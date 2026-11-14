@@ -27,3 +27,7 @@ target/
 .DS_Store
 Thumbs.db
 *.log
+
+# personal docs
+ns-docs/
+
