@@ -1,3 +1,4 @@
+import { createRemoteJWKSet, jwtVerify } from 'jose'
 import type { BoardMember, Channel, Donor, Draft, DraftKind, Gift, Interaction, NextStep, Program, RawDonorRow, Source } from '../src/data/types'
 import { dedupe, normEmail, normName, normPhone } from '../src/lib/dedupe'
 import { draftBody } from '../src/lib/drafts'
@@ -8,7 +9,7 @@ import { nextOwner } from '../src/lib/logic'
 
 export interface Env {
   DB: D1Database
-  DEMO_AUTH?: string
+  WORKOS_CLIENT_ID: string
 }
 
 interface Session { role: 'admin' | 'board'; memberId: string }
@@ -75,20 +76,24 @@ const toDraft = (r: Row): Draft => ({
 
 // --- Session ----------------------------------------------------------------
 
-// Demo only: the client says who it is in X-Demo-Session ("admin" or a board
-// member id). Replaced by WorkOS token verification; the role will come from
-// board_members.is_admin, never from the client.
+// The caller sends their WorkOS access token as a Bearer header. We check its
+// signature against the WorkOS keys for our client, then look the email up in
+// board_members; is_admin sets the role. Nothing the client says is trusted.
+// The email claim comes from the environment's JWT template.
+let jwks: ReturnType<typeof createRemoteJWKSet> | undefined
+
 async function getSession(req: Request, env: Env): Promise<Session> {
-  if (env.DEMO_AUTH !== 'true') throw new HttpError(401, 'Sign-in required')
-  const who = req.headers.get('X-Demo-Session') ?? 'admin'
-  if (who === 'admin') {
-    const admin = await env.DB.prepare('SELECT id FROM board_members WHERE is_admin = 1 LIMIT 1').first<{ id: string }>()
-    if (!admin) throw new HttpError(500, 'No admin board member')
-    return { role: 'admin', memberId: admin.id }
-  }
-  const m = await env.DB.prepare('SELECT id FROM board_members WHERE id = ?').bind(who).first()
-  if (!m) throw new HttpError(401, 'Unknown board member')
-  return { role: 'board', memberId: who }
+  const token = req.headers.get('Authorization')?.match(/^Bearer (.+)$/)?.[1]
+  if (!token) throw new HttpError(401, 'Sign-in required')
+  jwks ??= createRemoteJWKSet(new URL(`https://api.workos.com/sso/jwks/${env.WORKOS_CLIENT_ID}`))
+  const { payload } = await jwtVerify(token, jwks).catch(() => {
+    throw new HttpError(401, 'Session expired, sign in again')
+  })
+  if (typeof payload.email !== 'string') throw new HttpError(401, 'Token has no email claim')
+  const m = await env.DB.prepare('SELECT id, is_admin FROM board_members WHERE lower(email) = lower(?)')
+    .bind(payload.email).first<{ id: string; is_admin: number }>()
+  if (!m) throw new HttpError(403, `${payload.email} is not a board member`)
+  return { role: m.is_admin ? 'admin' : 'board', memberId: m.id }
 }
 
 const requireAdmin = (s: Session) => {
@@ -125,6 +130,10 @@ async function route(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url)
   const parts = url.pathname.replace(/^\/api\/?/, '').split('/').filter(Boolean)
   const m = req.method
+
+  // Public: the browser needs the client ID before anyone has signed in.
+  if (m === 'GET' && parts[0] === 'config') return json({ workosClientId: env.WORKOS_CLIENT_ID })
+
   const s = await getSession(req, env)
   const db = env.DB
 

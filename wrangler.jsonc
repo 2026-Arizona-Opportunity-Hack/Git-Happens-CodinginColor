@@ -13,7 +13,7 @@
   "d1_databases": [
     { "binding": "DB", "database_name": "githappens", "database_id": "7ecb8d1a-5f89-456a-b880-e00ba97d5dfb", "migrations_dir": "migrations" }
   ],
-  // Until WorkOS sign-in lands, the API trusts a demo session header. Fake data only.
-  "vars": { "DEMO_AUTH": "true" },
+  // Public AuthKit client ID (WorkOS staging environment). Not a secret.
+  "vars": { "WORKOS_CLIENT_ID": "client_01M7E3A3JEVSSQCSM38YCBW0VQ" },
   "routes": [{ "pattern": "githappens.jurenka.software", "custom_domain": true, "zone_name": "jurenka.software" }]
 }

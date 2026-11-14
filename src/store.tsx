@@ -21,11 +21,13 @@ interface Bootstrap {
 
 class ApiError extends Error {}
 
-// Demo only: X-Demo-Session picks who we are. Replaced by the WorkOS token.
-async function api<T>(who: string, path: string, method = 'GET', body?: unknown): Promise<T> {
+// Returns a current WorkOS access token (AuthKit refreshes it as needed).
+type GetToken = () => Promise<string>
+
+async function api<T>(token: GetToken, path: string, method = 'GET', body?: unknown): Promise<T> {
   const res = await fetch(`/api/${path}`, {
     method,
-    headers: { 'X-Demo-Session': who, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+    headers: { Authorization: `Bearer ${await token()}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   const data = await res.json().catch(() => ({}))
@@ -33,7 +35,7 @@ async function api<T>(who: string, path: string, method = 'GET', body?: unknown)
   return data as T
 }
 
-function useStoreState(data: Bootstrap, who: string, setWho: (w: string) => void, reload: () => Promise<void>) {
+function useStoreState(data: Bootstrap, token: GetToken, reload: () => Promise<void>) {
   // Draft edits are drawn over the server copy and save after a pause in
   // typing, so a reload never overwrites what someone is mid-way through.
   const [edits, setEdits] = useState<Record<string, string>>({})
@@ -44,7 +46,7 @@ function useStoreState(data: Bootstrap, who: string, setWho: (w: string) => void
     if (!p) return
     clearTimeout(p.timer)
     pendingEdits.current.delete(id)
-    await api(who, `drafts/${id}`, 'PATCH', { body: p.body })
+    await api(token, `drafts/${id}`, 'PATCH', { body: p.body })
   }
 
   // Runs one API call, reloads, and returns its result, or undefined after
@@ -63,7 +65,7 @@ function useStoreState(data: Bootstrap, who: string, setWho: (w: string) => void
   const member = (id: string) => data.boardMembers.find((m) => m.id === id)!
 
   const createDraft = (donorId: string, kind: DraftKind, channel: 'email' | 'text' = 'email') =>
-    run(() => api<Draft>(who, 'drafts', 'POST', { donorId, kind, channel }))
+    run(() => api<Draft>(token, 'drafts', 'POST', { donorId, kind, channel }))
 
   const updateDraft = (id: string, body: string) => {
     setEdits((e) => ({ ...e, [id]: body }))
@@ -75,32 +77,30 @@ function useStoreState(data: Bootstrap, who: string, setWho: (w: string) => void
   const approveDraft = (id: string) =>
     run(async () => {
       await saveEdit(id)
-      return api(who, `drafts/${id}/approve`, 'POST')
+      return api(token, `drafts/${id}/approve`, 'POST')
     })
 
   const discardDraft = (id: string) =>
     run(async () => {
       clearTimeout(pendingEdits.current.get(id)?.timer)
       pendingEdits.current.delete(id)
-      return api(who, `drafts/${id}/discard`, 'POST')
+      return api(token, `drafts/${id}/discard`, 'POST')
     })
 
   const logInteraction = (donorId: string, channel: Channel, summary: string) =>
-    run(() => api(who, `donors/${donorId}/interactions`, 'POST', { channel, summary }))
+    run(() => api(token, `donors/${donorId}/interactions`, 'POST', { channel, summary }))
 
   const setNextStep = (donorId: string, nextStep: Donor['nextStep']) =>
-    run(() => api(who, `donors/${donorId}/next-step`, 'PUT', nextStep ?? {}))
+    run(() => api(token, `donors/${donorId}/next-step`, 'PUT', nextStep ?? {}))
 
   const reassign = (donorId: string, ownerId: string) =>
-    run(() => api(who, `donors/${donorId}/owner`, 'PUT', { ownerId }))
+    run(() => api(token, `donors/${donorId}/owner`, 'PUT', { ownerId }))
 
   const importRows = (rows: RawDonorRow[]) =>
-    run(() => api<{ created: number; merged: number; clusters: number }>(who, 'import', 'POST', { rows }))
-
-  const setSession = (s: Session) => setWho(s.role === 'admin' ? 'admin' : s.memberId)
+    run(() => api<{ created: number; merged: number; clusters: number }>(token, 'import', 'POST', { rows }))
 
   return {
-    ...data, drafts, setSession, member,
+    ...data, drafts, member,
     createDraft, updateDraft, approveDraft, discardDraft, logInteraction, setNextStep, reassign, importRows,
   }
 }
@@ -108,25 +108,24 @@ function useStoreState(data: Bootstrap, who: string, setWho: (w: string) => void
 type Store = ReturnType<typeof useStoreState>
 const Ctx = createContext<Store | null>(null)
 
-function Loaded({ data, who, setWho, reload, children }: {
-  data: Bootstrap; who: string; setWho: (w: string) => void; reload: () => Promise<void>; children: ReactNode
+function Loaded({ data, token, reload, children }: {
+  data: Bootstrap; token: GetToken; reload: () => Promise<void>; children: ReactNode
 }) {
-  return <Ctx.Provider value={useStoreState(data, who, setWho, reload)}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={useStoreState(data, token, reload)}>{children}</Ctx.Provider>
 }
 
-export function StoreProvider({ children }: { children: ReactNode }) {
-  const [who, setWho] = useState('admin')
+export function StoreProvider({ token, onSignOut, children }: { token: GetToken; onSignOut: () => void; children: ReactNode }) {
   const [data, setData] = useState<Bootstrap | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const reload = useCallback(async () => {
     try {
-      setData(await api<Bootstrap>(who, 'bootstrap'))
+      setData(await api<Bootstrap>(token, 'bootstrap'))
       setError(null)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not reach the server')
     }
-  }, [who])
+  }, [token])
 
   useEffect(() => {
     reload()
@@ -134,11 +133,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   if (!data)
     return (
-      <div role="status" className="p-8 text-muted-foreground">
-        {error ? `Could not load donor data: ${error}` : 'Loading donor data…'}
+      <div role="status" className="space-y-3 p-8 text-muted-foreground">
+        <p>{error ? `Could not load donor data: ${error}` : 'Loading donor data…'}</p>
+        {error && <button className="underline" onClick={onSignOut}>Sign out</button>}
       </div>
     )
-  return <Loaded data={data} who={who} setWho={setWho} reload={reload}>{children}</Loaded>
+  return <Loaded data={data} token={token} reload={reload}>{children}</Loaded>
 }
 
 export const useStore = () => useContext(Ctx)!

@@ -49,7 +49,7 @@ Judges score **Scope, Documentation, Polish and Security**, plus a separate **Ac
 
 ## What we built
 
-Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevity, and follow-ups depend on board members remembering them. This platform merges those sources into one deduplicated donor list, gives each board member a queue of next steps with drafted thank-yous and updates that a human approves, and shows year-over-year retention. Data lives in Cloudflare D1 behind a Worker API; the seed data is fake. Sign-in is still a demo switcher until WorkOS lands.
+Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevity, and follow-ups depend on board members remembering them. This platform merges those sources into one deduplicated donor list, gives each board member a queue of next steps with drafted thank-yous and updates that a human approves, and shows year-over-year retention. Board members sign in with WorkOS AuthKit, and data lives in Cloudflare D1 behind a Worker API. The seed data is fake.
 
 | Page | Brief requirement (P0) |
 |---|---|
@@ -65,7 +65,16 @@ Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevi
 
 ![Donors](docs/screenshots/donors.png)
 
-Use the **"Viewing as"** switcher in the sidebar to see the board-member view. Board members only see their own donors, and Import and the API page are admin-only.
+### Demo accounts
+
+Sign in with any of these. They're fake board members, and every one uses the password **`CicDemo-2026!`**:
+
+| Email | Role |
+|---|---|
+| `alex@example.org` | CIC admin: every donor, plus Import and the Read API page |
+| `priya@example.org`, `jordan@example.org`, `sam@example.org` | Board member: only their own donors |
+
+The password is public on purpose because the data is fake. Replace these accounts before CIC loads real donors.
 
 ### Where the logic lives
 
@@ -79,19 +88,18 @@ Use the **"Viewing as"** switcher in the sidebar to see the board-member view. B
 
 ### Next steps
 
-1. **Sign-in**: WorkOS AuthKit. The Worker verifies the WorkOS access token and looks the user up in `board_members`; `is_admin` sets the role.
-2. **Real exports**: get scrubbed Zeffy/Benevity samples from CIC and fix `COLUMN_MAP` in `dedupe.ts`.
-3. **Read API**: a Worker route behind a hashed API key, returning aggregates only (no PII).
-4. **Sending**: email via Resend/Listmonk and SMS via Twilio. Do this only after approval, and log the send to `interactions`.
-5. **Pick a P1**: debrief-to-action (a voice note becomes a contact record, a next step and a draft) or events-aware next steps (Google Calendar).
-6. **Brand**: swap the placeholder mark in `App.tsx` for the real CIC logo, and run Lighthouse (target a11y ≥ 95).
+1. **Real exports**: get scrubbed Zeffy/Benevity samples from CIC and fix `COLUMN_MAP` in `dedupe.ts`.
+2. **Read API**: a Worker route behind a hashed API key, returning aggregates only (no PII).
+3. **Sending**: email via Resend/Listmonk and SMS via Twilio. Do this only after approval, and log the send to `interactions`.
+4. **Pick a P1**: debrief-to-action (a voice note becomes a contact record, a next step and a draft) or events-aware next steps (Google Calendar).
+5. **Brand**: swap the placeholder mark in `App.tsx` for the real CIC logo, and run Lighthouse (target a11y ≥ 95).
 
 ## Tech stack
 
 - Frontend: Vite + React + TypeScript, Tailwind v4, [shadcn/ui](https://ui.shadcn.com) on [Base UI](https://base-ui.com) (`components.json` style `base-nova`). Add components with `bunx shadcn@latest add <name>`.
 - Backend: a Cloudflare Worker (`worker/index.ts`) serving a JSON API under `/api/*`, next to the static app
 - Database: [Cloudflare D1](https://developers.cloudflare.com/d1/) (SQLite). Schema in `migrations/`
-- Auth: [WorkOS AuthKit](https://workos.com/user-management) (in progress; the API trusts a demo session header until it lands)
+- Auth: [WorkOS AuthKit](https://workos.com/user-management), free up to 1M users. The Worker verifies each access token with `jose` and maps its email to `board_members`
 - APIs / services: none yet
 
 ## Run it locally
@@ -109,6 +117,18 @@ bun run build        # typecheck + production build
 ```
 
 There's no `.env` yet. `bun dev` runs the Worker and a local D1 database inside Vite, through `@cloudflare/vite-plugin`.
+
+### Sign-in (WorkOS)
+
+The app uses the **Staging** environment of the "Coding in Color" WorkOS workspace. Its public client ID is `WORKOS_CLIENT_ID` in `wrangler.jsonc`. The browser fetches it from `/api/config`, so no secret or API key is involved. That environment is configured with:
+
+- **Redirect URIs and allowed origins:** `https://githappens.jurenka.software`, `http://localhost:5173` and `http://localhost:5321`. Add any new host in both places.
+- **A JWT template** that adds `email` to access tokens. The Worker needs it to find the user's `board_members` row.
+- **Password sign-in.** Users are created in WorkOS.
+
+To add a board member, create the user in WorkOS (Users → Create user) and insert a `board_members` row with the same email. Set `is_admin = 1` for admins. Someone who can sign in to WorkOS but has no row gets a 403.
+
+AuthKit runs in `devMode`, which keeps the session in localStorage. That's required without a WorkOS custom domain, which costs $99/month.
 
 ### Deploying
 
