@@ -49,7 +49,40 @@ Judges score **Scope, Documentation, Polish and Security**, plus a separate **Ac
 
 ## What we built
 
-<!-- Two or three sentences: the problem, who it helps, what the nonprofit can do now that they couldn't before -->
+Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevity, and follow-ups depend on board members remembering them. This platform merges those sources into one deduplicated donor list, gives each board member a queue of next steps with drafted thank-yous and updates that a human approves, and shows year-over-year retention. Right now it's a **clickable prototype** on in-memory fake data: it sets the direction and the UI, and there's no backend yet.
+
+| Page | Brief requirement (P0) |
+|---|---|
+| **Dashboard** | Org health; board-member load; upcoming events; recent activity |
+| **Follow-ups** | Next steps with due dates; quarterly-touch queue; lapsed-donor nudges; **drafts a human must approve** |
+| **Donors** | One deduped table across all sources; owner, lifetime, status, next step |
+| **Donor detail** | Timeline of gifts and communications; set a next step (one-click "invite to <event>"); log a text/email/call; draft thank-you/update; **one-click funder packet** |
+| **Retention** | Year over year: new, recovered, increased, same, decreased, lapsed, plus retention rate |
+| **Import** | Spreadsheet + Zeffy + Benevity CSVs → dedupe preview → commit; new donors assigned **round-robin to the member with the fewest** |
+| **Read API** | Contract for `GET /api/v1/donor-summary`, aggregated by period / program / board member, with a live sample response |
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+![Donors](docs/screenshots/donors.png)
+
+Use the **"Viewing as"** switcher in the sidebar to see the board-member view. Board members only see their own donors, and Import and the API page are admin-only.
+
+### Where the logic lives
+
+- `src/lib/dedupe.ts`: CSV parsing, per-source column mapping, union-find dedupe on email, then phone, then name+org, then name. Name-only matches are flagged for review.
+- `src/lib/logic.ts`: round-robin assignment, retention classification, quarterly cadence.
+- `src/lib/drafts.ts`: message templates. **Swap point for AI drafting**: same inputs, and a human still approves.
+- `src/store.tsx`: in-memory state. Each action maps to one future API route or table write.
+- `src/data/seed.ts`: fake donors. **Never commit real donor PII.**
+
+### Next steps
+
+1. **Backend**: Supabase (Postgres + Auth + RLS). Tables: `board_members`, `donors`, `gifts`, `interactions`, `drafts`, `events`, `api_keys`. Use an RLS policy so `board` users can only see donors where `owner_id = auth.uid()`.
+2. **Real exports**: get scrubbed Zeffy/Benevity samples from CIC and fix `COLUMN_MAP` in `dedupe.ts`.
+3. **Read API**: a Supabase edge function behind a hashed API key, returning aggregates only (no PII).
+4. **Sending**: email via Resend/Listmonk and SMS via Twilio. Do this only after approval, and log the send to `interactions`.
+5. **Pick a P1**: debrief-to-action (a voice note becomes a contact record, a next step and a draft) or events-aware next steps (Google Calendar).
+6. **Brand**: swap the placeholder mark in `App.tsx` for the real CIC logo, and run Lighthouse (target a11y ≥ 95).
 
 ## Tech stack
 
