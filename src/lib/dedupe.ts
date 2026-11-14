@@ -1,0 +1,135 @@
+import type { RawDonorRow, Source } from '../data/types'
+
+// Dedupe strategy, strongest signal first:
+//   1. normalized email
+//   2. normalized phone (last 10 digits)
+//   3. normalized name + org
+// Rows that share any key collapse into one cluster (union-find), so
+// "J. Smith <j@x.com>" from Zeffy and "John Smith 602-555-0101" from the
+// spreadsheet merge if a third row links the email and phone.
+
+export const normEmail = (e?: string) => e?.trim().toLowerCase() || undefined
+
+export const normPhone = (p?: string) => {
+  const digits = p?.replace(/\D/g, '') ?? ''
+  return digits.length >= 10 ? digits.slice(-10) : undefined
+}
+
+export const normName = (n: string) =>
+  n.toLowerCase().replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim()
+
+export interface DonorCluster {
+  name: string
+  email?: string
+  phone?: string
+  org?: string
+  sources: Source[]
+  rows: RawDonorRow[]
+  matchedOn: string[]
+}
+
+export function dedupe(rows: RawDonorRow[]): DonorCluster[] {
+  const parent = rows.map((_, i) => i)
+  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])))
+  const reasons = new Map<number, Set<string>>()
+
+  const byKey = new Map<string, number>()
+  rows.forEach((r, i) => {
+    const keys: [string, string | undefined][] = [
+      ['email', normEmail(r.email)],
+      ['phone', normPhone(r.phone)],
+      ['name+org', r.org ? `${normName(r.name)}|${normName(r.org)}` : undefined],
+      ['name', normName(r.name)],
+    ]
+    for (const [kind, k] of keys) {
+      if (!k) continue
+      const key = `${kind}:${k}`
+      const j = byKey.get(key)
+      if (j === undefined) byKey.set(key, i)
+      else if (find(i) !== find(j)) {
+        const root = find(j)
+        parent[find(i)] = root
+        reasons.set(root, (reasons.get(root) ?? new Set()).add(kind))
+      }
+    }
+  })
+
+  const groups = new Map<number, RawDonorRow[]>()
+  rows.forEach((r, i) => {
+    const root = find(i)
+    groups.set(root, [...(groups.get(root) ?? []), r])
+  })
+
+  return [...groups.entries()].map(([root, rs]) => ({
+    // Prefer the longest name seen ("John Smith" over "J Smith").
+    name: rs.map((r) => r.name).sort((a, b) => b.length - a.length)[0],
+    email: rs.find((r) => r.email)?.email,
+    phone: rs.find((r) => r.phone)?.phone,
+    org: rs.find((r) => r.org)?.org,
+    sources: [...new Set(rs.map((r) => r.source))],
+    rows: rs,
+    matchedOn: [...(reasons.get(root) ?? [])],
+  }))
+}
+
+// Minimal CSV parser (quoted fields, commas inside quotes). Good enough for
+// Zeffy/Benevity exports; swap for papaparse if the real files get gnarly.
+export function parseCsv(text: string): Record<string, string>[] {
+  const lines: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let quoted = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++ }
+      else if (c === '"') quoted = false
+      else field += c
+    } else if (c === '"') quoted = true
+    else if (c === ',') { row.push(field); field = '' }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++
+      row.push(field); lines.push(row); row = []; field = ''
+    } else field += c
+  }
+  if (field || row.length) { row.push(field); lines.push(row) }
+  const [header, ...body] = lines.filter((l) => l.some((f) => f.trim()))
+  if (!header) return []
+  const keys = header.map((h) => h.trim().toLowerCase())
+  return body.map((l) => Object.fromEntries(keys.map((k, i) => [k, (l[i] ?? '').trim()])))
+}
+
+// Column mappings per source. Real exports should be checked against these
+// as soon as CIC shares samples.
+const COLUMN_MAP: Record<string, Partial<Record<keyof RawDonorRow, string[]>>> = {
+  default: {
+    name: ['name', 'full name', 'donor name', 'donor'],
+    email: ['email', 'email address', 'donor email'],
+    phone: ['phone', 'phone number', 'mobile'],
+    org: ['org', 'organization', 'company', 'employer'],
+    amount: ['amount', 'total amount', 'donation amount', 'gift amount'],
+    date: ['date', 'payment date', 'donation date', 'gift date'],
+  },
+}
+
+export function rowsFromCsv(text: string, source: Source): RawDonorRow[] {
+  const map = COLUMN_MAP.default
+  const pick = (rec: Record<string, string>, field: keyof RawDonorRow) =>
+    map[field]?.map((k) => rec[k]).find((v) => v)
+  return parseCsv(text)
+    .map((rec) => {
+      const first = rec['first name'], last = rec['last name']
+      const name = pick(rec, 'name') ?? [first, last].filter(Boolean).join(' ')
+      const amount = Number((pick(rec, 'amount') ?? '').replace(/[$,]/g, ''))
+      return {
+        source,
+        name,
+        email: pick(rec, 'email'),
+        phone: pick(rec, 'phone'),
+        org: pick(rec, 'org'),
+        amount: Number.isFinite(amount) && amount > 0 ? amount : undefined,
+        date: pick(rec, 'date'),
+      }
+    })
+    .filter((r) => r.name)
+}
