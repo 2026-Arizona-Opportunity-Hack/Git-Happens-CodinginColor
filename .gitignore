@@ -35,3 +35,4 @@ ns-docs/
 # Vite
 dist-ssr/
 *.local
+.wrangler/

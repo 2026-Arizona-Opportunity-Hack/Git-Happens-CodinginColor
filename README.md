@@ -105,6 +105,25 @@ bun run build    # typecheck + production build
 
 There's no `.env` yet, because the app runs on in-memory data.
 
+### Deploying
+
+`main` is where PRs land. To deploy, fast-forward `develop` to `main` and push:
+
+```bash
+git push origin origin/main:develop
+```
+
+Every push to `develop` deploys to **https://githappens.jurenka.software** through `.github/workflows/deploy.yml` (Cloudflare Workers static assets, configured in `wrangler.jsonc`). You can also run it by hand from the Actions tab.
+
+The repo needs two Actions secrets:
+
+| Secret | Value |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | API token from the "Edit Cloudflare Workers" template, scoped to the account and the `jurenka.software` zone |
+| `CLOUDFLARE_ACCOUNT_ID` | `57cdeda067b33ff3b8def5d2b65aee9d` |
+
+To deploy by hand, run `bun run deploy` (it uses wrangler, so log in with `wrangler login` first).
+
 ### Brand
 
 Colors follow the CIC brand guidelines and live as tokens in `src/index.css`:
@@ -118,7 +137,7 @@ Primary buttons use dark green rather than `#00A850`, because white on `#00A850`
 
 ## Links
 
-- Live demo:
+- Live demo: https://githappens.jurenka.software
 - Demo video:
 - Design / docs:
 
