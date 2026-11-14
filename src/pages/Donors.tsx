@@ -9,9 +9,9 @@ import { useStore } from '@/store'
 import { fmtDate, money, retentionStatus, yearOf } from '@/lib/logic'
 
 export default function Donors() {
-  const { visibleDonors, gifts, member, today } = useStore()
+  const { donors, gifts, member, today } = useStore()
   const [q, setQ] = useState('')
-  const rows = visibleDonors
+  const rows = donors
     .filter((d) => `${d.name} ${d.org ?? ''} ${d.email ?? ''}`.toLowerCase().includes(q.toLowerCase()))
     .map((d) => {
       const gs = gifts.filter((g) => g.donorId === d.id)

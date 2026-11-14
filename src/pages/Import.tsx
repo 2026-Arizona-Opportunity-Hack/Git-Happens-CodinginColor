@@ -96,8 +96,9 @@ export default function Import() {
           </Card>
           <div className="mt-4 flex gap-2">
             <Button
-              onClick={() => {
-                const r = importRows(rows)
+              onClick={async () => {
+                const r = await importRows(rows)
+                if (!r) return
                 toast.success(`${r.created} new donors, ${r.merged} merged into existing records`)
                 setCsv({})
               }}

@@ -1,111 +1,106 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
-import * as seed from '@/data/seed'
-import type { Channel, Donor, Draft, DraftKind, Interaction, RawDonorRow, Role } from '@/data/types'
-import { draftBody } from '@/lib/drafts'
-import { dedupe, normEmail, normPhone, normName } from '@/lib/dedupe'
-import { nextOwner } from '@/lib/logic'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { toast } from 'sonner'
+import type { BoardMember, Channel, Donor, CicEvent, Draft, DraftKind, Gift, Interaction, RawDonorRow, Role } from '@/data/types'
 
-// In-memory store standing in for Supabase/Postgres. Each action here maps to
-// one API route / RLS-guarded table write in the real build.
+// Client for the Worker API. The server scopes every read to the caller, so
+// `donors` is already the set this user may see. Actions call one route, then
+// reload the bootstrap so the UI shows exactly what D1 holds.
 
 interface Session { role: Role; memberId: string }
 
-function useStoreState() {
-  const [session, setSession] = useState<Session>({ role: 'admin', memberId: 'bm1' })
-  const [donors, setDonors] = useState(seed.donors)
-  const [gifts, setGifts] = useState(seed.gifts)
-  const [interactions, setInteractions] = useState(seed.interactions)
-  const [drafts, setDrafts] = useState<Draft[]>([])
+interface Bootstrap {
+  session: Session
+  today: string
+  boardMembers: BoardMember[]
+  events: CicEvent[]
+  donors: Donor[]
+  gifts: Gift[]
+  interactions: Interaction[]
+  drafts: Draft[]
+}
 
-  // Board members only see their own donors (least privilege). Admin sees all.
-  const visibleDonors = useMemo(
-    () => (session.role === 'admin' ? donors : donors.filter((d) => d.ownerId === session.memberId)),
-    [donors, session],
-  )
+class ApiError extends Error {}
 
-  const member = (id: string) => seed.boardMembers.find((m) => m.id === id)!
+// Returns a current WorkOS access token (AuthKit refreshes it as needed).
+type GetToken = () => Promise<string>
 
-  const createDraft = (donorId: string, kind: DraftKind, channel: 'email' | 'text' = 'email') => {
-    const donor = donors.find((d) => d.id === donorId)!
-    const draft: Draft = {
-      id: crypto.randomUUID(),
-      donorId,
-      kind,
-      channel,
-      body: draftBody(kind, donor, gifts.filter((g) => g.donorId === donorId), member(donor.ownerId)),
-      createdAt: seed.TODAY,
-      status: 'pending',
+async function api<T>(token: GetToken, path: string, method = 'GET', body?: unknown): Promise<T> {
+  const res = await fetch(`/api/${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${await token()}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new ApiError(data.error ?? `Request failed (${res.status})`)
+  return data as T
+}
+
+function useStoreState(data: Bootstrap, token: GetToken, reload: () => Promise<void>) {
+  // Draft edits are drawn over the server copy and save after a pause in
+  // typing, so a reload never overwrites what someone is mid-way through.
+  const [edits, setEdits] = useState<Record<string, string>>({})
+  const drafts = data.drafts.map((d) => (d.id in edits ? { ...d, body: edits[d.id] } : d))
+  const pendingEdits = useRef(new Map<string, { timer: number; body: string }>())
+  const saveEdit = async (id: string) => {
+    const p = pendingEdits.current.get(id)
+    if (!p) return
+    clearTimeout(p.timer)
+    pendingEdits.current.delete(id)
+    await api(token, `drafts/${id}`, 'PATCH', { body: p.body })
+  }
+
+  // Runs one API call, reloads, and returns its result, or undefined after
+  // telling the user what went wrong.
+  const run = async <T,>(call: () => Promise<T>): Promise<T | undefined> => {
+    try {
+      const result = await call()
+      await reload()
+      return result
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : 'Could not reach the server')
+      return undefined
     }
-    setDrafts((ds) => [draft, ...ds])
-    return draft
   }
 
-  const updateDraft = (id: string, body: string) =>
-    setDrafts((ds) => ds.map((d) => (d.id === id ? { ...d, body } : d)))
+  const member = (id: string) => data.boardMembers.find((m) => m.id === id)!
 
-  // Human approval is the only path to "sent". Approving logs the interaction
-  // and resets the quarterly clock.
-  const approveDraft = (id: string) => {
-    const draft = drafts.find((d) => d.id === id)!
-    setDrafts((ds) => ds.map((d) => (d.id === id ? { ...d, status: 'approved', approvedBy: session.memberId } : d)))
-    logInteraction(draft.donorId, draft.channel, `Sent ${draft.kind.replace('-', ' ')} (approved by ${member(session.memberId).name})`)
+  const createDraft = (donorId: string, kind: DraftKind, channel: 'email' | 'text' = 'email') =>
+    run(() => api<Draft>(token, 'drafts', 'POST', { donorId, kind, channel }))
+
+  const updateDraft = (id: string, body: string) => {
+    setEdits((e) => ({ ...e, [id]: body }))
+    clearTimeout(pendingEdits.current.get(id)?.timer)
+    pendingEdits.current.set(id, { body, timer: window.setTimeout(() => run(() => saveEdit(id)), 600) })
   }
+
+  // Human approval is the only path to "sent"; the server logs the interaction.
+  const approveDraft = (id: string) =>
+    run(async () => {
+      await saveEdit(id)
+      return api(token, `drafts/${id}/approve`, 'POST')
+    })
 
   const discardDraft = (id: string) =>
-    setDrafts((ds) => ds.map((d) => (d.id === id ? { ...d, status: 'discarded' } : d)))
+    run(async () => {
+      clearTimeout(pendingEdits.current.get(id)?.timer)
+      pendingEdits.current.delete(id)
+      return api(token, `drafts/${id}/discard`, 'POST')
+    })
 
-  const logInteraction = (donorId: string, channel: Channel, summary: string) => {
-    const i: Interaction = { id: crypto.randomUUID(), donorId, byId: session.memberId, channel, date: seed.TODAY, summary }
-    setInteractions((is) => [i, ...is])
-    setDonors((ds) => ds.map((d) => (d.id === donorId ? { ...d, lastTouchAt: seed.TODAY } : d)))
-  }
+  const logInteraction = (donorId: string, channel: Channel, summary: string) =>
+    run(() => api(token, `donors/${donorId}/interactions`, 'POST', { channel, summary }))
 
   const setNextStep = (donorId: string, nextStep: Donor['nextStep']) =>
-    setDonors((ds) => ds.map((d) => (d.id === donorId ? { ...d, nextStep } : d)))
+    run(() => api(token, `donors/${donorId}/next-step`, 'PUT', nextStep ?? {}))
 
   const reassign = (donorId: string, ownerId: string) =>
-    setDonors((ds) => ds.map((d) => (d.id === donorId ? { ...d, ownerId } : d)))
+    run(() => api(token, `donors/${donorId}/owner`, 'PUT', { ownerId }))
 
-  // Merge imported rows into the donor table: match against existing donors
-  // first, then round-robin any genuinely new donors.
-  const importRows = (rows: RawDonorRow[]) => {
-    const clusters = dedupe(rows)
-    let next = [...donors]
-    const newGifts = [...gifts]
-    let created = 0, merged = 0
-    for (const c of clusters) {
-      const existing = next.find(
-        (d) =>
-          (c.email && normEmail(d.email) === normEmail(c.email)) ||
-          (c.phone && normPhone(d.phone) === normPhone(c.phone)) ||
-          normName(d.name) === normName(c.name),
-      )
-      let donorId: string
-      if (existing) {
-        merged++
-        donorId = existing.id
-        next = next.map((d) =>
-          d.id === existing.id
-            ? { ...d, email: d.email ?? c.email, phone: d.phone ?? c.phone, sources: [...new Set([...d.sources, ...c.sources])] }
-            : d,
-        )
-      } else {
-        created++
-        donorId = `d${crypto.randomUUID().slice(0, 8)}`
-        next.push({ id: donorId, name: c.name, email: c.email, phone: c.phone, org: c.org, sources: c.sources, ownerId: nextOwner(seed.boardMembers, next) })
-      }
-      for (const r of c.rows)
-        if (r.amount && r.date)
-          newGifts.push({ id: crypto.randomUUID(), donorId, amount: r.amount, date: r.date.slice(0, 10), source: r.source, program: r.program ?? 'General' })
-    }
-    setDonors(next)
-    setGifts(newGifts)
-    return { created, merged, clusters: clusters.length }
-  }
+  const importRows = (rows: RawDonorRow[]) =>
+    run(() => api<{ created: number; merged: number; clusters: number }>(token, 'import', 'POST', { rows }))
 
   return {
-    session, setSession, donors, visibleDonors, gifts, interactions, drafts,
-    boardMembers: seed.boardMembers, events: seed.events, today: seed.TODAY, member,
+    ...data, drafts, member,
     createDraft, updateDraft, approveDraft, discardDraft, logInteraction, setNextStep, reassign, importRows,
   }
 }
@@ -113,8 +108,37 @@ function useStoreState() {
 type Store = ReturnType<typeof useStoreState>
 const Ctx = createContext<Store | null>(null)
 
-export function StoreProvider({ children }: { children: ReactNode }) {
-  return <Ctx.Provider value={useStoreState()}>{children}</Ctx.Provider>
+function Loaded({ data, token, reload, children }: {
+  data: Bootstrap; token: GetToken; reload: () => Promise<void>; children: ReactNode
+}) {
+  return <Ctx.Provider value={useStoreState(data, token, reload)}>{children}</Ctx.Provider>
+}
+
+export function StoreProvider({ token, onSignOut, children }: { token: GetToken; onSignOut: () => void; children: ReactNode }) {
+  const [data, setData] = useState<Bootstrap | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const reload = useCallback(async () => {
+    try {
+      setData(await api<Bootstrap>(token, 'bootstrap'))
+      setError(null)
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not reach the server')
+    }
+  }, [token])
+
+  useEffect(() => {
+    reload()
+  }, [reload])
+
+  if (!data)
+    return (
+      <div role="status" className="space-y-3 p-8 text-muted-foreground">
+        <p>{error ? `Could not load donor data: ${error}` : 'Loading donor data…'}</p>
+        {error && <button className="underline" onClick={onSignOut}>Sign out</button>}
+      </div>
+    )
+  return <Loaded data={data} token={token} reload={reload}>{children}</Loaded>
 }
 
 export const useStore = () => useContext(Ctx)!

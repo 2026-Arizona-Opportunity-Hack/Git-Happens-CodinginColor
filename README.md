@@ -49,7 +49,7 @@ Judges score **Scope, Documentation, Polish and Security**, plus a separate **Ac
 
 ## What we built
 
-Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevity, and follow-ups depend on board members remembering them. This platform merges those sources into one deduplicated donor list, gives each board member a queue of next steps with drafted thank-yous and updates that a human approves, and shows year-over-year retention. Right now it's a **clickable prototype** on in-memory fake data: it sets the direction and the UI, and there's no backend yet.
+Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevity, and follow-ups depend on board members remembering them. This platform merges those sources into one deduplicated donor list, gives each board member a queue of next steps with drafted thank-yous and updates that a human approves, and shows year-over-year retention. Board members sign in with WorkOS AuthKit, and data lives in Cloudflare D1 behind a Worker API. The seed data is fake.
 
 | Page | Brief requirement (P0) |
 |---|---|
@@ -65,30 +65,41 @@ Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevi
 
 ![Donors](docs/screenshots/donors.png)
 
-Use the **"Viewing as"** switcher in the sidebar to see the board-member view. Board members only see their own donors, and Import and the API page are admin-only.
+### Demo accounts
+
+Sign in with any of these. They're fake accounts, and every one uses the password **`CicDemo-2026!`**:
+
+| Email | Role |
+|---|---|
+| `alex@example.org`, `diana@example.org`, `mauricio@example.org`, `dominick@example.org`, `melissa@example.org` | CIC admin: every donor, plus Import and the Read API page |
+| `priya@example.org`, `jordan@example.org`, `sam@example.org`, `greg@example.org`, `genevieve@example.org`, `frank@example.org`, `landon@example.org`, `nicole@example.org`, `adrian@example.org`, `amber@example.org` | Board member: only their own donors |
+
+The password is public on purpose because the data is fake. Replace these accounts before CIC loads real donors.
 
 ### Where the logic lives
 
 - `src/lib/dedupe.ts`: CSV parsing, per-source column mapping, union-find dedupe on email, then phone, then name+org, then name. Name-only matches are flagged for review.
 - `src/lib/logic.ts`: round-robin assignment, retention classification, quarterly cadence.
 - `src/lib/drafts.ts`: message templates. **Swap point for AI drafting**: same inputs, and a human still approves.
-- `src/store.tsx`: in-memory state. Each action maps to one future API route or table write.
+- `src/store.tsx`: the API client. It loads `/api/bootstrap`, and each action calls one route and reloads, so the UI always shows what D1 holds.
+- `worker/index.ts`: the API. Every route resolves the caller first; board members can only read or write donors they own, and import is admin-only.
+- `migrations/`: D1 schema. Add a new numbered file for each change; deploys apply them before the new code goes live.
 - `src/data/seed.ts`: fake donors. **Never commit real donor PII.**
 
 ### Next steps
 
-1. **Backend**: Supabase (Postgres + Auth + RLS). Tables: `board_members`, `donors`, `gifts`, `interactions`, `drafts`, `events`, `api_keys`. Use an RLS policy so `board` users can only see donors where `owner_id = auth.uid()`.
-2. **Real exports**: get scrubbed Zeffy/Benevity samples from CIC and fix `COLUMN_MAP` in `dedupe.ts`.
-3. **Read API**: a Supabase edge function behind a hashed API key, returning aggregates only (no PII).
-4. **Sending**: email via Resend/Listmonk and SMS via Twilio. Do this only after approval, and log the send to `interactions`.
-5. **Pick a P1**: debrief-to-action (a voice note becomes a contact record, a next step and a draft) or events-aware next steps (Google Calendar).
-6. **Brand**: swap the placeholder mark in `App.tsx` for the real CIC logo, and run Lighthouse (target a11y ≥ 95).
+1. **Real exports**: get scrubbed Zeffy/Benevity samples from CIC and fix `COLUMN_MAP` in `dedupe.ts`.
+2. **Read API**: a Worker route behind a hashed API key, returning aggregates only (no PII).
+3. **Sending**: email via Resend/Listmonk and SMS via Twilio. Do this only after approval, and log the send to `interactions`.
+4. **Pick a P1**: debrief-to-action (a voice note becomes a contact record, a next step and a draft) or events-aware next steps (Google Calendar).
+5. **Brand**: swap the placeholder mark in `App.tsx` for the real CIC logo, and run Lighthouse (target a11y ≥ 95).
 
 ## Tech stack
 
 - Frontend: Vite + React + TypeScript, Tailwind v4, [shadcn/ui](https://ui.shadcn.com) on [Base UI](https://base-ui.com) (`components.json` style `base-nova`). Add components with `bunx shadcn@latest add <name>`.
-- Backend: none yet
-- Database: none yet
+- Backend: a Cloudflare Worker (`worker/index.ts`) serving a JSON API under `/api/*`, next to the static app
+- Database: [Cloudflare D1](https://developers.cloudflare.com/d1/) (SQLite). Schema in `migrations/`
+- Auth: [WorkOS AuthKit](https://workos.com/user-management), free up to 1M users. The Worker verifies each access token with `jose` and looks the user up in the CIC organization in WorkOS, which is the source of truth for who is on the board
 - APIs / services: none yet
 
 ## Run it locally
@@ -99,11 +110,26 @@ Needs [Bun](https://bun.sh).
 git clone https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor.git
 cd Git-Happens-CodinginColor
 bun install
-bun dev          # http://localhost:5173
-bun run build    # typecheck + production build
+bun run db:migrate   # create the local D1 database
+bun run db:seed      # load the fake demo data (re-run any time to reset)
+bun dev              # http://localhost:5173, app + API
+bun run build        # typecheck + production build
 ```
 
-There's no `.env` yet, because the app runs on in-memory data.
+`bun dev` runs the Worker and a local D1 database inside Vite, through `@cloudflare/vite-plugin`. Both the Worker and `bun run db:seed` need the WorkOS Staging secret key, so copy `.env.example` to `.env` and set `WORKOS_API_KEY` before running them. `.env` is gitignored.
+
+### Sign-in (WorkOS)
+
+The app uses the **Staging** environment of the "Coding in Color" WorkOS workspace. Its public client ID is `WORKOS_CLIENT_ID` in `wrangler.jsonc`, and the browser fetches it from `/api/config`. The secret key (`WORKOS_API_KEY`) stays on the Worker, which uses it to list the board. That environment is configured with:
+
+- **Redirect URIs and allowed origins:** `https://githappens.jurenka.software`, `http://localhost:5173` and `http://localhost:5321`. Add any new host in both places.
+- **Password sign-in.** Users are created in WorkOS.
+
+- **An organization, "Coding in Color"** (`WORKOS_ORG_ID` in `wrangler.jsonc`). Its members are the board.
+
+WorkOS is the source of truth for board members; D1 only stores donor data, keyed by WorkOS user ID. To add a board member, create the user in WorkOS (Users → Create user), then add them to the "Coding in Color" organization with the **admin** role (sees every donor, can import) or the **member** role (only their own donors). To remove someone, remove their membership. The Worker caches the member list for 60 seconds, so changes show up within a minute. Someone who can sign in to WorkOS but isn't in the organization gets a 403.
+
+AuthKit runs in `devMode`, which keeps the session in localStorage. That's required without a WorkOS custom domain, which costs $99/month.
 
 ### Deploying
 
@@ -113,16 +139,18 @@ There's no `.env` yet, because the app runs on in-memory data.
 git push origin origin/main:develop
 ```
 
-Every push to `develop` deploys to **https://githappens.jurenka.software** through `.github/workflows/deploy.yml` (Cloudflare Workers static assets, configured in `wrangler.jsonc`). You can also run it by hand from the Actions tab.
+Every push to `develop` deploys to **https://githappens.jurenka.software** through `.github/workflows/deploy.yml` (a Cloudflare Worker with static assets and a D1 database, configured in `wrangler.jsonc`). Each deploy applies any new `migrations/` to the production database first. You can also run it by hand from the Actions tab.
 
 The repo needs two Actions secrets:
 
 | Secret | Value |
 |---|---|
-| `CLOUDFLARE_API_TOKEN` | API token from the "Edit Cloudflare Workers" template, scoped to the account and the `jurenka.software` zone |
+| `CLOUDFLARE_API_TOKEN` | API token from the "Edit Cloudflare Workers" template, scoped to the account and the `jurenka.software` zone, **plus Account → D1 → Edit** (the template leaves D1 out) |
 | `CLOUDFLARE_ACCOUNT_ID` | `57cdeda067b33ff3b8def5d2b65aee9d` |
 
-To deploy by hand, run `bun run deploy` (it uses wrangler, so log in with `wrangler login` first).
+The Worker also needs the WorkOS secret key. Set it once (or whenever the key is rotated) with `bunx wrangler secret put WORKOS_API_KEY` and paste the Staging `sk_test_…` key. Without it every API call fails.
+
+To deploy by hand, run `bun run deploy` (it uses wrangler, so log in with `wrangler login` first). To reset the live demo to the fake seed data, run `bun run db:seed:remote` (with `WORKOS_API_KEY` in `.env`; it maps the seed's donor owners to WorkOS users by email).
 
 ### Brand
 

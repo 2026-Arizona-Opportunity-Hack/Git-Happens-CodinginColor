@@ -43,7 +43,7 @@ export default function DonorDetail() {
   const { id } = useParams()
   const nav = useNavigate()
   const s = useStore()
-  const donor = s.visibleDonors.find((d) => d.id === id)
+  const donor = s.donors.find((d) => d.id === id)
   const [channel, setChannel] = useState<Channel>('text')
   const [note, setNote] = useState('')
   const [stepText, setStepText] = useState(donor?.nextStep?.text ?? '')
@@ -61,8 +61,8 @@ export default function DonorDetail() {
   const max = Math.max(1, ...byYear.map(([, v]) => v))
   const upcoming = s.events.filter((e) => e.date >= s.today)
 
-  const draft = (kind: Parameters<typeof s.createDraft>[1]) => {
-    s.createDraft(donor.id, kind, donor.email ? 'email' : 'text')
+  const draft = async (kind: Parameters<typeof s.createDraft>[1]) => {
+    if (!(await s.createDraft(donor.id, kind, donor.email ? 'email' : 'text'))) return
     toast('Draft created. Review it in Follow-ups.', { action: { label: 'Open', onClick: () => nav('/follow-ups') } })
   }
 

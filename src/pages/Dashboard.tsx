@@ -6,14 +6,14 @@ import { useStore } from '@/store'
 import { fmtDate, money, quarterlyTouchDue, retentionStatus, yearOf } from '@/lib/logic'
 
 export default function Dashboard() {
-  const { visibleDonors, donors, gifts, interactions, boardMembers, events, today, member, session } = useStore()
+  const { donors, gifts, interactions, boardMembers, events, today, member, session } = useStore()
   const year = yearOf(today)
-  const ids = new Set(visibleDonors.map((d) => d.id))
+  const ids = new Set(donors.map((d) => d.id))
   const myGifts = gifts.filter((g) => ids.has(g.donorId))
   const ytd = myGifts.filter((g) => yearOf(g.date) === year).reduce((s, g) => s + g.amount, 0)
-  const overdue = visibleDonors.filter((d) => d.nextStep && d.nextStep.due < today)
-  const touchDue = visibleDonors.filter((d) => quarterlyTouchDue(d, today))
-  const lapsed = visibleDonors.filter((d) => retentionStatus(myGifts.filter((g) => g.donorId === d.id), year) === 'lapsed')
+  const overdue = donors.filter((d) => d.nextStep && d.nextStep.due < today)
+  const touchDue = donors.filter((d) => quarterlyTouchDue(d, today))
+  const lapsed = donors.filter((d) => retentionStatus(myGifts.filter((g) => g.donorId === d.id), year) === 'lapsed')
 
   return (
     <>
@@ -23,7 +23,7 @@ export default function Dashboard() {
       />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat label={`Raised ${year} YTD`} value={money(ytd)} />
-        <Stat label="Donors" value={visibleDonors.length} />
+        <Stat label="Donors" value={donors.length} />
         <Stat label="Overdue next steps" value={overdue.length} hint="Past their due date" />
         <Stat label="Lapsed this year" value={lapsed.length} hint={`Gave in ${year - 1}, not ${year}`} />
       </div>

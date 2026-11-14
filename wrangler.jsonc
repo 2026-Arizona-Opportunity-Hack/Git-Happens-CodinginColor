@@ -1,12 +1,21 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "githappens",
+  "main": "./worker/index.ts",
   "workers_dev": true,
   "compatibility_date": "2026-11-01",
   "assets": {
-    "directory": "./dist",
     // Client-side routes (/donors/d7) fall back to index.html
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    // /api/* goes to the Worker; everything else is a static file
+    "run_worker_first": ["/api/*"]
   },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "githappens", "database_id": "7ecb8d1a-5f89-456a-b880-e00ba97d5dfb", "migrations_dir": "migrations" }
+  ],
+  // Public AuthKit client ID and the "Coding in Color" organization that holds
+  // the board (WorkOS staging environment). Not secrets. WORKOS_API_KEY is a
+  // Worker secret: `wrangler secret put WORKOS_API_KEY`, or .env locally.
+  "vars": { "WORKOS_CLIENT_ID": "client_01M7E3A3JEVSSQCSM38YCBW0VQ", "WORKOS_ORG_ID": "org_01M7E55JADH32FJZXZBGRVWJQS" },
   "routes": [{ "pattern": "githappens.jurenka.software", "custom_domain": true, "zone_name": "jurenka.software" }]
 }

@@ -4,6 +4,8 @@ import type { BoardMember, CicEvent, Donor, Gift, Interaction } from './types'
 
 export const TODAY = '2026-11-14'
 
+// The fake donors' owners. The real board lives in WorkOS; the seed script
+// maps these emails to WorkOS user IDs, so each must exist there.
 export const boardMembers: BoardMember[] = [
   { id: 'bm1', name: 'Alex Rivera', email: 'alex@example.org' },
   { id: 'bm2', name: 'Priya Natarajan', email: 'priya@example.org' },
