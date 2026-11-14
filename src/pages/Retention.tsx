@@ -9,12 +9,12 @@ import { money, retentionStatus, totalsByYear, yearOf, type RetentionStatus } fr
 const ORDER: RetentionStatus[] = ['new', 'recovered', 'increased', 'same', 'decreased', 'lapsed']
 
 export default function Retention() {
-  const { visibleDonors, gifts, today } = useStore()
+  const { donors, gifts, today } = useStore()
   const thisYear = yearOf(today)
   const years = [thisYear - 2, thisYear - 1, thisYear]
   const [year, setYear] = useState(thisYear)
 
-  const rows = visibleDonors.map((d) => {
+  const rows = donors.map((d) => {
     const gs = gifts.filter((g) => g.donorId === d.id)
     const t = totalsByYear(gs)
     return { d, status: retentionStatus(gs, year), cur: t.get(year) ?? 0, prev: t.get(year - 1) ?? 0 }

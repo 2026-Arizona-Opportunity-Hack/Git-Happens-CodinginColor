@@ -10,13 +10,13 @@ import { daysBetween, fmtDate, quarterlyTouchDue, retentionStatus, yearOf } from
 
 // The board member's work queue. The system drafts and reminds; a human sends.
 export default function FollowUps() {
-  const { visibleDonors, gifts, drafts, today, createDraft, updateDraft, approveDraft, discardDraft } = useStore()
-  const ids = new Set(visibleDonors.map((d) => d.id))
-  const name = (id: string) => visibleDonors.find((d) => d.id === id)?.name
+  const { donors, gifts, drafts, today, createDraft, updateDraft, approveDraft, discardDraft } = useStore()
+  const ids = new Set(donors.map((d) => d.id))
+  const name = (id: string) => donors.find((d) => d.id === id)?.name
 
-  const steps = visibleDonors.filter((d) => d.nextStep).sort((a, b) => a.nextStep!.due.localeCompare(b.nextStep!.due))
-  const touchDue = visibleDonors.filter((d) => quarterlyTouchDue(d, today))
-  const lapsed = visibleDonors.filter((d) => retentionStatus(gifts.filter((g) => g.donorId === d.id), yearOf(today)) === 'lapsed')
+  const steps = donors.filter((d) => d.nextStep).sort((a, b) => a.nextStep!.due.localeCompare(b.nextStep!.due))
+  const touchDue = donors.filter((d) => quarterlyTouchDue(d, today))
+  const lapsed = donors.filter((d) => retentionStatus(gifts.filter((g) => g.donorId === d.id), yearOf(today)) === 'lapsed')
   const pending = drafts.filter((d) => d.status === 'pending' && ids.has(d.donorId))
   const hasPending = (donorId: string) => pending.some((p) => p.donorId === donorId)
 
@@ -38,7 +38,7 @@ export default function FollowUps() {
                   <Textarea aria-label={`Draft to ${name(d.donorId)}`} rows={7} value={d.body} onChange={(e) => updateDraft(d.id, e.target.value)} />
                 </CardContent>
                 <CardFooter className="gap-2">
-                  <Button onClick={() => { approveDraft(d.id); toast.success(`Approved and logged for ${name(d.donorId)}`) }}>
+                  <Button onClick={async () => { if (await approveDraft(d.id)) toast.success(`Approved and logged for ${name(d.donorId)}`) }}>
                     Approve &amp; send
                   </Button>
                   <Button variant="ghost" onClick={() => discardDraft(d.id)}>Discard</Button>

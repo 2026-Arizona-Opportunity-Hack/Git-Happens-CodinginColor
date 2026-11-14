@@ -49,7 +49,7 @@ Judges score **Scope, Documentation, Polish and Security**, plus a separate **Ac
 
 ## What we built
 
-Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevity, and follow-ups depend on board members remembering them. This platform merges those sources into one deduplicated donor list, gives each board member a queue of next steps with drafted thank-yous and updates that a human approves, and shows year-over-year retention. Right now it's a **clickable prototype** on in-memory fake data: it sets the direction and the UI, and there's no backend yet.
+Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevity, and follow-ups depend on board members remembering them. This platform merges those sources into one deduplicated donor list, gives each board member a queue of next steps with drafted thank-yous and updates that a human approves, and shows year-over-year retention. Data lives in Cloudflare D1 behind a Worker API; the seed data is fake. Sign-in is still a demo switcher until WorkOS lands.
 
 | Page | Brief requirement (P0) |
 |---|---|
@@ -72,20 +72,19 @@ Use the **"Viewing as"** switcher in the sidebar to see the board-member view. B
 - `src/lib/dedupe.ts`: CSV parsing, per-source column mapping, union-find dedupe on email, then phone, then name+org, then name. Name-only matches are flagged for review.
 - `src/lib/logic.ts`: round-robin assignment, retention classification, quarterly cadence.
 - `src/lib/drafts.ts`: message templates. **Swap point for AI drafting**: same inputs, and a human still approves.
-- `src/store.tsx`: in-memory state. Each action maps to one future API route or table write.
+- `src/store.tsx`: the API client. It loads `/api/bootstrap`, and each action calls one route and reloads, so the UI always shows what D1 holds.
 - `worker/index.ts`: the API. Every route resolves the caller first; board members can only read or write donors they own, and import is admin-only.
 - `migrations/`: D1 schema. Add a new numbered file for each change; deploys apply them before the new code goes live.
 - `src/data/seed.ts`: fake donors. **Never commit real donor PII.**
 
 ### Next steps
 
-1. **Wire the UI to the API**: `src/store.tsx` still holds state in memory; switch it to `/api/bootstrap` and the action routes in `worker/index.ts`.
-2. **Sign-in**: WorkOS AuthKit. The Worker verifies the WorkOS access token and looks the user up in `board_members`; `is_admin` sets the role.
-3. **Real exports**: get scrubbed Zeffy/Benevity samples from CIC and fix `COLUMN_MAP` in `dedupe.ts`.
-4. **Read API**: a Worker route behind a hashed API key, returning aggregates only (no PII).
-5. **Sending**: email via Resend/Listmonk and SMS via Twilio. Do this only after approval, and log the send to `interactions`.
-6. **Pick a P1**: debrief-to-action (a voice note becomes a contact record, a next step and a draft) or events-aware next steps (Google Calendar).
-7. **Brand**: swap the placeholder mark in `App.tsx` for the real CIC logo, and run Lighthouse (target a11y ≥ 95).
+1. **Sign-in**: WorkOS AuthKit. The Worker verifies the WorkOS access token and looks the user up in `board_members`; `is_admin` sets the role.
+2. **Real exports**: get scrubbed Zeffy/Benevity samples from CIC and fix `COLUMN_MAP` in `dedupe.ts`.
+3. **Read API**: a Worker route behind a hashed API key, returning aggregates only (no PII).
+4. **Sending**: email via Resend/Listmonk and SMS via Twilio. Do this only after approval, and log the send to `interactions`.
+5. **Pick a P1**: debrief-to-action (a voice note becomes a contact record, a next step and a draft) or events-aware next steps (Google Calendar).
+6. **Brand**: swap the placeholder mark in `App.tsx` for the real CIC logo, and run Lighthouse (target a11y ≥ 95).
 
 ## Tech stack
 
