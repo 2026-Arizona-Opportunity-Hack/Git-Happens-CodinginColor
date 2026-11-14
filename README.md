@@ -61,6 +61,10 @@ Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevi
 | **Import** | Spreadsheet + Zeffy + Benevity CSVs → dedupe preview → commit; new donors assigned **round-robin to the member with the fewest** |
 | **Read API** | Contract for `GET /api/v1/donor-summary`, aggregated by period / program / board member, with a live sample response |
 
+![Dashboard](docs/screenshots/dashboard.png)
+
+![Donors](docs/screenshots/donors.png)
+
 Use the **"Viewing as"** switcher in the sidebar to see the board-member view. Board members only see their own donors, and Import and the API page are admin-only.
 
 ### Where the logic lives
