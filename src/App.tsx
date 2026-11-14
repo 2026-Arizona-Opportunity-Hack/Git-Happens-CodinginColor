@@ -57,9 +57,11 @@ function Shell() {
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:p-2">Skip to content</a>
       <aside className="border-b border-sidebar-border bg-sidebar p-4 md:sticky md:top-0 md:h-screen md:border-r md:border-b-0">
         <div className="mb-6 flex items-center gap-2">
-          <div aria-hidden className="flex size-8 items-center justify-center rounded-md bg-cic-dark text-sm font-bold text-white">
-            C<span className="text-cic-green">i</span>C
-          </div>
+          <img
+            src="/cic-logo.png"
+            alt="Coding in Color"
+            className="size-8 object-contain"
+          />
           <div className="leading-tight">
             <div className="font-bold text-cic-dark">Coding in Color</div>
             <div className="text-xs text-muted-foreground">Donor Relationships</div>
