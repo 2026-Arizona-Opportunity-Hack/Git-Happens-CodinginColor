@@ -21,7 +21,7 @@ const NAV = [
   { to: '/api', label: 'Read API', icon: Code2, adminOnly: true },
 ]
 
-// Demo-only identity switcher. Replaced by Supabase Auth; role comes from the
+// Demo-only identity switcher. Replaced by WorkOS sign-in; role comes from the
 // user's profile row, never from the client.
 function RoleSwitcher() {
   const { session, setSession, boardMembers } = useStore()

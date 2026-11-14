@@ -73,22 +73,26 @@ Use the **"Viewing as"** switcher in the sidebar to see the board-member view. B
 - `src/lib/logic.ts`: round-robin assignment, retention classification, quarterly cadence.
 - `src/lib/drafts.ts`: message templates. **Swap point for AI drafting**: same inputs, and a human still approves.
 - `src/store.tsx`: in-memory state. Each action maps to one future API route or table write.
+- `worker/index.ts`: the API. Every route resolves the caller first; board members can only read or write donors they own, and import is admin-only.
+- `migrations/`: D1 schema. Add a new numbered file for each change; deploys apply them before the new code goes live.
 - `src/data/seed.ts`: fake donors. **Never commit real donor PII.**
 
 ### Next steps
 
-1. **Backend**: Supabase (Postgres + Auth + RLS). Tables: `board_members`, `donors`, `gifts`, `interactions`, `drafts`, `events`, `api_keys`. Use an RLS policy so `board` users can only see donors where `owner_id = auth.uid()`.
-2. **Real exports**: get scrubbed Zeffy/Benevity samples from CIC and fix `COLUMN_MAP` in `dedupe.ts`.
-3. **Read API**: a Supabase edge function behind a hashed API key, returning aggregates only (no PII).
-4. **Sending**: email via Resend/Listmonk and SMS via Twilio. Do this only after approval, and log the send to `interactions`.
-5. **Pick a P1**: debrief-to-action (a voice note becomes a contact record, a next step and a draft) or events-aware next steps (Google Calendar).
-6. **Brand**: swap the placeholder mark in `App.tsx` for the real CIC logo, and run Lighthouse (target a11y ≥ 95).
+1. **Wire the UI to the API**: `src/store.tsx` still holds state in memory; switch it to `/api/bootstrap` and the action routes in `worker/index.ts`.
+2. **Sign-in**: WorkOS AuthKit. The Worker verifies the WorkOS access token and looks the user up in `board_members`; `is_admin` sets the role.
+3. **Real exports**: get scrubbed Zeffy/Benevity samples from CIC and fix `COLUMN_MAP` in `dedupe.ts`.
+4. **Read API**: a Worker route behind a hashed API key, returning aggregates only (no PII).
+5. **Sending**: email via Resend/Listmonk and SMS via Twilio. Do this only after approval, and log the send to `interactions`.
+6. **Pick a P1**: debrief-to-action (a voice note becomes a contact record, a next step and a draft) or events-aware next steps (Google Calendar).
+7. **Brand**: swap the placeholder mark in `App.tsx` for the real CIC logo, and run Lighthouse (target a11y ≥ 95).
 
 ## Tech stack
 
 - Frontend: Vite + React + TypeScript, Tailwind v4, [shadcn/ui](https://ui.shadcn.com) on [Base UI](https://base-ui.com) (`components.json` style `base-nova`). Add components with `bunx shadcn@latest add <name>`.
-- Backend: none yet
-- Database: none yet
+- Backend: a Cloudflare Worker (`worker/index.ts`) serving a JSON API under `/api/*`, next to the static app
+- Database: [Cloudflare D1](https://developers.cloudflare.com/d1/) (SQLite). Schema in `migrations/`
+- Auth: [WorkOS AuthKit](https://workos.com/user-management) (in progress; the API trusts a demo session header until it lands)
 - APIs / services: none yet
 
 ## Run it locally
@@ -99,11 +103,13 @@ Needs [Bun](https://bun.sh).
 git clone https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor.git
 cd Git-Happens-CodinginColor
 bun install
-bun dev          # http://localhost:5173
-bun run build    # typecheck + production build
+bun run db:migrate   # create the local D1 database
+bun run db:seed      # load the fake demo data (re-run any time to reset)
+bun dev              # http://localhost:5173, app + API
+bun run build        # typecheck + production build
 ```
 
-There's no `.env` yet, because the app runs on in-memory data.
+There's no `.env` yet. `bun dev` runs the Worker and a local D1 database inside Vite, through `@cloudflare/vite-plugin`.
 
 ### Deploying
 
@@ -113,16 +119,16 @@ There's no `.env` yet, because the app runs on in-memory data.
 git push origin origin/main:develop
 ```
 
-Every push to `develop` deploys to **https://githappens.jurenka.software** through `.github/workflows/deploy.yml` (Cloudflare Workers static assets, configured in `wrangler.jsonc`). You can also run it by hand from the Actions tab.
+Every push to `develop` deploys to **https://githappens.jurenka.software** through `.github/workflows/deploy.yml` (a Cloudflare Worker with static assets and a D1 database, configured in `wrangler.jsonc`). Each deploy applies any new `migrations/` to the production database first. You can also run it by hand from the Actions tab.
 
 The repo needs two Actions secrets:
 
 | Secret | Value |
 |---|---|
-| `CLOUDFLARE_API_TOKEN` | API token from the "Edit Cloudflare Workers" template, scoped to the account and the `jurenka.software` zone |
+| `CLOUDFLARE_API_TOKEN` | API token from the "Edit Cloudflare Workers" template, scoped to the account and the `jurenka.software` zone, **plus Account → D1 → Edit** (the template leaves D1 out) |
 | `CLOUDFLARE_ACCOUNT_ID` | `57cdeda067b33ff3b8def5d2b65aee9d` |
 
-To deploy by hand, run `bun run deploy` (it uses wrangler, so log in with `wrangler login` first).
+To deploy by hand, run `bun run deploy` (it uses wrangler, so log in with `wrangler login` first). To reset the live demo to the fake seed data, run `bun run db:seed:remote`.
 
 ### Brand
 

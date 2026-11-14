@@ -1,4 +1,4 @@
-// Core domain model. Mirrors the Postgres schema sketched in docs/DATA_MODEL.md.
+// Core domain model. The D1 schema in migrations/ stores these shapes.
 
 export type Role = 'admin' | 'board'
 

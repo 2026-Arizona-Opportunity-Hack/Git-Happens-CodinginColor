@@ -5,7 +5,7 @@ import { draftBody } from '@/lib/drafts'
 import { dedupe, normEmail, normPhone, normName } from '@/lib/dedupe'
 import { nextOwner } from '@/lib/logic'
 
-// In-memory store standing in for Supabase/Postgres. Each action here maps to
+// In-memory store standing in for the D1-backed API. Each action here maps to
 // one API route / RLS-guarded table write in the real build.
 
 interface Session { role: Role; memberId: string }
