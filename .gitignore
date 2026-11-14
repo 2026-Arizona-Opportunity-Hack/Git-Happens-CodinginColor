@@ -31,3 +31,7 @@ Thumbs.db
 # personal docs
 ns-docs/
 
+
+# Vite
+dist-ssr/
+*.local

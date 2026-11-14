@@ -53,19 +53,35 @@ Judges score **Scope, Documentation, Polish and Security**, plus a separate **Ac
 
 ## Tech stack
 
-- Frontend:
-- Backend:
-- Database:
-- APIs / services:
+- Frontend: Vite + React + TypeScript, Tailwind v4, [shadcn/ui](https://ui.shadcn.com) on [Base UI](https://base-ui.com) (`components.json` style `base-nova`). Add components with `bunx shadcn@latest add <name>`.
+- Backend: none yet
+- Database: none yet
+- APIs / services: none yet
 
 ## Run it locally
 
+Needs [Bun](https://bun.sh).
+
 ```bash
-git clone https://github.com/2026-Arizona-Opportunity-Hack/Git Happens-CodinginColor.git
-cd Git Happens-CodinginColor
-cp .env.example .env   # fill in your own values — never commit .env
-# install + start commands here
+git clone https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor.git
+cd Git-Happens-CodinginColor
+bun install
+bun dev          # http://localhost:5173
+bun run build    # typecheck + production build
 ```
+
+There's no `.env` yet, because the app runs on in-memory data.
+
+### Brand
+
+Colors follow the CIC brand guidelines and live as tokens in `src/index.css`:
+
+- Dark green `#007A3D` is the dominant color: headers, table headers and primary buttons.
+- Green `#00A850` is an accent only: focus rings and the logo.
+- Tint `#E6F4ED` is for table rows and callouts.
+- Body type is Arial.
+
+Primary buttons use dark green rather than `#00A850`, because white on `#00A850` is about 3.1:1 contrast and fails WCAG AA.
 
 ## Links
 
