@@ -10,6 +10,8 @@ import { nextOwner } from '../src/lib/logic'
 export interface Env {
   DB: D1Database
   WORKOS_CLIENT_ID: string
+  WORKOS_ORG_ID: string
+  WORKOS_API_KEY: string
 }
 
 interface Session { role: 'admin' | 'board'; memberId: string }
@@ -53,7 +55,6 @@ async function body(req: Request): Promise<Record<string, unknown>> {
 
 type Row = Record<string, unknown>
 
-const toMember = (r: Row): BoardMember => ({ id: r.id as string, name: r.name as string, email: r.email as string })
 const toDonor = (r: Row): Donor => ({
   id: r.id as string,
   name: r.name as string,
@@ -74,12 +75,49 @@ const toDraft = (r: Row): Draft => ({
   body: r.body as string, createdAt: r.created_at as string, status: r.status as Draft['status'], approvedBy: (r.approved_by as string) ?? undefined,
 })
 
+// --- Board members (WorkOS) -------------------------------------------------
+
+// WorkOS is the source of truth for people: a board member is an active member
+// of the CIC organization, and its "admin" role makes them a CIC admin. Member
+// IDs are WorkOS user IDs. Cached per isolate for a minute, so most requests
+// make no WorkOS calls; a role change shows up within that minute.
+interface Member extends BoardMember { role: Session['role'] }
+let membersCache: { at: number; members: Member[] } | undefined
+
+async function workos<T>(env: Env, path: string): Promise<T> {
+  const res = await fetch(`https://api.workos.com/user_management/${path}`, { headers: { Authorization: `Bearer ${env.WORKOS_API_KEY}` } })
+  if (!res.ok) throw new Error(`WorkOS ${path} returned ${res.status}`)
+  return res.json()
+}
+
+async function listMembers(env: Env): Promise<Member[]> {
+  if (membersCache && Date.now() - membersCache.at < 60_000) return membersCache.members
+  const q = `organization_id=${env.WORKOS_ORG_ID}&limit=100` // a board fits in one page
+  const [users, memberships] = await Promise.all([
+    workos<{ data: { id: string; email: string; first_name: string | null; last_name: string | null }[] }>(env, `users?${q}`),
+    workos<{ data: { user_id: string; status: string; role: { slug: string } }[] }>(env, `organization_memberships?${q}`),
+  ])
+  const roles = new Map(memberships.data.filter((m) => m.status === 'active').map((m) => [m.user_id, m.role.slug]))
+  const members = users.data
+    .filter((u) => roles.has(u.id))
+    .map((u): Member => ({
+      id: u.id,
+      email: u.email,
+      name: [u.first_name, u.last_name].filter(Boolean).join(' ') || u.email,
+      role: roles.get(u.id) === 'admin' ? 'admin' : 'board',
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+  membersCache = { at: Date.now(), members }
+  return members
+}
+
+const toMember = ({ id, name, email }: Member): BoardMember => ({ id, name, email })
+
 // --- Session ----------------------------------------------------------------
 
 // The caller sends their WorkOS access token as a Bearer header. We check its
-// signature against the WorkOS keys for our client, then look the email up in
-// board_members; is_admin sets the role. Nothing the client says is trusted.
-// The email claim comes from the environment's JWT template.
+// signature against the WorkOS keys for our client, then look its subject up
+// in the CIC organization. Nothing the client says is trusted.
 let jwks: ReturnType<typeof createRemoteJWKSet> | undefined
 
 async function getSession(req: Request, env: Env): Promise<Session> {
@@ -89,11 +127,9 @@ async function getSession(req: Request, env: Env): Promise<Session> {
   const { payload } = await jwtVerify(token, jwks).catch(() => {
     throw new HttpError(401, 'Session expired, sign in again')
   })
-  if (typeof payload.email !== 'string') throw new HttpError(401, 'Token has no email claim')
-  const m = await env.DB.prepare('SELECT id, is_admin FROM board_members WHERE lower(email) = lower(?)')
-    .bind(payload.email).first<{ id: string; is_admin: number }>()
-  if (!m) throw new HttpError(403, `${payload.email} is not a board member`)
-  return { role: m.is_admin ? 'admin' : 'board', memberId: m.id }
+  const me = (await listMembers(env)).find((m) => m.id === payload.sub)
+  if (!me) throw new HttpError(403, `${typeof payload.email === 'string' ? payload.email : 'This account'} is not a CIC board member`)
+  return { role: me.role, memberId: me.id }
 }
 
 const requireAdmin = (s: Session) => {
@@ -140,8 +176,8 @@ async function route(req: Request, env: Env): Promise<Response> {
   // Everything the UI needs, already scoped to the caller.
   if (m === 'GET' && parts[0] === 'bootstrap') {
     const f = ownerFilter(s, 'd.owner_id')
-    const [members, events, donors, gifts, interactions, drafts] = await db.batch<Row>([
-      db.prepare('SELECT * FROM board_members ORDER BY id'),
+    const members = await listMembers(env)
+    const [events, donors, gifts, interactions, drafts] = await db.batch<Row>([
       db.prepare('SELECT * FROM events ORDER BY date'),
       db.prepare(`SELECT d.* FROM donors d WHERE ${f.sql} ORDER BY d.id`).bind(...f.args),
       db.prepare(`SELECT g.* FROM gifts g JOIN donors d ON d.id = g.donor_id WHERE ${f.sql}`).bind(...f.args),
@@ -151,7 +187,7 @@ async function route(req: Request, env: Env): Promise<Response> {
     return json({
       session: s,
       today: today(),
-      boardMembers: members.results.map(toMember),
+      boardMembers: members.map(toMember),
       events: events.results,
       donors: donors.results.map(toDonor),
       gifts: gifts.results.map(toGift),
@@ -187,7 +223,7 @@ async function route(req: Request, env: Env): Promise<Response> {
     if (m === 'PUT' && parts[2] === 'owner') {
       requireAdmin(s)
       const ownerId = str((await body(req)).ownerId, 'ownerId', 50)
-      if (!(await db.prepare('SELECT 1 FROM board_members WHERE id = ?').bind(ownerId).first())) throw new HttpError(400, 'Unknown board member')
+      if (!(await listMembers(env)).some((mb) => mb.id === ownerId)) throw new HttpError(400, 'Unknown board member')
       await db.prepare('UPDATE donors SET owner_id = ? WHERE id = ?').bind(ownerId, donor.id).run()
       return json({ ok: true })
     }
@@ -199,13 +235,13 @@ async function route(req: Request, env: Env): Promise<Response> {
     const donor = await loadDonor(env, s, str(b.donorId, 'donorId', 50))
     const kind = oneOf(b.kind, KINDS, 'kind')
     const channel = b.channel === undefined ? 'email' : oneOf(b.channel, ['email', 'text'] as const, 'channel')
-    const [gifts, owner] = await db.batch<Row>([
-      db.prepare('SELECT * FROM gifts WHERE donor_id = ?').bind(donor.id),
-      db.prepare('SELECT * FROM board_members WHERE id = ?').bind(donor.ownerId),
-    ])
+    const gifts = await db.prepare('SELECT * FROM gifts WHERE donor_id = ?').bind(donor.id).all()
+    // Sign as the donor's owner, or as the caller if the owner has left the board.
+    const members = await listMembers(env)
+    const owner = members.find((mb) => mb.id === donor.ownerId) ?? members.find((mb) => mb.id === s.memberId)!
     const draft: Draft = {
       id: id('x'), donorId: donor.id, kind, channel, status: 'pending', createdAt: today(),
-      body: draftBody(kind, donor, gifts.results.map(toGift), toMember(owner.results[0])),
+      body: draftBody(kind, donor, gifts.results.map(toGift), toMember(owner)),
     }
     await db.prepare('INSERT INTO drafts (id, donor_id, kind, channel, body, created_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .bind(draft.id, draft.donorId, draft.kind, draft.channel, draft.body, draft.createdAt, draft.status).run()
@@ -225,7 +261,7 @@ async function route(req: Request, env: Env): Promise<Response> {
     // Human approval is the only path to "sent". Approving logs the
     // interaction and resets the quarterly clock.
     if (m === 'POST' && parts[2] === 'approve') {
-      const me = toMember((await db.prepare('SELECT * FROM board_members WHERE id = ?').bind(s.memberId).first())!)
+      const me = (await listMembers(env)).find((mb) => mb.id === s.memberId)!
       await db.batch<Row>([
         db.prepare("UPDATE drafts SET status = 'approved', approved_by = ? WHERE id = ?").bind(s.memberId, draft.id),
         ...logInteraction(env, s, draft.donorId, draft.channel, `Sent ${draft.kind.replace('-', ' ')} (approved by ${me.name})`),
@@ -259,9 +295,9 @@ async function route(req: Request, env: Env): Promise<Response> {
       }
     })
 
-    const [members, existing] = await db.batch<Row>([db.prepare('SELECT * FROM board_members ORDER BY id'), db.prepare('SELECT * FROM donors')])
+    const existing = await db.prepare('SELECT * FROM donors').all()
     const donors = existing.results.map(toDonor)
-    const boardMembers = members.results.map(toMember)
+    const boardMembers = await listMembers(env)
     const writes: D1PreparedStatement[] = []
     let created = 0, merged = 0
     const clusters = dedupe(rows)

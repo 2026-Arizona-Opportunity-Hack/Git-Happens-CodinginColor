@@ -13,7 +13,9 @@
   "d1_databases": [
     { "binding": "DB", "database_name": "githappens", "database_id": "7ecb8d1a-5f89-456a-b880-e00ba97d5dfb", "migrations_dir": "migrations" }
   ],
-  // Public AuthKit client ID (WorkOS staging environment). Not a secret.
-  "vars": { "WORKOS_CLIENT_ID": "client_01M7E3A3JEVSSQCSM38YCBW0VQ" },
+  // Public AuthKit client ID and the "Coding in Color" organization that holds
+  // the board (WorkOS staging environment). Not secrets. WORKOS_API_KEY is a
+  // Worker secret: `wrangler secret put WORKOS_API_KEY`, or .env locally.
+  "vars": { "WORKOS_CLIENT_ID": "client_01M7E3A3JEVSSQCSM38YCBW0VQ", "WORKOS_ORG_ID": "org_01M7E55JADH32FJZXZBGRVWJQS" },
   "routes": [{ "pattern": "githappens.jurenka.software", "custom_domain": true, "zone_name": "jurenka.software" }]
 }
