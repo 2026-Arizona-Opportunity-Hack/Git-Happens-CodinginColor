@@ -51,7 +51,7 @@ Three automatic checks, so security doesn't rely on someone remembering.
 
 ### 95% coverage gate
 
-The **Tests** workflow runs the typecheck and unit tests on every PR and fails it if tests cover under 95% of lines or functions in `src/` (`scripts/check-coverage.ts`). Modules with no tests still count ([#83](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/pull/83)). Coverage is 100% today. See [Testing](testing.md).
+The **Tests** workflow runs the typecheck and unit tests on every PR and fails it if tests cover under 95% of lines or functions in `src/` (`scripts/check-coverage.ts`). Modules with no tests still count ([#83](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/pull/83)). Coverage is about 98% today. See [Testing](testing.md).
 
 ### Fuzz tests
 
