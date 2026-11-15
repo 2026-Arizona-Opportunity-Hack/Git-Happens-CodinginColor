@@ -10,7 +10,7 @@ covers:
 
 # My Donors
 
-The donors assigned to the signed-in person. Admins have one too, since they can be assigned donors. Each row shows lifetime giving, status and next step.
+The donors assigned to the signed-in person. Admins have one too, since they can be assigned donors. Each row shows lifetime giving, status and next step. The subtitle names only the sources these donors actually came from (e.g. "from Zeffy"), not every source the app can import.
 
 **Filters** come from the column headers, as in Excel: the funnel on Donor (name, organization or email), Last gift (a gift in a date range), Status, Next step (overdue, due in 7 days, later, none) and Sources. Active filters show as removable chips above the table, and exports follow them.
 

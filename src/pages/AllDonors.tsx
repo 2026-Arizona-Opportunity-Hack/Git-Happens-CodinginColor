@@ -12,7 +12,7 @@ import type { Donor } from '@/data/types'
 import { fmtDate, lastGiftDate, money, suggestOwners, UNASSIGNED } from '@/lib/logic'
 import { donorsCsv, donorsXlsx, download } from '@/lib/export'
 import { donorTextFilter, giftDateFilter, sourceFilter } from '@/lib/donor-columns'
-import { cn } from '@/lib/utils'
+import { cn, fmtPhone } from '@/lib/utils'
 import { useStore } from '@/store'
 
 // Every donor and who looks after them. This is where an admin manages board
@@ -107,7 +107,7 @@ export default function AllDonors() {
       cell: ({ row: { original: { d } } }) => (
         <>
           <div>{d.email ?? '—'}</div>
-          {d.phone && <div className="text-muted-foreground">{d.phone}</div>}
+          {d.phone && <div className="text-muted-foreground">{fmtPhone(d.phone)}</div>}
         </>
       ),
     },

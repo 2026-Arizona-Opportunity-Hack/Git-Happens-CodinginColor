@@ -8,7 +8,7 @@ covers:
 
 # Donor detail
 
-One donor's page:
+One donor's page. The header shows their organization, email and phone (US numbers as (555) 555-1234).
 
 - **Notes:** free text about the donor, under Giving by year. It saves as you type (a second after you stop, or when you leave the box), and the AI reads it when it writes their [drafts](follow-ups.md). Notes can also be imported from a Notes column on [Update Donors](update-donors.md).
 - **Timeline** of gifts and communications.

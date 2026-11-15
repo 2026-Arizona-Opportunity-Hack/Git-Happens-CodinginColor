@@ -21,6 +21,11 @@ const URGENCY: { key: Urgency; label: string; badge: string }[] = [
   { key: 'upcoming', label: 'Coming up', badge: 'bg-cic-tint text-cic-dark' },
 ]
 
+// The sidebar badge counts only what needs action, so say how the page's total
+// splits, or the two numbers look like they disagree.
+const summary = (now: number, upcoming: number) =>
+  `${now} need${now === 1 ? 's' : ''} action · ${upcoming} coming up`
+
 // One inbox for everything the app would otherwise make you go looking for.
 export default function Notifications() {
   const { session } = useStore()
@@ -34,6 +39,7 @@ export default function Notifications() {
     <>
       <PageHeader
         title="Notifications"
+        description={summary(all.filter((r) => r.urgency !== 'upcoming').length, all.filter((r) => r.urgency === 'upcoming').length)}
       />
 
       <div role="group" aria-label="Filter reminders" className="mb-6 flex flex-wrap gap-2">

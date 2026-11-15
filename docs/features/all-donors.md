@@ -7,7 +7,7 @@ covers:
 
 # All Donors (admin)
 
-Every donor, with contact details and their board member.
+Every donor, with contact details and their board member. US phone numbers show as (555) 555-1234 whatever format the import used.
 
 - **Assigning:** pick board members in any rows (changed rows turn amber and say *Not saved yet*), then click **Save** (bottom right). Nothing is saved before that.
 - **Suggest assignment**, beside the Unassigned donors heading, fills in a board member for each unassigned donor the filters show (whoever has the fewest, counting unsaved choices). Check them, then Save. Until then each board member in the dropdown reads like "Jordan (4 + 3 unsaved)", so you can see the load even out before saving.

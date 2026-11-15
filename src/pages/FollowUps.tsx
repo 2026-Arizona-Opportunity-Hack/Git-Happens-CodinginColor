@@ -12,7 +12,7 @@ import type { DraftKind } from '@/data/types'
 import { DRAFT_SUBJECT, draftBody } from '@/lib/drafts'
 import { useStore } from '@/store'
 import { calendarLink, daysBetween, fmtDate, quarterlyTouchDue, retentionStatus, yearOf } from '@/lib/logic'
-import { cn } from '@/lib/utils'
+import { cn, fmtPhone } from '@/lib/utils'
 
 // The board member's work queue. The AI drafts and the system reminds; a
 // human sends. Template emails offers the plain templates instead.
@@ -206,7 +206,7 @@ function TemplateEmails() {
           </div>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              {channel === 'email' ? <>Subject: <span className="text-foreground">{DRAFT_SUBJECT[kind]}</span> · to {donor.email}</> : <>Text message to {donor.phone}</>}
+              {channel === 'email' ? <>Subject: <span className="text-foreground">{DRAFT_SUBJECT[kind]}</span> · to {donor.email}</> : <>Text message to {donor.phone && fmtPhone(donor.phone)}</>}
             </p>
             <pre className="whitespace-pre-wrap rounded-md border bg-muted/40 p-3 font-sans text-sm" aria-label="Template preview">{body}</pre>
             <Button disabled={saving} onClick={use}>{saving ? 'Adding…' : 'Use this template'}</Button>

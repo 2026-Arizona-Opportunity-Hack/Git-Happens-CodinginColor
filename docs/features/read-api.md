@@ -17,6 +17,7 @@ It takes an API key (`Authorization: Bearer cic_live_…`). An admin creates one
 
 An interactive reference for the whole Worker API is at [`/api/docs`](https://githappens.jurenka.software/api/docs). [Scalar](https://scalar.com) renders it from the OpenAPI spec at `/api/openapi.json`, which comes from `worker/openapi.ts`. Paste a WorkOS access token, or a read API key for `/api/v1`, to try requests.
 
+`POST /api/import` leaves new donors unassigned; an admin assigns them on [All Donors](all-donors.md).
 **When a route in `worker/index.ts` changes, update `worker/openapi.ts` in the same PR.** The spec is the API's documentation; don't describe routes by hand elsewhere.
 
 ## Where the code is
