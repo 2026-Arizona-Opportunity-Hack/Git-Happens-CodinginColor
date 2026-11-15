@@ -10,7 +10,8 @@ covers:
 Every donor, with contact details and their board member.
 
 - **Assigning:** pick board members in any rows (changed rows turn amber and say *Not saved yet*), then click **Save** (bottom right). Nothing is saved before that.
-- **Suggest assignment**, beside the Unassigned donors heading, fills in a board member for each unassigned donor the filters show (whoever has the fewest, counting unsaved choices). Check them, then Save.
+- **Suggest assignment**, beside the Unassigned donors heading, fills in a board member for each unassigned donor the filters show (whoever has the fewest, counting unsaved choices). Check them, then Save. Until then each board member in the dropdown reads like "Jordan (4 + 3 unsaved)", so you can see the load even out before saving.
+- Donor, contact and source cells wrap, so the Board member column stays on screen with the assistant docked beside the page; at narrower widths the table scrolls sideways.
 - **New donors** picked in the New Donors popup on [Update Donors](update-donors.md) sit at the bottom marked *New*, with a suggested board member filled in (the one with the fewest donors).
 - **Unassigned donors** are in their own section below.
 - **Filters** from the column headers, as on [My Donors](my-donors.md): Donor, Contact, Last gift date range, Sources and Board member, applied to both sections.
