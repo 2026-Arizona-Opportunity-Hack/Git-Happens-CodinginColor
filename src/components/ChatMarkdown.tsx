@@ -52,7 +52,7 @@ function remarkChatBlocks() {
 }
 
 function DonorCard({ id }: { id?: string }) {
-  const { donors, gifts, member } = useStore()
+  const { donors, gifts, ownerName } = useStore()
   const d = donors.find((x) => x.id === id)
   if (!d) return <p className="text-muted-foreground">(That donor isn't one you can see.)</p>
   const theirs = gifts.filter((g) => g.donorId === d.id).sort((a, b) => b.date.localeCompare(a.date))
@@ -60,7 +60,7 @@ function DonorCard({ id }: { id?: string }) {
     <Link to={`/donors/${d.id}`} className="my-2 block rounded-md border bg-background p-3 no-underline hover:border-cic-dark">
       <span className="block font-semibold text-foreground">{d.name}</span>
       <span className="block text-xs text-muted-foreground">
-        {d.org && `${d.org} · `}Owner: {member(d.ownerId)?.name ?? 'unassigned'}
+        {d.org && `${d.org} · `}Owner: {ownerName(d)}
       </span>
       <span className="block text-xs text-muted-foreground">
         {theirs[0] ? `Last gift ${money(theirs[0].amount)} on ${fmtDate(theirs[0].date)}` : 'No gifts yet'}

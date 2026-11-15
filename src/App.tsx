@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom'
 import { AuthKitProvider, useAuth } from '@workos-inc/authkit-react'
-import { BarChart3, Bell, Code2, Home, ListTodo, LogOut, MessageCircle, ShieldAlert, Upload, UserCog, UserRound, Users } from 'lucide-react'
+import { BarChart3, Bell, Code2, Contact, Home, ListTodo, LogOut, MessageCircle, ShieldAlert, Upload, UserCog, UserRound, Users } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
 import { StoreProvider, useReminders, useStore } from '@/store'
@@ -10,6 +10,7 @@ import { ChatPanel, useChat, useWide } from '@/components/ChatWidget'
 import { InstallPrompt } from '@/components/InstallPrompt'
 import Dashboard from '@/pages/Dashboard'
 import Donors from '@/pages/Donors'
+import AllDonors from '@/pages/AllDonors'
 import DonorDetail from '@/pages/DonorDetail'
 import FollowUps from '@/pages/FollowUps'
 import Retention from '@/pages/Retention'
@@ -23,11 +24,12 @@ const NAV = [
   { to: '/', label: 'Dashboard', icon: Home },
   { to: '/notifications', label: 'Notifications', icon: Bell },
   { to: '/follow-ups', label: 'Follow-ups', icon: ListTodo },
-  { to: '/donors', label: 'Donors', icon: Users },
-  { to: '/retention', label: 'Retention', icon: BarChart3 },
+  { to: '/donors', label: 'My Donors', icon: Contact },
+  { to: '/all-donors', label: 'All Donors', icon: Users, adminOnly: true },
+  { to: '/retention', label: 'Retention', icon: BarChart3, adminOnly: true },
   // On wide screens the assistant is a column beside every page instead.
   { to: '/assistant', label: 'Assistant', icon: MessageCircle, narrowOnly: true },
-  { to: '/import', label: 'Import', icon: Upload, adminOnly: true },
+  { to: '/import', label: 'Update Donors', icon: Upload, adminOnly: true },
   { to: '/members', label: 'Board members', icon: UserCog, adminOnly: true },
   { to: '/api', label: 'Read API', icon: Code2, adminOnly: true },
   { to: '/account', label: 'My account', icon: UserRound },
@@ -50,6 +52,8 @@ function SignedInAs() {
 
 function Shell() {
   const { session } = useStore()
+  // Admin pages: the Worker enforces it too; this keeps board members off them.
+  const admin = (el: React.ReactNode) => (session.role === 'admin' ? el : <Navigate to="/" replace />)
   // Badge counts what needs action now; "coming up" items don't nag.
   const actionable = useReminders().filter((r) => r.urgency !== 'upcoming').length
   const chat = useChat()
@@ -101,8 +105,9 @@ function Shell() {
           <Route path="/follow-ups" element={<FollowUps />} />
           <Route path="/donors" element={<Donors />} />
           <Route path="/donors/:id" element={<DonorDetail />} />
-          <Route path="/retention" element={<Retention />} />
-          <Route path="/import" element={<Import />} />
+          <Route path="/all-donors" element={admin(<AllDonors />)} />
+          <Route path="/retention" element={admin(<Retention />)} />
+          <Route path="/import" element={admin(<Import />)} />
           <Route path="/members" element={session.role === 'admin' && <Suspense fallback={<p role="status">Loading…</p>}><Members /></Suspense>} />
           <Route path="/api" element={session.role === 'admin' && <Suspense fallback={<p role="status">Loading…</p>}><Api /></Suspense>} />
           <Route path="/assistant" element={wide ? <Navigate to="/" replace /> : <ChatPanel chat={chat} variant="page" />} />

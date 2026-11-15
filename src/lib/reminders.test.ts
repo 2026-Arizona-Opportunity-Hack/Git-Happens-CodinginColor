@@ -28,3 +28,15 @@ test('an overdue next step is overdue and sorts first', () => {
   assert.equal(first.urgency, 'overdue')
   assert.match(first.detail, /4 days overdue/)
 })
+
+test('admins are told how many donors need a board member; board members are not', () => {
+  const donors = [
+    { id: 'd1', name: 'A', ownerId: null, sources: [], lastTouchAt: '2026-11-01' },
+    { id: 'd2', name: 'B', ownerId: null, sources: [], lastTouchAt: '2026-11-01' },
+    { id: 'd3', name: 'C', ownerId: 'u1', sources: [], lastTouchAt: '2026-11-01' },
+  ]
+  const admin = reminders({ ...base, role: 'admin', imports: [], donors }).find((r) => r.id === 'unassigned')
+  assert.equal(admin?.title, '2 donors need a board member')
+  assert.equal(admin?.to, '/all-donors')
+  assert.equal(reminders({ ...base, role: 'board', imports: [], donors }).some((r) => r.id === 'unassigned'), false)
+})

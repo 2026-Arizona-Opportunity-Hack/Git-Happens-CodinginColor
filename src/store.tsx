@@ -76,6 +76,9 @@ function useStoreState(data: Bootstrap, token: GetToken, reload: () => Promise<v
   }
 
   const member = (id: string) => data.boardMembers.find((m) => m.id === id)!
+  // Who a donor is assigned to, for display.
+  const ownerName = (d: Pick<Donor, 'ownerId'>) =>
+    d.ownerId ? data.boardMembers.find((m) => m.id === d.ownerId)?.name ?? 'Former board member' : 'Unassigned'
 
   const createDraft = (donorId: string, kind: DraftKind, channel: 'email' | 'text' = 'email') =>
     run(() => api<Draft>(token, 'drafts', 'POST', { donorId, kind, channel }))
@@ -106,11 +109,16 @@ function useStoreState(data: Bootstrap, token: GetToken, reload: () => Promise<v
   const setNextStep = (donorId: string, nextStep: Donor['nextStep']) =>
     run(() => api(token, `donors/${donorId}/next-step`, 'PUT', nextStep ?? {}))
 
-  const reassign = (donorId: string, ownerId: string) =>
+  // ownerId null leaves the donor unassigned.
+  const reassign = (donorId: string, ownerId: string | null) =>
     run(() => api(token, `donors/${donorId}/owner`, 'PUT', { ownerId }))
 
+  // Several assignments in one transaction and one reload.
+  const assignOwners = (assignments: { donorId: string; ownerId: string | null }[]) =>
+    run(() => api<{ updated: number }>(token, 'assign', 'POST', { assignments }))
+
   const importRows = (rows: RawDonorRow[], files: Partial<Record<Source, string>> = {}) =>
-    run(() => api<{ created: number; merged: number; clusters: number; gifts: number; skippedGifts: number }>(token, 'import', 'POST', { rows, files }))
+    run(() => api<{ created: number; merged: number; clusters: number; gifts: number; skippedGifts: number; createdDonors: { id: string; name: string }[] }>(token, 'import', 'POST', { rows, files }))
 
   // Fetched by the Members widget itself, whenever its token runs out.
   const widgetToken = useCallback(() => api<{ token: string }>(token, 'widget-token', 'POST').then((r) => r.token), [token])
@@ -124,8 +132,8 @@ function useStoreState(data: Bootstrap, token: GetToken, reload: () => Promise<v
   const chat = (messages: ChatTurn[]) => api<{ reply: string }>(token, 'chat', 'POST', { messages }).then((r) => r.reply)
 
   return {
-    ...data, drafts, member, chat,
-    createDraft, updateDraft, approveDraft, discardDraft, logInteraction, setNextStep, reassign, importRows, widgetToken,
+    ...data, drafts, member, ownerName, chat,
+    createDraft, updateDraft, approveDraft, discardDraft, logInteraction, setNextStep, reassign, assignOwners, importRows, widgetToken,
     listApiKeys, createApiKey, revokeApiKey,
   }
 }

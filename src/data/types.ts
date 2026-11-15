@@ -18,7 +18,7 @@ export interface Donor {
   email?: string
   phone?: string
   org?: string
-  ownerId: string
+  ownerId: string | null // null: not assigned to a board member yet
   sources: Source[]
   nextStep?: NextStep
   lastTouchAt?: string
