@@ -156,7 +156,7 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
       '/api/import': {
         post: {
           tags: ['Admin'], summary: 'Import donor rows (admin only)',
-          description: 'Rows are deduplicated, matched against existing donors, and new donors are assigned round-robin. Gifts a donor already has (same amount, near-same date) are skipped. All or nothing.',
+          description: 'Rows are deduplicated, matched against existing donors, and new donors are saved unassigned (the response lists them) for an admin to assign on All Donors, where Suggest assignment proposes board members. Gifts a donor already has (same amount, near-same date) are skipped. All or nothing.',
           requestBody: jsonBody({
             type: 'object', required: ['rows'],
             properties: {

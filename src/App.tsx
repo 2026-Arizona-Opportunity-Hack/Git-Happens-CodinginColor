@@ -92,7 +92,7 @@ function SampleToggle() {
   return (
     <label className="mb-4 flex cursor-pointer items-center justify-between gap-2 text-sm font-medium">
       Use sample data
-      <input type="checkbox" role="switch" className="size-4 accent-cic-dark" checked={sample} onChange={(e) => setSample(e.target.checked)} />
+      <input type="checkbox" role="switch" aria-label="Use sample data" className="size-4 accent-cic-dark" checked={sample} onChange={(e) => setSample(e.target.checked)} />
     </label>
   )
 }
@@ -141,7 +141,14 @@ function SampleBanner() {
 }
 
 function Shell() {
-  const { session, devTools } = useStore()
+  const { session, devTools, donors } = useStore()
+  // A donor page lives under /donors/:id, so NavLink alone would light up My
+  // Donors for anyone's donor. Light it only for your own, All Donors otherwise.
+  const { pathname } = useLocation()
+  const donorId = pathname.match(/^\/donors\/([^/]+)/)?.[1]
+  const mineOpen = !!donorId && donors.find((d) => d.id === decodeURIComponent(donorId))?.ownerId === session.memberId
+  const navActive = (to: string, isActive: boolean) =>
+    !donorId ? isActive : to === '/donors' ? mineOpen : to === '/all-donors' ? !mineOpen : isActive
   // Admin pages: the Worker enforces it too; this keeps board members off them.
   const admin = (el: React.ReactNode) => (session.role === 'admin' ? el : <Navigate to="/" replace />)
   // Badge counts what needs action now; "coming up" items don't nag.
@@ -191,11 +198,11 @@ function Shell() {
                   <NavLink
                     key={to}
                     to={to}
-                    end={to === '/'}
+                    end={to === '/' || to === '/donors'}
                     className={({ isActive }) =>
                       cn(
                         'flex items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cic-dark',
-                        isActive && 'bg-sidebar-accent font-semibold text-sidebar-accent-foreground',
+                        navActive(to, isActive) && 'bg-sidebar-accent font-semibold text-sidebar-accent-foreground',
                       )
                     }
                   >

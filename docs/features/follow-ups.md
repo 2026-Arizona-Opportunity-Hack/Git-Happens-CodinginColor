@@ -21,6 +21,8 @@ A board member's work queue:
 
 Every draft (thank-you, quarterly update, lapsed nudge, follow-up, invitation) is written by AI from the donor's **notes**, gifts, next step, logged outreach and the last messages sent to them. They're marked **Drafted by AI: check before sending**. If the AI fails or takes over 12 seconds, the template is used instead.
 
+A text draft names the number it goes to, formatted as (555) 555-1234 for US numbers.
+
 **Template emails** at the bottom shows the standard thank-you, update, nudge and follow-up filled in for any donor. **Use this template** adds it to the drafts as written, without the AI.
 
 ## Sending

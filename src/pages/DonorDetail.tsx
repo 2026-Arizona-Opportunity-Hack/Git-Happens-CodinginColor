@@ -14,6 +14,7 @@ import type { Channel, Donor, Gift } from '@/data/types'
 import { funderPacket } from '@/lib/packet'
 import { useStore } from '@/store'
 import { useAsk } from '@/components/ChatWidget'
+import { fmtPhone } from '@/lib/utils'
 import { byDateDesc, calendarLink, donorTimeline, fmtDate, money, retentionStatus, totalsByYear, UNASSIGNED, yearOf } from '@/lib/logic'
 
 const CHANNEL_ICON = { email: Mail, text: MessageSquare, call: Phone, 'in-person': Users, note: StickyNote }
@@ -68,7 +69,7 @@ export default function DonorDetail() {
     <>
       <PageHeader
         title={donor.name}
-        description={[donor.org, donor.email, donor.phone].filter(Boolean).join(' · ')}
+        description={[donor.org, donor.email, donor.phone && fmtPhone(donor.phone)].filter(Boolean).join(' · ')}
         actions={
           <>
             {/* The assistant turns what happened into a log, a next step and a draft, as buttons to press. */}
