@@ -60,6 +60,8 @@ Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevi
 | **Retention** | Year over year: new, recovered, increased, same, decreased, lapsed, plus retention rate |
 | **Import** | Spreadsheet + Zeffy + Benevity CSVs → dedupe preview → commit; new donors assigned **round-robin to the member with the fewest** |
 | **Read API** | Contract for `GET /api/v1/donor-summary`, aggregated by period / program / board member, with a live sample response |
+| **Board members** (admin) | Invite board members, change their role, remove them (WorkOS Users Management widget) |
+| **My account** | Each user edits their profile, changes password and sets up MFA, and signs out other devices (WorkOS widgets) |
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
@@ -130,7 +132,7 @@ The app uses the **Staging** environment of the "Coding in Color" WorkOS workspa
 
 - **An organization, "Coding in Color"** (`WORKOS_ORG_ID` in `wrangler.jsonc`). Its members are the board.
 
-WorkOS is the source of truth for board members; D1 only stores donor data, keyed by WorkOS user ID. To add a board member, create the user in WorkOS (Users → Create user), then add them to the "Coding in Color" organization with the **admin** role (sees every donor, can import) or the **member** role (only their own donors). To remove someone, remove their membership. The Worker caches the member list for 60 seconds, so changes show up within a minute. Someone who can sign in to WorkOS but isn't in the organization gets a 403.
+WorkOS is the source of truth for board members; D1 only stores donor data, keyed by WorkOS user ID. Admins manage the board on the app's **Board members** page: invite someone by email, set their role to **Admin** (sees every donor, can import) or **Member** (only their own donors), or remove them. The page is WorkOS's [Users Management widget](https://workos.com/docs/widgets/user-management). The Worker mints its token at `POST /api/widget-token`, and the widget only works for roles with the `widgets:users-table:manage` permission, which the Staging Admin role has. The WorkOS dashboard still works too: add a user to the "Coding in Color" organization with the same roles. The Worker caches the member list for 60 seconds, so changes show up within a minute. Someone who can sign in to WorkOS but isn't in the organization gets a 403.
 
 AuthKit runs in `devMode`, which keeps the session in localStorage. That's required without a WorkOS custom domain, which costs $99/month.
 

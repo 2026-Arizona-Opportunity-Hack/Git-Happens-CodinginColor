@@ -275,6 +275,21 @@ async function route(req: Request, env: Env): Promise<Response> {
     }
   }
 
+  // POST /api/widget-token: a one-hour token for the WorkOS Users Management
+  // widget on the Members page. WorkOS also caps it to the caller's own
+  // permissions in the org, so it only works for its "admin" role. Admin only.
+  if (m === 'POST' && parts[0] === 'widget-token') {
+    requireAdmin(s)
+    const res = await fetch('https://api.workos.com/widgets/token', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.WORKOS_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ organization_id: env.WORKOS_ORG_ID, user_id: s.memberId, scopes: ['widgets:users-table:manage'] }),
+    })
+    if (!res.ok) throw new Error(`WorkOS widgets/token returned ${res.status}`)
+    const { token } = await res.json<{ token: string }>()
+    return json({ token })
+  }
+
   // POST /api/import {rows}: match against existing donors first, then
   // round-robin any genuinely new donors. Admin only.
   if (m === 'POST' && parts[0] === 'import') {
