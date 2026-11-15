@@ -6,6 +6,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
 import { StoreProvider, useStore } from '@/store'
 import { cn } from '@/lib/utils'
+import { ChatWidget } from '@/components/ChatWidget'
 import Dashboard from '@/pages/Dashboard'
 import Donors from '@/pages/Donors'
 import DonorDetail from '@/pages/DonorDetail'
@@ -91,6 +92,7 @@ function Shell() {
           <Route path="/account" element={<Suspense fallback={<p role="status">Loading…</p>}><Account /></Suspense>} />
         </Routes>
       </main>
+      <ChatWidget />
       <Toaster />
     </div>
   )

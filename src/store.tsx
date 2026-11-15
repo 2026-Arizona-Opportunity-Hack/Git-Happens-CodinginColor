@@ -21,6 +21,8 @@ interface Bootstrap {
 
 class ApiError extends Error {}
 
+export interface ChatTurn { role: 'user' | 'assistant'; content: string }
+
 // Returns a current WorkOS access token (AuthKit refreshes it as needed).
 type GetToken = () => Promise<string>
 
@@ -102,8 +104,11 @@ function useStoreState(data: Bootstrap, token: GetToken, reload: () => Promise<v
   // Fetched by the Members widget itself, whenever its token runs out.
   const widgetToken = useCallback(() => api<{ token: string }>(token, 'widget-token', 'POST').then((r) => r.token), [token])
 
+  // The assistant only reads, so there's nothing to reload afterwards.
+  const chat = (messages: ChatTurn[]) => api<{ reply: string }>(token, 'chat', 'POST', { messages }).then((r) => r.reply)
+
   return {
-    ...data, drafts, member,
+    ...data, drafts, member, chat,
     createDraft, updateDraft, approveDraft, discardDraft, logInteraction, setNextStep, reassign, importRows, widgetToken,
   }
 }
