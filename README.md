@@ -45,7 +45,9 @@ Judges score **Scope, Documentation, Polish and Security**, plus a separate **Ac
 
 <!-- Replace with real people; link GitHub profiles so this repo works as your portfolio -->
 - [Noah Schroeder](https://github.com/n-schroeder)
-- [Name](https://github.com/username) — role
+- [Matthew Jurenka](https://github.com/mattjurenka)
+- [Ram Bhatnagar](https://github.com/Sir-Arceebee)
+- [Eleanor Lam](https://github.com/codagirlaz)
 
 ## What we built
 
