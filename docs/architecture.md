@@ -50,7 +50,7 @@ Each page's doc in [features/](features/) says where its code is. The pieces eve
 - `worker/index.ts`: the API. Every route resolves the caller first; board members can only read or write donors they own, and import is admin-only. `POST /api/drafts` sends a draft on a channel the donor has (`draftChannel()` in `src/lib/drafts.ts`) and refuses one for a donor with no email or phone.
 - `migrations/`: D1 schema. Add a new numbered file for each change; deploys apply them before the new code goes live.
 - `src/lib/utils.ts`: `cn` for class names, and `fmtPhone`, which shows US 10-digit phones as (555) 555-1234 and leaves anything else as stored. Stored values and search are untouched.
-- `src/App.tsx`: the sidebar and routes. A donor page (`/donors/:id`) highlights My Donors only when the donor is yours, and All Donors otherwise.
+- `src/App.tsx`: the sidebar and routes. A donor page (`/donors/:id`) highlights My Donors only when the donor is yours, and All Donors otherwise. Pages other than the dashboard load when first opened; if a deploy has replaced a page's file since the tab opened, the app reloads once to get the new build instead of going blank.
 - `src/data/types.ts`: the domain model; the D1 schema in `migrations/` stores these shapes.
 - Lists: tables use `DataTable` (`src/components/ui/data-table.tsx`), 25 rows a page; plain lists that can grow wrap in `Paged` (`src/components/common.tsx`), 10 a page.
 
