@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { StoreProvider, useReminders, useStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { ChatPanel, useChat, useWide } from '@/components/ChatWidget'
+import { InstallPrompt } from '@/components/InstallPrompt'
 import Dashboard from '@/pages/Dashboard'
 import Donors from '@/pages/Donors'
 import DonorDetail from '@/pages/DonorDetail'
@@ -97,6 +98,7 @@ function Shell() {
         </div>
       </aside>
       <main id="main" className="mx-auto w-full max-w-6xl p-4 md:p-8">
+        <InstallPrompt />
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/notifications" element={<Notifications />} />
