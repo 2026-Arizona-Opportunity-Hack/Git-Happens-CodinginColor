@@ -51,7 +51,7 @@ export default function FollowUps() {
       {pending.length > 0 && (
         <section className="mb-8">
           <SectionTitle>Drafts awaiting approval ({pending.length})</SectionTitle>
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid items-start gap-4 lg:grid-cols-2">
             {pending.map((d) => (
               <Card key={d.id}>
                 <CardHeader>
