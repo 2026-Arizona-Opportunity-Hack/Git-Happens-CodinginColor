@@ -79,3 +79,14 @@ test('lapse rate by source counts last period\'s donors who gave nothing this pe
   ])
   assert.deepEqual(lapseBy(gifts, 'year', 2026, 'program'), [{ key: 'General', gave: 3, lapsed: 1 }])
 })
+
+test('retention compares each donor with the year before: new, recovered, increased, same, decreased, lapsed, inactive', () => {
+  const g = (...gifts: [string, number][]): Gift[] => gifts.map(([date, amount], i) => ({ id: `g${i}`, donorId: 'd', amount, date, source: 'zeffy', program: 'General' }))
+  assert.equal(retentionStatus(g(['2026-02-01', 50]), 2026), 'new')
+  assert.equal(retentionStatus(g(['2024-02-01', 50], ['2026-02-01', 50]), 2026), 'recovered')
+  assert.equal(retentionStatus(g(['2025-02-01', 50], ['2026-02-01', 80]), 2026), 'increased')
+  assert.equal(retentionStatus(g(['2025-02-01', 50], ['2026-02-01', 50]), 2026), 'same')
+  assert.equal(retentionStatus(g(['2025-02-01', 50], ['2026-02-01', 20]), 2026), 'decreased')
+  assert.equal(retentionStatus(g(['2025-02-01', 50]), 2026), 'lapsed')
+  assert.equal(retentionStatus(g(['2023-02-01', 50]), 2026), 'inactive')
+})

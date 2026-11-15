@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { RawDonorRow } from '../data/types'
 import { SAMPLE_CSV } from '../data/samples'
-import { autoMapping, csvHeaders, dedupe, matchDonor, NEW_COLUMN, parseAmount, parseDate, rowsFromCsv, sameGift, SKIP, splitGifts } from './dedupe'
+import { autoMapping, csvHeaders, CUSTOM, DB_FIELDS, dedupe, matchDonor, NEW_COLUMN, parseAmount, parseDate, rowsFromCsv, sameGift, SKIP, splitGifts, targetLabel } from './dedupe'
 
 const row = (r: Partial<RawDonorRow>): RawDonorRow => ({ source: 'spreadsheet', name: 'Kevin Tran', ...r })
 
@@ -119,4 +119,12 @@ test('re-importing undated gifts adds nothing; an undated and a dated gift of th
   assert.equal(splitGifts([row({ amount: 75 })], [{ amount: 75, date: null }]).keep.length, 0)
   assert.equal(splitGifts([row({ amount: 75 })], [{ amount: 75, date: '2026-01-01' }]).keep.length, 1)
   assert.equal(splitGifts([row({ amount: 75, date: '2026-01-01' })], [{ amount: 75, date: null }]).keep.length, 1)
+})
+
+test('mapping targets are labelled the way the staging popup shows them', () => {
+  assert.equal(targetLabel(SKIP, 'Notes'), 'Do not save')
+  assert.equal(targetLabel(`${NEW_COLUMN}Shirt size`, 'Size'), 'New column: Shirt size')
+  assert.equal(targetLabel(NEW_COLUMN, 'Size'), 'New column: Size')
+  assert.equal(targetLabel(`${CUSTOM}Campaign`, 'Campaign'), 'Campaign (custom)')
+  assert.equal(targetLabel('email', 'E-mail'), DB_FIELDS.find((f) => f.key === 'email')!.label)
 })
