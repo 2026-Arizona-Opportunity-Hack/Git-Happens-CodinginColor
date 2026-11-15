@@ -5,10 +5,9 @@ import { Download, FileSpreadsheet } from 'lucide-react'
 import { PageHeader, SectionTitle } from '@/components/common'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+import { DataTable, type ColumnDef } from '@/components/ui/data-table'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { Donor } from '@/data/types'
 import { fmtDate, money, UNASSIGNED } from '@/lib/logic'
 import { donorsCsv, donorsXlsx, download } from '@/lib/export'
@@ -24,7 +23,7 @@ export default function AllDonors() {
   // From the New Donors popup: {donorId: suggested board member}, not saved yet.
   const suggested = (location.state as { suggested?: Record<string, string> } | null)?.suggested ?? {}
   // Donors from that popup, plus any moved out of Unassigned here, stay at the
-  // bottom of the main list, marked New, until the page is left.
+  // top of the main list (page 1), marked New, until the page is left.
   const [recent, setRecent] = useState<string[]>(() => Object.keys(suggested))
   // Unsaved dropdown choices, by donor. A row is "changed" when its choice
   // differs from what D1 holds.
@@ -53,7 +52,7 @@ export default function AllDonors() {
   const inMain = (d: Donor) => !!d.ownerId || recent.includes(d.id)
   const assigned = donors
     .filter((d) => inMain(d) && match(d))
-    .sort((a, b) => (rank(a) === -1 && rank(b) === -1 ? a.name.localeCompare(b.name) : rank(a) === -1 ? -1 : rank(b) === -1 ? 1 : rank(a) - rank(b)))
+    .sort((a, b) => (rank(a) === -1 && rank(b) === -1 ? a.name.localeCompare(b.name) : rank(a) === -1 ? 1 : rank(b) === -1 ? -1 : rank(a) - rank(b)))
   const unassigned = donors.filter((d) => !inMain(d) && match(d)).sort((a, b) => a.name.localeCompare(b.name))
   const totalUnassigned = donors.filter((d) => !d.ownerId).length
   const shown = [...assigned, ...unassigned]
@@ -72,61 +71,81 @@ export default function AllDonors() {
       : `Updated ${list.length} donors`)
   }
 
-  const table = (rows: Donor[], empty: string) => (
-    <Card className="py-0">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-cic-dark hover:bg-cic-dark">
-            {['Donor', 'Contact', 'Lifetime', 'Last gift', 'Sources', 'Board member', ''].map((h, i) => (
-              <TableHead key={i} className="text-white">{h || <span className="sr-only">Save</span>}</TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((d) => {
-            const gs = gifts.filter((g) => g.donorId === d.id)
-            const items = [{ value: UNASSIGNED, label: 'Unassigned' }, ...boardMembers.map((m) => ({ value: m.id, label: `${m.name} (${load.get(m.id) ?? 0})` }))]
-            const isNew = recent.includes(d.id)
-            const pending = !d.ownerId && choice(d) !== UNASSIGNED
-            return (
-              <TableRow key={d.id} className={isNew ? 'bg-cic-tint' : 'even:bg-cic-tint/40'}>
-                <TableCell>
-                  <Link to={`/donors/${d.id}`} className="font-medium text-cic-dark underline">{d.name}</Link>
-                  {isNew && <Badge className="ml-2 bg-cic-dark text-white">New</Badge>}
-                  {d.org && d.org !== d.name && <div className="text-xs text-muted-foreground">{d.org}</div>}
-                  {pending && <div className="text-xs text-amber-900">Suggested, not saved yet</div>}
-                </TableCell>
-                <TableCell className="text-sm">
-                  <div>{d.email ?? '—'}</div>
-                  {d.phone && <div className="text-muted-foreground">{d.phone}</div>}
-                </TableCell>
-                <TableCell>{money(gs.reduce((s, g) => s + g.amount, 0))}</TableCell>
-                <TableCell>{(() => { const last = gs.map((g) => g.date).sort().at(-1); return last ? fmtDate(last) : '—' })()}</TableCell>
-                <TableCell className="space-x-1">{d.sources.map((s) => <Badge key={s} variant="outline">{s}</Badge>)}</TableCell>
-                <TableCell className="min-w-52">
-                  <Select items={items} value={choice(d)} onValueChange={(v) => setChoices((c) => ({ ...c, [d.id]: v as string }))}>
-                    <SelectTrigger aria-label={`Board member for ${d.name}`} className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {items.map((it) => <SelectItem key={it.value} value={it.value}>{it.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-                <TableCell>
-                  <Button size="sm" disabled={choice(d) === current(d) || saving.has(d.id)} onClick={() => save([d])} aria-label={`Update board member for ${d.name}`}>
-                    {saving.has(d.id) ? 'Saving…' : 'Update'}
-                  </Button>
-                </TableCell>
-              </TableRow>
-            )
-          })}
-          {rows.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={7} className="py-6 text-center text-muted-foreground">{empty}</TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </Card>
+  const items = [{ value: UNASSIGNED, label: 'Unassigned' }, ...boardMembers.map((m) => ({ value: m.id, label: `${m.name} (${load.get(m.id) ?? 0})` }))]
+  const totals = (d: Donor) => {
+    const gs = gifts.filter((g) => g.donorId === d.id)
+    return { d, lifetime: gs.reduce((s, g) => s + g.amount, 0), last: gs.map((g) => g.date).sort().at(-1) }
+  }
+  const columns: ColumnDef<ReturnType<typeof totals>>[] = [
+    {
+      id: 'donor',
+      header: 'Donor',
+      accessorFn: (r) => r.d.name,
+      cell: ({ row: { original: { d } } }) => (
+        <>
+          <Link to={`/donors/${d.id}`} className="font-medium text-cic-dark underline">{d.name}</Link>
+          {recent.includes(d.id) && <Badge className="ml-2 bg-cic-dark text-white">New</Badge>}
+          {d.org && d.org !== d.name && <div className="text-xs text-muted-foreground">{d.org}</div>}
+          {!d.ownerId && choice(d) !== UNASSIGNED && <div className="text-xs text-amber-900">Suggested, not saved yet</div>}
+        </>
+      ),
+    },
+    {
+      id: 'contact',
+      header: 'Contact',
+      accessorFn: (r) => r.d.email,
+      sortUndefined: 'last',
+      cell: ({ row: { original: { d } } }) => (
+        <>
+          <div>{d.email ?? '—'}</div>
+          {d.phone && <div className="text-muted-foreground">{d.phone}</div>}
+        </>
+      ),
+    },
+    { id: 'lifetime', header: 'Lifetime', accessorFn: (r) => r.lifetime, cell: ({ getValue }) => money(getValue<number>()) },
+    { id: 'last', header: 'Last gift', accessorFn: (r) => r.last, sortUndefined: 'last', cell: ({ getValue }) => (getValue<string>() ? fmtDate(getValue<string>()) : '—') },
+    {
+      id: 'sources',
+      header: 'Sources',
+      enableSorting: false,
+      meta: { className: 'space-x-1' },
+      cell: ({ row: { original: { d } } }) => d.sources.map((s) => <Badge key={s} variant="outline">{s}</Badge>),
+    },
+    {
+      id: 'owner',
+      header: 'Board member',
+      accessorFn: (r) => name(current(r.d)),
+      meta: { className: 'min-w-52' },
+      cell: ({ row: { original: { d } } }) => (
+        <Select items={items} value={choice(d)} onValueChange={(v) => setChoices((c) => ({ ...c, [d.id]: v as string }))}>
+          <SelectTrigger aria-label={`Board member for ${d.name}`} className="w-full"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {items.map((it) => <SelectItem key={it.value} value={it.value}>{it.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      ),
+    },
+    {
+      id: 'save',
+      header: () => <span className="sr-only">Save</span>,
+      enableSorting: false,
+      cell: ({ row: { original: { d } } }) => (
+        <Button size="sm" disabled={choice(d) === current(d) || saving.has(d.id)} onClick={() => save([d])} aria-label={`Update board member for ${d.name}`}>
+          {saving.has(d.id) ? 'Saving…' : 'Update'}
+        </Button>
+      ),
+    },
+  ]
+
+  const table = (rows: Donor[], caption: string, empty: string) => (
+    <DataTable
+      caption={caption}
+      columns={columns}
+      data={rows.map(totals)}
+      getRowId={(r) => r.d.id}
+      rowClassName={(r) => (recent.includes(r.original.d.id) ? 'bg-cic-tint!' : undefined)}
+      empty={empty}
+    />
   )
 
   return (
@@ -183,15 +202,15 @@ export default function AllDonors() {
 
       <section aria-labelledby="assigned-heading">
         <h2 id="assigned-heading" className="sr-only">Assigned donors</h2>
-        {table(assigned, filtering ? 'No assigned donors match these filters.' : 'No donors are assigned yet.')}
+        {table(assigned, 'Assigned donors', filtering ? 'No assigned donors match these filters.' : 'No donors are assigned yet.')}
       </section>
 
       <section className="mt-10">
         <SectionTitle>Unassigned donors ({unassigned.length})</SectionTitle>
         <p className="mb-3 text-sm text-muted-foreground">
-          Donors without a board member. Choose one and click Update to move the donor up to the list above.
+          Donors without a board member. Choose one and click Update to move the donor to the top of the list above.
         </p>
-        {table(unassigned, filtering ? 'No unassigned donors match these filters.' : 'Every donor has a board member.')}
+        {table(unassigned, 'Unassigned donors', filtering ? 'No unassigned donors match these filters.' : 'Every donor has a board member.')}
       </section>
 
       <div className="sticky bottom-0 mt-6 flex flex-wrap items-center justify-end gap-3 border-t bg-background py-3 pr-20">
