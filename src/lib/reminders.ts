@@ -1,5 +1,6 @@
 import { IMPORT_SOURCES, STALE_IMPORT_DAYS } from '../data/sources'
 import type { CicEvent, Donor, Draft, Gift, ImportRecord, Role, Source } from '../data/types'
+import { THANK_YOU_DAYS, thankableGift } from './drafts'
 import { daysBetween, fmtDate, quarterlyTouchDue, retentionStatus, yearOf } from './logic'
 
 // Everything that needs someone's attention, computed from data the caller can
@@ -54,6 +55,15 @@ export function reminders({ role, memberId, today, donors: visible, gifts, draft
     // A draft saved before the donor lost (or never had) that contact detail
     // can't be sent; asking to approve it is a dead end.
     const sendable = d.channel === 'text' ? donor.phone : donor.email
+    // A thank-you with no gift in the window would thank them for something old.
+    if (d.kind === 'thank-you' && !thankableGift(gifts.filter((g) => g.donorId === donor.id), today)) {
+      out.push({
+        id: `draft-${d.id}`, category: 'draft', urgency: 'due', to: '/follow-ups',
+        title: `Discard the old thank you for ${donor.name}`,
+        detail: `No gift in the last ${THANK_YOU_DAYS} days to thank them for`,
+      })
+      continue
+    }
     out.push({
       id: `draft-${d.id}`, category: 'draft', urgency: 'due', to: '/follow-ups',
       title: sendable
@@ -94,7 +104,8 @@ export function reminders({ role, memberId, today, donors: visible, gifts, draft
   for (const e of events) {
     const until = daysBetween(today, e.date)
     if (until < 0 || until > EVENT_SOON_DAYS) continue
-    const linked = donors.filter((d) => d.nextStep?.eventId === e.id).length
+    // Admins see the whole board's invitations, unassigned donors included.
+    const linked = (role === 'admin' ? visible : donors).filter((d) => d.nextStep?.eventId === e.id).length
     out.push({
       id: `event-${e.id}`, category: 'event', urgency: 'upcoming', to: '/',
       title: `${e.name} is ${until === 0 ? 'today' : `in ${until} day${until === 1 ? '' : 's'}`}`,

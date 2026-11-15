@@ -249,8 +249,8 @@ function Shell() {
         </Suspense>
       </main>
       <Assistant chat={chat} />
-      {/* Top center: the assistant docks on the right, where bottom-right toasts covered its text box. */}
-      <Toaster position="top-center" />
+      {/* Bottom center: bottom-right covered the docked assistant's text box, top center covered page buttons like Export CSV and Debrief. */}
+      <Toaster position="bottom-center" />
     </div>
     </ChatProvider>
   )

@@ -142,7 +142,9 @@ export default function AllDonors() {
               >
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              {/* Wider than the narrow trigger so "(0 + 6 unsaved)" fits; opens
+                  leftward because this is the table's last column. */}
+              <SelectContent alignItemWithTrigger={false} align="end" className="w-auto min-w-(--anchor-width) max-w-[calc(100vw-2rem)]">
                 {items.map((it) => <SelectItem key={it.value} value={it.value}>{it.value === UNASSIGNED ? it.label : `${it.label} (${count(it.value)})`}</SelectItem>)}
               </SelectContent>
             </Select>
