@@ -28,7 +28,7 @@ A draft opens in Gmail, Outlook or the default mail app (or Messages, for texts)
 ## Where the code is
 
 - `src/lib/drafts.ts`: the message templates. Invitations, updates and nudges name a real event from the calendar. They're the fallback, and the starting point the AI rewrites.
-- `src/lib/ai-draft.ts`: the prompt for AI drafts (which kinds, the rules, the donor's facts), and the check that throws out a reply that is empty, too long, or contains links or `[placeholders]`.
+- `src/lib/ai-draft.ts`: the prompt for AI drafts (which kinds, the rules, the donor's facts), and the check that throws out a reply that is empty, too long, or contains links, web or email addresses other than codingincolor.org, payment or bank words, account-like numbers or `[placeholders]`. Donor, org and event names go into the prompt on one line with directive syntax stripped (`inert()`).
 - `src/components/SendDraft.tsx`: the mail-app links and the "Did you send it?" step.
 - The Worker route is `POST /api/drafts`; which model it uses and why is in [the AI model decision](../decisions/001-ai-model.md).
 
