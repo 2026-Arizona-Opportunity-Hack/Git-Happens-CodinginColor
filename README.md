@@ -178,6 +178,8 @@ What tests each feature of [CIC's brief](https://docs.google.com/document/d/1sdl
 
 Not built yet, so not tested: meeting notes in (P1, #29), the grant deadline tracker (P1, #30), the donor impact feed (P2, #31) and likelihood-to-give scoring (P2, #32). The tests cover logic, not pages: the React components and the Worker's D1 and WorkOS calls have no tests yet.
 
+`fuzz.test.ts` throws a few hundred random inputs at the parsers and checks, from a fixed seed, so a failure is repeatable. It covers CSV export then re-import, amounts, dates, dedupe, the API input checks and totals, calendar feeds, AI drafts and the assistant's buttons. A failure prints its seed; rerun it with `FUZZ_SEED=<seed> bun test src/lib/fuzz.test.ts`, or try new inputs with any other seed.
+
 ### Sign-in (WorkOS)
 
 The app uses the **Staging** environment of the "Coding in Color" WorkOS workspace. Its public client ID is `WORKOS_CLIENT_ID` in `wrangler.jsonc`, and the browser fetches it from `/api/config`. The secret key (`WORKOS_API_KEY`) stays on the Worker, which uses it to list the board. That environment is configured with:
