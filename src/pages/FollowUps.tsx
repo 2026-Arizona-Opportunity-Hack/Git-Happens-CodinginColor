@@ -22,7 +22,7 @@ export default function FollowUps() {
 
   return (
     <>
-      <PageHeader title="Follow-ups" description="Next steps, quarterly updates and drafts waiting for your approval." />
+      <PageHeader title="Follow-ups" />
 
       {pending.length > 0 && (
         <section className="mb-8">

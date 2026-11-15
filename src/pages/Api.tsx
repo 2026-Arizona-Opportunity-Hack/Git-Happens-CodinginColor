@@ -50,7 +50,6 @@ export default function Api() {
     <>
       <PageHeader
         title="Read API"
-        description="Totals and recent activity by period, program and board member for CIC's org dashboard. No donor names or contact details leave through it."
         actions={
           // Served by the Worker, not the router, so it's a plain link.
           <a href="/api/docs" target="_blank" rel="noopener" className={buttonVariants({ variant: 'outline' })}>
