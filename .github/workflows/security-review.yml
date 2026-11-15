@@ -156,7 +156,7 @@ jobs:
           git push -q "$remote" "$branch"
 
           # GITHUB_TOKEN can only open PRs if the org allows it (ours does not),
-          # so AUDIT_PR_TOKEN, a teammate's fine-grained token, opens it when set.
+          # so AUDIT_PR_TOKEN, a collaborator's classic token, opens it when set.
           # Without either, the branch is still there to open by hand
           if url=$(GH_TOKEN="${AUDIT_PR_TOKEN:-$GH_TOKEN}" gh pr create --repo "$GITHUB_REPOSITORY" --base "$DEFAULT" --head "$branch" \
               --title "Add $MODEL security audit of #$PR" \
