@@ -60,15 +60,26 @@ const NAV: { heading: string; items: NavItem[] }[] = [
   },
 ]
 
+// signOut clears the user before it navigates to WorkOS's logout URL. Without this
+// flag, SignedInApp would see no user and start a sign-in that cancels the logout.
+let signingOut = false
+function useSignOut() {
+  const { signOut } = useAuth()
+  return () => {
+    signingOut = true
+    signOut({ returnTo: location.origin })
+  }
+}
+
 function SignedInAs() {
   const { session, member } = useStore()
-  const { signOut } = useAuth()
+  const signOut = useSignOut()
   return (
     <div className="text-sm">
       <div className="text-xs text-muted-foreground">Signed in as</div>
       <div className="font-medium">{member(session.memberId).name}</div>
       <div className="mb-2 text-xs text-muted-foreground">{session.role === 'admin' ? 'CIC admin' : 'Board member'}</div>
-      <Button variant="outline" size="sm" className="w-full bg-white" onClick={() => signOut({ returnTo: location.origin })}>
+      <Button variant="outline" size="sm" className="w-full bg-white" onClick={signOut}>
         <LogOut aria-hidden /> Sign out
       </Button>
     </div>
@@ -209,7 +220,8 @@ function Centered({ children }: { children: React.ReactNode }) {
 
 // Signed in with WorkOS, but not in the CIC organization the Worker checks.
 function NotAMember() {
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
+  const signOut = useSignOut()
   return (
     <Centered>
       <div className="max-w-sm space-y-4 text-center">
@@ -219,7 +231,7 @@ function NotAMember() {
           You're signed in as <strong className="text-foreground">{user?.email}</strong>, but this account isn't a Coding in Color board member.
           Contact your system admin to be added, then sign in again.
         </p>
-        <Button variant="outline" onClick={() => signOut({ returnTo: location.origin })}>
+        <Button variant="outline" onClick={signOut}>
           <LogOut aria-hidden /> Sign out
         </Button>
       </div>
@@ -229,16 +241,17 @@ function NotAMember() {
 
 // Only signed-in users get past here; the Worker re-checks every request.
 function SignedInApp() {
-  const { user, isLoading, signIn, signOut, getAccessToken } = useAuth()
+  const { user, isLoading, signIn, getAccessToken } = useAuth()
+  const signOut = useSignOut()
   // Signed-out visitors go straight to the WorkOS sign-in page; there's nothing to see here without it.
   useEffect(() => {
-    if (!isLoading && !user) signIn({ state: { returnTo: location.pathname } })
+    if (!isLoading && !user && !signingOut) signIn({ state: { returnTo: location.pathname } })
   }, [isLoading, user, signIn])
   if (isLoading) return <AppSkeleton label="Checking your sign-in…" />
   if (!user) return <AppSkeleton label="Taking you to sign in…" />
 
   return (
-    <StoreProvider token={getAccessToken} onSignOut={() => signOut({ returnTo: location.origin })} denied={<NotAMember />}>
+    <StoreProvider token={getAccessToken} onSignOut={signOut} denied={<NotAMember />}>
       <BrowserRouter>
         <Shell />
       </BrowserRouter>
