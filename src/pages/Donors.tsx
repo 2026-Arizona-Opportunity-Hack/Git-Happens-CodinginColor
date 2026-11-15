@@ -8,7 +8,7 @@ import { DataTable, type ColumnDef } from '@/components/ui/data-table'
 import { Input } from '@/components/ui/input'
 import { useStore } from '@/store'
 import type { Donor } from '@/data/types'
-import { fmtDate, money, retentionStatus, yearOf } from '@/lib/logic'
+import { fmtDate, lastGiftDate, money, retentionStatus, yearOf } from '@/lib/logic'
 import { donorsCsv, donorsXlsx, download } from '@/lib/export'
 
 // The signed-in person's own donors. Admins see everyone's on All Donors.
@@ -23,7 +23,7 @@ export default function Donors() {
       return {
         d,
         lifetime: gs.reduce((s, g) => s + g.amount, 0),
-        last: gs.map((g) => g.date).sort().at(-1),
+        last: lastGiftDate(gs),
         status: retentionStatus(gs, yearOf(today)),
       }
     })

@@ -88,7 +88,7 @@ const toDonor = (r: Row): Donor => ({
   lastTouchAt: (r.last_touch_at as string) ?? undefined,
   extra: r.extra && r.extra !== '{}' ? JSON.parse(r.extra as string) : undefined,
 })
-const toGift = (r: Row): Gift => ({ id: r.id as string, donorId: r.donor_id as string, amount: r.amount as number, date: r.date as string, source: r.source as Source, program: r.program as Program })
+const toGift = (r: Row): Gift => ({ id: r.id as string, donorId: r.donor_id as string, amount: r.amount as number, date: (r.date as string) || null, source: r.source as Source, program: r.program as Program }) // date NOT NULL in D1: '' = unknown
 const toInteraction = (r: Row): Interaction => ({ id: r.id as string, donorId: r.donor_id as string, byId: r.by_id as string, channel: r.channel as Channel, date: r.date as string, summary: r.summary as string })
 const toImport = (r: Row): ImportRecord => ({
   id: r.id as string, source: r.source as Source, fileName: (r.file_name as string) ?? undefined,
@@ -643,9 +643,9 @@ async function route(req: Request, env: Env): Promise<Response> {
     const donors = existing.results.map(toDonor)
     // Gifts per donor: what D1 holds plus what this import has queued, so two
     // clusters landing on the same donor can't both add one gift.
-    const known = new Map<string, { amount: number; date: string }[]>()
+    const known = new Map<string, { amount: number; date?: string | null }[]>()
     for (const g of existingGifts.results)
-      known.set(g.donor_id as string, [...(known.get(g.donor_id as string) ?? []), { amount: g.amount as number, date: g.date as string }])
+      known.set(g.donor_id as string, [...(known.get(g.donor_id as string) ?? []), { amount: g.amount as number, date: (g.date as string) || null }])
     const writes: D1PreparedStatement[] = []
     const createdDonors: { id: string; name: string }[] = []
     let created = 0, merged = 0, gifts = 0, skippedGifts = 0
@@ -679,7 +679,7 @@ async function route(req: Request, env: Env): Promise<Response> {
       skippedGifts += skipped.length
       for (const r of keep)
         writes.push(db.prepare('INSERT INTO gifts (id, donor_id, amount, date, source, program) VALUES (?, ?, ?, ?, ?, ?)')
-          .bind(id('g'), donorId, r.amount, r.date, r.source, r.program ?? 'General'))
+          .bind(id('g'), donorId, r.amount, r.date ?? '', r.source, r.program ?? 'General')) // '' = date unknown
     }
     // Log one import per source, in the same transaction, so "last updated"
     // only moves when the data actually landed. files is {source: fileName}.

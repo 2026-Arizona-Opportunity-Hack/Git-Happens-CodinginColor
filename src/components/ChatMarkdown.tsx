@@ -7,7 +7,7 @@ import { visit } from 'unist-util-visit'
 import { Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { Channel, DraftKind } from '@/data/types'
-import { fmtDate, inviteDue, money } from '@/lib/logic'
+import { byDateDesc, fmtDate, inviteDue, money } from '@/lib/logic'
 import { useStore } from '@/store'
 
 // Renders assistant replies. The model writes Markdown plus two block
@@ -55,7 +55,7 @@ function DonorCard({ id }: { id?: string }) {
   const { donors, gifts, ownerName } = useStore()
   const d = donors.find((x) => x.id === id)
   if (!d) return <p className="text-muted-foreground">(That donor isn't one you can see.)</p>
-  const theirs = gifts.filter((g) => g.donorId === d.id).sort((a, b) => b.date.localeCompare(a.date))
+  const theirs = gifts.filter((g) => g.donorId === d.id).sort(byDateDesc)
   return (
     <Link to={`/donors/${d.id}`} className="my-2 block rounded-md border bg-background p-3 no-underline hover:border-cic-dark">
       <span className="block font-semibold text-foreground">{d.name}</span>

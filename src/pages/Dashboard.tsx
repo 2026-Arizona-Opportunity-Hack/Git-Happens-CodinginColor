@@ -1,16 +1,17 @@
+import { CalendarPlus } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { PageHeader, SectionTitle, Stat } from '@/components/common'
 import { Card, CardContent } from '@/components/ui/card'
 import { DataTable, type ColumnDef } from '@/components/ui/data-table'
 import { useStore } from '@/store'
-import { fmtDate, money, quarterlyTouchDue, retentionStatus, yearOf } from '@/lib/logic'
+import { allDayEventLink, fmtDate, inYear, money, quarterlyTouchDue, retentionStatus, yearOf } from '@/lib/logic'
 
 export default function Dashboard() {
   const { donors, gifts, interactions, boardMembers, events, today, member, session } = useStore()
   const year = yearOf(today)
   const ids = new Set(donors.map((d) => d.id))
   const myGifts = gifts.filter((g) => ids.has(g.donorId))
-  const ytd = myGifts.filter((g) => yearOf(g.date) === year).reduce((s, g) => s + g.amount, 0)
+  const ytd = myGifts.filter((g) => inYear(g, year)).reduce((s, g) => s + g.amount, 0)
   const overdue = donors.filter((d) => d.nextStep && d.nextStep.due < today)
   const touchDue = donors.filter((d) => quarterlyTouchDue(d, today))
   const lapsed = donors.filter((d) => retentionStatus(myGifts.filter((g) => g.donorId === d.id), year) === 'lapsed')
@@ -68,7 +69,14 @@ export default function Dashboard() {
               <ul className="space-y-2">
                 {events.filter((e) => e.date >= today).map((e) => (
                   <li key={e.id} className="flex justify-between gap-2 text-sm">
-                    <span className="font-medium">{e.name}</span>
+                    <a
+                      className="inline-flex items-center gap-1.5 font-medium text-cic-dark underline"
+                      href={allDayEventLink(e.name, e.date, 'Coding in Color event')}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <CalendarPlus className="size-4 shrink-0" aria-hidden /> {e.name}<span className="sr-only"> (add to Google Calendar, opens in a new tab)</span>
+                    </a>
                     <span className="text-muted-foreground">{fmtDate(e.date)}</span>
                   </li>
                 ))}

@@ -1,5 +1,5 @@
 import type { BoardMember, CicEvent, Donor, DraftKind, Gift } from '../data/types'
-import { fmtDate, money } from './logic'
+import { byDateDesc, fmtDate, money } from './logic'
 
 // Template drafts. This is the seam where an LLM-drafted version plugs in
 // later: same inputs, same output, a human still approves every send.
@@ -19,7 +19,7 @@ export const DRAFT_SUBJECT: Record<DraftKind, string> = {
 const on = (e: CicEvent) => `${e.name} on ${fmtDate(e.date).replace(/, \d{4}$/, '')}`
 
 export function draftBody(kind: DraftKind, donor: Donor, gifts: Gift[], owner: BoardMember, event?: CicEvent): string {
-  const last = [...gifts].sort((a, b) => b.date.localeCompare(a.date))[0]
+  const last = [...gifts].sort(byDateDesc)[0]
   const hi = donor.org && !donor.email?.includes(first(donor.name).toLowerCase()) ? 'team' : first(donor.name)
   switch (kind) {
     case 'thank-you':
@@ -27,7 +27,7 @@ export function draftBody(kind: DraftKind, donor: Donor, gifts: Gift[], owner: B
     case 'quarterly-update':
       return `Hi ${hi},\n\nA quick update from Coding in Color: this quarter our AI Academy cohorts at Desert Edge, Maryvale and Salt River kept building${event ? `, and ${on(event)} is coming up` : ''}.\n\n[Program outcomes pulled from the curriculum platform go here.]\n\nThanks for being part of it,\n${owner.name}`
     case 'lapsed-nudge':
-      return `Hi ${hi},\n\nWe've missed you this year! Your past support${last ? ` (${money(last.amount)} in ${last.date.slice(0, 4)})` : ''} helped students at schools without CS classes. ${event ? `${on(event)} is coming up. Would you consider joining us again?` : 'Would you consider joining us again?'}\n\n${owner.name}`
+      return `Hi ${hi},\n\nWe've missed you this year! Your past support${last ? ` (${money(last.amount)}${last.date ? ` in ${last.date.slice(0, 4)}` : ''})` : ''} helped students at schools without CS classes. ${event ? `${on(event)} is coming up. Would you consider joining us again?` : 'Would you consider joining us again?'}\n\n${owner.name}`
     case 'follow-up':
       return `Hi ${hi},\n\nGreat to connect. ${donor.nextStep ? `Following up on: ${donor.nextStep.text}.` : ''}\n\n${owner.name}`
     case 'event-invite':

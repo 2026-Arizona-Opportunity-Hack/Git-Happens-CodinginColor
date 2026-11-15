@@ -38,7 +38,7 @@ export const periodLabel = (n: number, p: Period) => (p === 'year' ? String(n) :
 
 export function totalsByPeriod(gifts: Gift[], p: Period) {
   const t = new Map<number, number>()
-  for (const g of gifts) t.set(periodOf(g.date, p), (t.get(periodOf(g.date, p)) ?? 0) + g.amount)
+  for (const g of gifts) if (g.date) t.set(periodOf(g.date, p), (t.get(periodOf(g.date, p)) ?? 0) + g.amount)
   return t
 }
 
@@ -76,14 +76,18 @@ export function inviteDue(eventDate: string, today: string) {
 // A Google Calendar "new event" link for a next step: an all-day event on its
 // due date, so the board member can put it on their own calendar.
 export function calendarLink(step: NextStep, donor: Pick<Donor, 'id' | 'name'>, origin: string) {
-  const day = step.due.replaceAll('-', '')
-  const next = new Date(step.due + 'T12:00:00Z')
+  return allDayEventLink(`${step.text} (${donor.name})`, step.due, `Coding in Color next step for ${donor.name}: ${origin}/donors/${donor.id}`)
+}
+
+// Google Calendar "add event" link for an all-day event on `date` (YYYY-MM-DD).
+export function allDayEventLink(text: string, date: string, details: string) {
+  const next = new Date(date + 'T12:00:00Z')
   next.setUTCDate(next.getUTCDate() + 1)
   const q = new URLSearchParams({
     action: 'TEMPLATE',
-    text: `${step.text} (${donor.name})`,
-    dates: `${day}/${next.toISOString().slice(0, 10).replaceAll('-', '')}`,
-    details: `Coding in Color next step for ${donor.name}: ${origin}/donors/${donor.id}`,
+    text,
+    dates: `${date.replaceAll('-', '')}/${next.toISOString().slice(0, 10).replaceAll('-', '')}`,
+    details,
   })
   return `https://calendar.google.com/calendar/render?${q}`
 }
@@ -95,5 +99,14 @@ export function quarterlyTouchDue(d: Donor, today: string) {
 export const money = (n: number) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 
-export const fmtDate = (iso: string) =>
-  new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+export const fmtDate = (iso: string | null | undefined) =>
+  iso ? new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Date unknown'
+
+// Newest first; gifts without a date go last.
+export const byDateDesc = (a: { date: string | null }, b: { date: string | null }) => (b.date ?? '').localeCompare(a.date ?? '')
+
+// Gifts in a given year (undated gifts are in none).
+export const inYear = (g: { date: string | null }, year: number) => !!g.date && yearOf(g.date) === year
+
+// Latest known gift date, if any.
+export const lastGiftDate = (gifts: { date: string | null }[]) => gifts.map((g) => g.date).filter((d): d is string => !!d).sort().at(-1)

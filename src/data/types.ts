@@ -35,7 +35,7 @@ export interface Gift {
   id: string
   donorId: string
   amount: number
-  date: string
+  date: string | null // null: the import had no usable date; counts toward lifetime giving, not any year
   source: Source
   program: Program
 }
