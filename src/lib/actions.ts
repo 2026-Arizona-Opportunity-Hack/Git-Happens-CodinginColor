@@ -1,4 +1,5 @@
 import type { BoardMember, Channel, CicEvent, Donor, Draft, DraftKind, Role } from '../data/types'
+import { unsafeDraftText } from './ai-draft'
 import { fmtDate, inviteDue } from './logic'
 
 // The assistant's `::action{...}` buttons. The model only proposes arguments;
@@ -65,7 +66,10 @@ export function chatAction(a: Attrs, store: ActionStore): ChatAction {
       if (!donor || !KINDS.includes(kind)) break
       // A body the assistant wrote (a follow-up from a debrief) is saved as the
       // draft; it still waits in Follow-ups for a human to approve.
+      // A body with links or payment details isn't offered at all, the same
+      // check AI-written drafts get.
       const body = text(a.body, 4000).replaceAll('\\n', '\n')
+      if (unsafeDraftText(body)) break
       return body
         ? { label: `Save this ${kind.replace('-', ' ')} ${channel} to ${donor.name} as a draft to approve: "${body.length > 140 ? body.slice(0, 140) + '…' : body}"`, run: () => store.createDraft(donor.id, kind, channel, body) }
         : { label: `Draft a ${kind.replace('-', ' ')} ${channel} to ${donor.name}`, run: () => store.createDraft(donor.id, kind, channel) }

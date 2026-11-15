@@ -16,5 +16,5 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["worker", "scripts"],
-  "exclude": ["scripts/check-coverage.ts"]
+  "exclude": ["scripts/check-coverage.ts", "scripts/check-docs.ts"]
 }

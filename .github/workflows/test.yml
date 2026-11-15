@@ -1,7 +1,8 @@
 name: Tests
 
-# Unit tests and the coverage gate: the run fails, with an error on the PR,
-# when tests fail or cover under 95% of lines or functions in src/.
+# Typecheck, unit tests and the coverage gate: the run fails, with an error
+# on the PR, when types break (which breaks the deploy's build), tests fail,
+# or tests cover under 95% of lines or functions in src/
 
 on:
   pull_request:
@@ -20,4 +21,5 @@ jobs:
         with:
           bun-version: 1.4.4 # the version flake.nix pins
       - run: bun install --frozen-lockfile
+      - run: bunx tsc -b
       - run: bun run test
