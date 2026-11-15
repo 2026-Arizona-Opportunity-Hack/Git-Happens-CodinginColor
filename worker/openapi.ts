@@ -70,6 +70,15 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
           responses: { 200: ok, ...errors(400, 401, 403, 404) },
         },
       },
+      '/api/donors/{id}/invite': {
+        post: {
+          tags: ['Donors'], summary: 'Invite a donor to an event',
+          description: 'Sets the next step to "Invite to <event>", due a week before the event (or today if that has passed), and creates a pending event-invite draft. Returns both.',
+          parameters: [idParam('id', 'Donor ID')],
+          requestBody: jsonBody({ type: 'object', required: ['eventId'], properties: { eventId: { type: 'string', description: 'An upcoming event ID from /api/bootstrap' } } }),
+          responses: { 201: { description: 'The new next step and draft', content: { 'application/json': { schema: { type: 'object', properties: { nextStep: ref('NextStep'), draft: ref('Draft') } } } } }, ...errors(400, 401, 403, 404) },
+        },
+      },
       '/api/donors/{id}/owner': {
         put: {
           tags: ['Donors'], summary: 'Reassign a donor (admin only)',
@@ -93,7 +102,7 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
           tags: ['Drafts'], summary: 'Draft a message', description: 'The server writes the body from the donor\'s history, signed by the donor\'s owner. It starts as `pending`.',
           requestBody: jsonBody({
             type: 'object', required: ['donorId', 'kind'],
-            properties: { donorId: { type: 'string' }, kind: { enum: enums.kinds }, channel: { enum: ['email', 'text'], default: 'email' } },
+            properties: { donorId: { type: 'string' }, kind: { enum: enums.kinds.filter((k) => k !== 'event-invite'), description: 'Invitations come from POST /api/donors/{id}/invite' }, channel: { enum: ['email', 'text'], default: 'email' } },
           }),
           responses: { 201: jsonResponse('The new draft', ref('Draft')), ...errors(400, 401, 403, 404) },
         },

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { useStore } from '@/store'
-import { daysBetween, fmtDate, quarterlyTouchDue, retentionStatus, yearOf } from '@/lib/logic'
+import { calendarLink, daysBetween, fmtDate, quarterlyTouchDue, retentionStatus, yearOf } from '@/lib/logic'
 
 // The board member's work queue. The system drafts and reminds; a human sends.
 export default function FollowUps() {
@@ -59,6 +59,9 @@ export default function FollowUps() {
                       <div>
                         <Link to={`/donors/${d.id}`} className="font-medium text-cic-dark underline">{d.name}</Link>
                         <div className="text-sm">{d.nextStep!.text}</div>
+                        <a className="text-xs text-cic-dark underline" href={calendarLink(d.nextStep!, d, location.origin)} target="_blank" rel="noreferrer">
+                          Add to Google Calendar<span className="sr-only"> (opens in a new tab)</span>
+                        </a>
                       </div>
                       <Badge className={late > 0 ? 'bg-red-100 text-red-900' : 'bg-cic-tint text-cic-dark'}>
                         {late > 0 ? `${late}d overdue` : `due ${fmtDate(d.nextStep!.due)}`}

@@ -1,8 +1,9 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose'
-import type { BoardMember, Channel, Donor, Draft, DraftKind, Gift, ImportRecord, Interaction, NextStep, Program, RawDonorRow, Source } from '../src/data/types'
+import type { BoardMember, Channel, CicEvent, Donor, Draft, DraftKind, Gift, ImportRecord, Interaction, NextStep, Program, RawDonorRow, Source } from '../src/data/types'
 import { dedupe, matchDonor, splitGifts } from '../src/lib/dedupe'
 import { draftBody } from '../src/lib/drafts'
 import { parseIcs } from '../src/lib/ical'
+import { inviteDue } from '../src/lib/logic'
 import { docsPage, openapi } from './openapi'
 
 // JSON API over D1. Every route resolves the caller's session first, and
@@ -30,7 +31,9 @@ const id = (prefix: string) => `${prefix}${crypto.randomUUID().slice(0, 8)}`
 // --- Input validation -------------------------------------------------------
 
 const CHANNELS: Channel[] = ['email', 'text', 'call', 'in-person', 'note']
-const KINDS: DraftKind[] = ['thank-you', 'quarterly-update', 'lapsed-nudge', 'follow-up']
+const KINDS: DraftKind[] = ['thank-you', 'quarterly-update', 'lapsed-nudge', 'follow-up', 'event-invite']
+// An invite needs its event, so it's made by POST /api/donors/:id/invite.
+const DRAFT_KINDS = KINDS.filter((k) => k !== 'event-invite')
 const SOURCES: Source[] = ['spreadsheet', 'zeffy', 'benevity', 'azgives', 'unitedway']
 const PROGRAMS: Program[] = ['K12', 'AI Academy', 'Summer Camp', 'Day of Compute', 'General']
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}/
@@ -167,6 +170,25 @@ const logInteraction = (env: Env, s: Session, donorId: string, channel: Channel,
     .bind(id('i'), donorId, s.memberId, channel, today(), summary),
   env.DB.prepare('UPDATE donors SET last_touch_at = ? WHERE id = ?').bind(today(), donorId),
 ]
+
+// A pending draft, written from the template, signed as the donor's owner (or
+// as the caller if the owner has left the board). Returns the draft and the
+// statement that saves it, so a caller can batch it with other writes.
+async function newDraft(env: Env, s: Session, donor: Donor, kind: DraftKind, channel: 'email' | 'text', event?: CicEvent) {
+  const db = env.DB
+  const gifts = await db.prepare('SELECT * FROM gifts WHERE donor_id = ?').bind(donor.id).all()
+  // Updates and nudges mention the next event on the calendar.
+  event ??= (await db.prepare('SELECT * FROM events WHERE date >= ? ORDER BY date, id LIMIT 1').bind(today()).first<CicEvent>()) ?? undefined
+  const members = await listMembers(env)
+  const owner = members.find((mb) => mb.id === donor.ownerId) ?? members.find((mb) => mb.id === s.memberId)!
+  const draft: Draft = {
+    id: id('x'), donorId: donor.id, kind, channel, status: 'pending', createdAt: today(),
+    body: draftBody(kind, donor, gifts.results.map(toGift), toMember(owner), event),
+  }
+  const save = db.prepare('INSERT INTO drafts (id, donor_id, kind, channel, body, created_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(draft.id, draft.donorId, draft.kind, draft.channel, draft.body, draft.createdAt, draft.status)
+  return { draft, save }
+}
 
 // --- Events calendar --------------------------------------------------------
 
@@ -340,6 +362,7 @@ function systemPrompt(data: Awaited<ReturnType<typeof loadScoped>>): string {
     [
       '::action{type="log" donor="<id>" channel="email|text|call|in-person|note" summary="<what happened>"}',
       '::action{type="next-step" donor="<id>" text="<what to do>" due="YYYY-MM-DD"}',
+      '::action{type="invite" donor="<id>" event="<upcoming event id>"} (sets the next step "Invite to <event>", due a week before it, and drafts the invitation; prefer it for inviting a donor to an event)',
       '::action{type="draft" donor="<id>" kind="thank-you|quarterly-update|lapsed-nudge|follow-up" channel="email|text"}',
       '::action{type="approve" draft="<pending draft id>"}',
       '::action{type="discard" draft="<pending draft id>"}',
@@ -456,6 +479,22 @@ async function route(req: Request, env: Env): Promise<Response> {
       return json({ ok: true })
     }
 
+    // POST /api/donors/:id/invite {eventId}: one click sets the next step to
+    // "Invite to <event>", due a week before it, and drafts the invitation.
+    if (m === 'POST' && parts[2] === 'invite') {
+      const eventId = str((await body(req)).eventId, 'eventId', 50)
+      const event = await db.prepare('SELECT * FROM events WHERE id = ?').bind(eventId).first<CicEvent>()
+      if (!event) throw new HttpError(400, 'Unknown event')
+      if (event.date < today()) throw new HttpError(400, 'That event has already happened')
+      const step: NextStep = { text: `Invite to ${event.name}`, due: inviteDue(event.date, today()), eventId: event.id }
+      const { draft, save } = await newDraft(env, s, { ...donor, nextStep: step }, 'event-invite', donor.email || !donor.phone ? 'email' : 'text', event)
+      await db.batch([
+        db.prepare('UPDATE donors SET next_step_text = ?, next_step_due = ?, next_step_event_id = ? WHERE id = ?').bind(step.text, step.due, step.eventId, donor.id),
+        save,
+      ])
+      return json({ nextStep: step, draft }, 201)
+    }
+
     // PUT /api/donors/:id/owner {ownerId} (admin); ownerId null unassigns
     if (m === 'PUT' && parts[2] === 'owner') {
       requireAdmin(s)
@@ -471,18 +510,10 @@ async function route(req: Request, env: Env): Promise<Response> {
   if (m === 'POST' && parts[0] === 'drafts' && !parts[1]) {
     const b = await body(req)
     const donor = await loadDonor(env, s, str(b.donorId, 'donorId', 50))
-    const kind = oneOf(b.kind, KINDS, 'kind')
+    const kind = oneOf(b.kind, DRAFT_KINDS, 'kind')
     const channel = b.channel === undefined ? 'email' : oneOf(b.channel, ['email', 'text'] as const, 'channel')
-    const gifts = await db.prepare('SELECT * FROM gifts WHERE donor_id = ?').bind(donor.id).all()
-    // Sign as the donor's owner, or as the caller if the owner has left the board.
-    const members = await listMembers(env)
-    const owner = members.find((mb) => mb.id === donor.ownerId) ?? members.find((mb) => mb.id === s.memberId)!
-    const draft: Draft = {
-      id: id('x'), donorId: donor.id, kind, channel, status: 'pending', createdAt: today(),
-      body: draftBody(kind, donor, gifts.results.map(toGift), toMember(owner)),
-    }
-    await db.prepare('INSERT INTO drafts (id, donor_id, kind, channel, body, created_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .bind(draft.id, draft.donorId, draft.kind, draft.channel, draft.body, draft.createdAt, draft.status).run()
+    const { draft, save } = await newDraft(env, s, donor, kind, channel)
+    await save.run()
     return json(draft, 201)
   }
 

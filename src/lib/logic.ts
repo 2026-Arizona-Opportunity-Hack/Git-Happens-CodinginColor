@@ -1,4 +1,4 @@
-import type { BoardMember, Donor, Gift } from '../data/types'
+import type { BoardMember, Donor, Gift, NextStep } from '../data/types'
 
 // Select value standing for "no board member" (Select values can't be null).
 export const UNASSIGNED = '__unassigned__'
@@ -54,6 +54,31 @@ export const QUARTER_DAYS = 90
 
 export const daysBetween = (a: string, b: string) =>
   Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000)
+
+// An invite goes out a week before the event, or today if that's already past.
+export const INVITE_LEAD_DAYS = 7
+
+export function inviteDue(eventDate: string, today: string) {
+  const d = new Date(eventDate + 'T12:00:00Z')
+  d.setUTCDate(d.getUTCDate() - INVITE_LEAD_DAYS)
+  const due = d.toISOString().slice(0, 10)
+  return due < today ? today : due
+}
+
+// A Google Calendar "new event" link for a next step: an all-day event on its
+// due date, so the board member can put it on their own calendar.
+export function calendarLink(step: NextStep, donor: Pick<Donor, 'id' | 'name'>, origin: string) {
+  const day = step.due.replaceAll('-', '')
+  const next = new Date(step.due + 'T12:00:00Z')
+  next.setUTCDate(next.getUTCDate() + 1)
+  const q = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: `${step.text} (${donor.name})`,
+    dates: `${day}/${next.toISOString().slice(0, 10).replaceAll('-', '')}`,
+    details: `Coding in Color next step for ${donor.name}: ${origin}/donors/${donor.id}`,
+  })
+  return `https://calendar.google.com/calendar/render?${q}`
+}
 
 export function quarterlyTouchDue(d: Donor, today: string) {
   return !d.lastTouchAt || daysBetween(d.lastTouchAt, today) >= QUARTER_DAYS
