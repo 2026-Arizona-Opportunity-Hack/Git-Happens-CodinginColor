@@ -1,0 +1,22 @@
+---
+title: Retention
+audience: admins
+covers:
+  - src/pages/Retention.tsx
+  - src/data/retention-sample.ts
+---
+
+# Retention (admin)
+
+Year over year or quarter over quarter: new, recovered, increased, same, decreased and lapsed donors, plus the retention rate.
+
+**Patterns** below show churn and activation:
+
+- donors grouped by the year (or quarter) of their first gift, with the share who gave again in each period after;
+- the lapse rate by source (Zeffy, Benevity…) and by program.
+
+With no gifts yet, the page offers **Use sample data** (see [Sample data](sample-data.md)).
+
+Gifts with an unknown date count toward lifetime giving but not toward any period, so they don't appear here.
+
+The classification and the patterns are in `src/lib/logic.ts`. Tests: `logic.test.ts`.
