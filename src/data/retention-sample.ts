@@ -1,7 +1,7 @@
 import type { Donor, Gift } from './types'
 
-// Fake donors for previewing the Retention page, quarter over quarter. Shown
-// only in the browser when someone clicks "Use sample data"; never saved.
+// Fake donors that show off the Retention page quarter over quarter. Part of
+// the "Use sample data" set (see sample-data.ts); never saved.
 
 const donor = (id: string, name: string, sources: Donor['sources']): Donor => ({ id, name, ownerId: null, sources })
 
