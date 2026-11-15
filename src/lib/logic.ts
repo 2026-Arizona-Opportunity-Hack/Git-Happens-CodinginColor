@@ -57,6 +57,47 @@ export function retentionStatus(gifts: Gift[], period: number, p: Period = 'year
   return 'same'
 }
 
+// --- Retention patterns ---------------------------------------------------
+// Cohorts: donors grouped by the period of their first dated gift, and how
+// many of each group gave again 1, 2, 3… periods later.
+export interface Cohort { period: number; size: number; gaveAgain: number[] }
+
+export function cohorts(gifts: Gift[], p: Period, current: number, count: number): Cohort[] {
+  const given = new Map<string, Set<number>>()
+  for (const g of gifts) if (g.date) {
+    if (!given.has(g.donorId)) given.set(g.donorId, new Set())
+    given.get(g.donorId)!.add(periodOf(g.date, p))
+  }
+  const out: Cohort[] = []
+  for (let c = current - count + 1; c <= current; c++) {
+    const members = [...given.values()].filter((ps) => Math.min(...ps) === c)
+    const gaveAgain = Array.from({ length: current - c }, (_, i) => members.filter((ps) => ps.has(c + i + 1)).length)
+    out.push({ period: c, size: members.length, gaveAgain })
+  }
+  return out
+}
+
+// Of the donors who gave in the previous period, how many stopped, grouped by
+// where their gifts came from (source) or what they paid for (program). A
+// donor who gave through two sources counts in both.
+export interface LapseRow { key: string; gave: number; lapsed: number }
+
+export function lapseBy(gifts: Gift[], p: Period, period: number, by: 'source' | 'program'): LapseRow[] {
+  const prev = new Map<string, Set<string>>() // key -> donors who gave in period - 1
+  const cur = new Set<string>()
+  for (const g of gifts) {
+    if (!g.date) continue
+    const n = periodOf(g.date, p)
+    if (n === period) cur.add(g.donorId)
+    if (n === period - 1) {
+      if (!prev.has(g[by])) prev.set(g[by], new Set())
+      prev.get(g[by])!.add(g.donorId)
+    }
+  }
+  return [...prev].map(([key, ids]) => ({ key, gave: ids.size, lapsed: [...ids].filter((id) => !cur.has(id)).length }))
+    .sort((a, b) => b.lapsed / b.gave - a.lapsed / a.gave || b.gave - a.gave)
+}
+
 // --- Follow-up cadence ----------------------------------------------------
 export const QUARTER_DAYS = 90
 
