@@ -1,6 +1,7 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import type { BoardMember, Channel, CicEvent, Donor, Draft, DraftKind, Gift, ImportRecord, Interaction, NextStep, Program, ProgramOutcome, RawDonorRow, Source } from '../src/data/types'
 import { dedupe, matchDonor, splitGifts } from '../src/lib/dedupe'
+import { AI_KINDS, cleanDraft, draftPrompt } from '../src/lib/ai-draft'
 import { draftBody } from '../src/lib/drafts'
 import { parseIcs } from '../src/lib/ical'
 import { inviteDue } from '../src/lib/logic'
@@ -100,6 +101,7 @@ const toImport = (r: Row): ImportRecord => ({
 const toDraft = (r: Row): Draft => ({
   id: r.id as string, donorId: r.donor_id as string, kind: r.kind as DraftKind, channel: r.channel as 'email' | 'text',
   body: r.body as string, createdAt: r.created_at as string, status: r.status as Draft['status'], approvedBy: (r.approved_by as string) ?? undefined,
+  ai: r.ai === 1,
 })
 
 // --- Board members (WorkOS) -------------------------------------------------
@@ -190,23 +192,44 @@ const logInteraction = (env: Env, s: Session, donorId: string, channel: Channel,
 // A pending draft, written from the template, signed as the donor's owner (or
 // as the caller if the owner has left the board). Returns the draft and the
 // statement that saves it, so a caller can batch it with other writes.
-async function newDraft(env: Env, s: Session, donor: Donor, kind: DraftKind, channel: 'email' | 'text', event?: CicEvent) {
+// A `body` the assistant already wrote (from a debrief) is used as is.
+async function newDraft(env: Env, s: Session, donor: Donor, kind: DraftKind, channel: 'email' | 'text', event?: CicEvent, body?: string) {
   const db = env.DB
-  const [gifts, outcomes] = await db.batch<Row>([
-    db.prepare('SELECT * FROM gifts WHERE donor_id = ?').bind(donor.id),
-    db.prepare('SELECT * FROM program_outcomes'),
-  ])
-  // Updates and nudges mention the next event on the calendar.
-  event ??= (await db.prepare('SELECT * FROM events WHERE date >= ? ORDER BY date, id LIMIT 1').bind(today()).first<CicEvent>()) ?? undefined
-  const members = await listMembers(env)
-  const owner = members.find((mb) => mb.id === donor.ownerId) ?? members.find((mb) => mb.id === s.memberId)!
-  const draft: Draft = {
-    id: id('x'), donorId: donor.id, kind, channel, status: 'pending', createdAt: today(),
-    body: draftBody(kind, donor, gifts.results.map(toGift), toMember(owner), event, outcomes.results.map(toOutcome)),
+  const draft: Draft = { id: id('x'), donorId: donor.id, kind, channel, status: 'pending', createdAt: today(), body: body ?? '', ai: body !== undefined }
+  if (body === undefined) {
+    const [gifts, outcomes] = await db.batch<Row>([
+      db.prepare('SELECT * FROM gifts WHERE donor_id = ?').bind(donor.id),
+      db.prepare('SELECT * FROM program_outcomes'),
+    ])
+    // Updates and nudges mention the next event on the calendar.
+    event ??= (await db.prepare('SELECT * FROM events WHERE date >= ? ORDER BY date, id LIMIT 1').bind(today()).first<CicEvent>()) ?? undefined
+    const members = await listMembers(env)
+    const owner = toMember(members.find((mb) => mb.id === donor.ownerId) ?? members.find((mb) => mb.id === s.memberId)!)
+    const gs = gifts.results.map(toGift), os = outcomes.results.map(toOutcome)
+    draft.body = draftBody(kind, donor, gs, owner, event, os)
+    const written = AI_KINDS.includes(kind) ? await aiDraft(env, draftPrompt(kind, channel, donor, gs, owner, draft.body, event, os), channel) : null
+    if (written) { draft.body = written; draft.ai = true }
   }
-  const save = db.prepare('INSERT INTO drafts (id, donor_id, kind, channel, body, created_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .bind(draft.id, draft.donorId, draft.kind, draft.channel, draft.body, draft.createdAt, draft.status)
+  const save = db.prepare('INSERT INTO drafts (id, donor_id, kind, channel, body, created_at, status, ai) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(draft.id, draft.donorId, draft.kind, draft.channel, draft.body, draft.createdAt, draft.status, draft.ai ? 1 : 0)
   return { draft, save }
+}
+
+// The gateway's rewrite of a template, or null to keep the template: no key,
+// an error, a slow reply or one that breaks the rules never blocks a draft.
+// Drafts use gpt-oss-120b with low reasoning: about 1.5 s a draft on Nov 15,
+// where muse-spark took 20-30 s.
+const AI_DRAFT_MODEL = 'gpt-oss-120b'
+const AI_DRAFT_TIMEOUT_MS = 12_000
+
+async function aiDraft(env: Env, messages: ChatMessage[], channel: 'email' | 'text') {
+  if (!env.AI_API_KEY) return null
+  try {
+    return cleanDraft(await complete(env, messages, { model: AI_DRAFT_MODEL, reasoningEffort: 'low', signal: AbortSignal.timeout(AI_DRAFT_TIMEOUT_MS) }), channel)
+  } catch (e) {
+    console.error('AI draft failed, using the template:', e)
+    return null
+  }
 }
 
 // --- Events calendar --------------------------------------------------------
@@ -396,11 +419,13 @@ function systemPrompt(data: Awaited<ReturnType<typeof loadScoped>>): string {
   ].join('\n\n')
 }
 
-async function complete(env: Env, messages: ChatMessage[]): Promise<string> {
+// The reply's text, or '' when the gateway sent none.
+async function complete(env: Env, messages: ChatMessage[], opts: { model?: string; reasoningEffort?: 'low'; signal?: AbortSignal } = {}): Promise<string> {
   const res = await fetch(AI_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${env.AI_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: AI_MODEL, messages }),
+    body: JSON.stringify({ model: opts.model ?? AI_MODEL, messages, ...(opts.reasoningEffort && { reasoning_effort: opts.reasoningEffort }) }),
+    signal: opts.signal,
   })
   if (!res.ok) {
     console.error(`AI gateway returned ${res.status}: ${await res.text()}`)
@@ -412,7 +437,7 @@ async function complete(env: Env, messages: ChatMessage[]): Promise<string> {
   }>()
   // Shows in `wrangler tail`: how much of each prompt the cache served.
   console.log(`chat prompt ${r.usage?.prompt_tokens ?? '?'} tokens, ${r.usage?.prompt_tokens_details?.cached_tokens ?? 0} cached`)
-  return r.choices[0]?.message.content?.trim() || "Sorry, I don't have an answer for that."
+  return r.choices[0]?.message.content?.trim() ?? ''
 }
 
 // --- Routes -----------------------------------------------------------------
@@ -473,7 +498,7 @@ async function route(req: Request, env: Env): Promise<Response> {
       role: oneOf(x?.role, ['user', 'assistant'] as const, `messages[${i}].role`),
       content: str(x?.content, `messages[${i}].content`, 4000),
     }))
-    const reply = await complete(env, [{ role: 'system', content: systemPrompt(await loadScoped(env, s)) }, ...messages])
+    const reply = (await complete(env, [{ role: 'system', content: systemPrompt(await loadScoped(env, s)) }, ...messages])) || "Sorry, I don't have an answer for that."
     return json({ reply })
   }
 

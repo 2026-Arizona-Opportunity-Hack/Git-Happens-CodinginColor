@@ -62,6 +62,7 @@ export interface Draft {
   createdAt: string
   status: 'pending' | 'approved' | 'discarded'
   approvedBy?: string
+  ai?: boolean // written by the AI gateway or the assistant rather than a template
 }
 
 // What a program achieved, for funder packets and quarterly updates. Admins
