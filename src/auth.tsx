@@ -40,16 +40,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { fetchToken().finally(() => setLoading(false)) }, [fetchToken])
 
+  // Stable, so the store doesn't reload when the user object changes.
+  const getAccessToken = useCallback(async () => {
+    const t = current.current
+    if (t && t.expiresAt - Date.now() > 30_000) return t.accessToken
+    const next = await fetchToken()
+    if (!next) throw new Error('Signed out')
+    return next.accessToken
+  }, [fetchToken])
+
   const auth = useMemo<Auth>(() => ({
     user,
     isLoading,
-    getAccessToken: async () => {
-      const t = current.current
-      if (t && t.expiresAt - Date.now() > 30_000) return t.accessToken
-      const next = await fetchToken()
-      if (!next) throw new Error('Signed out')
-      return next.accessToken
-    },
+    getAccessToken,
     signIn: (returnTo = location.pathname) => location.assign(`/auth/login?${new URLSearchParams({ returnTo })}`),
     signOut: async () => {
       const res = await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' })
@@ -57,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       current.current = null
       location.assign(logoutUrl)
     },
-  }), [user, isLoading, fetchToken])
+  }), [user, isLoading, getAccessToken])
 
   return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>
 }

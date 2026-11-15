@@ -113,7 +113,7 @@ export async function handleAuth(req: Request, env: Env): Promise<Response> {
     if (exp * 1000 - Date.now() > 60_000) return json({ accessToken: s.at, expiresAt: exp * 1000, user: s.user })
     const auth = await authenticate(env, { grant_type: 'refresh_token', refresh_token: s.rt })
     if (!auth) return json({ error: 'Session expired, sign in again' }, 401, { 'Set-Cookie': cookie(SESSION, '', 0, secure) })
-    const next = { at: auth.access_token, rt: auth.refresh_token, user: toUser(auth.user) }
+    const next = { at: auth.access_token, rt: auth.refresh_token, user: auth.user ? toUser(auth.user) : s.user }
     return json({ accessToken: next.at, expiresAt: (decodeJwt(next.at).exp ?? 0) * 1000, user: next.user }, 200, {
       'Set-Cookie': cookie(SESSION, await seal(env, next), SESSION_DAYS * 86400, secure),
     })
