@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { ImportRecord, Source } from '../data/types'
-import { reminders } from './reminders'
+import { pendingTasks, reminders } from './reminders'
 
 const imp = (source: Source, importedAt: string): ImportRecord => ({ id: `${source}-${importedAt}`, source, rowCount: 1, importedAt, importedBy: 'u1' })
 const base = { today: '2026-11-14', donors: [], gifts: [], drafts: [], events: [] }
@@ -10,7 +10,7 @@ const sheetReminders = (role: 'admin' | 'board', imports: ImportRecord[]) =>
 
 test('admins are reminded about exports never imported or older than 30 days', () => {
   const rs = sheetReminders('admin', [
-    imp('spreadsheet', '2026-11-14T10:00:00Z'), // fresh
+    imp('unitedway', '2026-11-14T10:00:00Z'), // fresh
     imp('zeffy', '2026-09-01T10:00:00Z'),
     imp('zeffy', '2026-10-01T10:00:00Z'), // newest zeffy: 44 days old
   ])
@@ -141,4 +141,17 @@ test('events in the next 3 weeks are upcoming and count the donors whose next st
   assert.deepEqual(rs.map((r) => r.title), ['Camp is today', 'Day of Compute is in 1 day'])
   assert.match(rs[1].detail, /1 donor has a next step tied to it/)
   assert.equal(rs[1].urgency, 'upcoming')
+})
+
+test("a board member's pending tasks are their overdue and due reminders, not admin-wide ones", () => {
+  const donors = [
+    { id: 'd1', name: 'APS', ownerId: 'u1', sources: [], lastTouchAt: '2026-11-01', nextStep: { text: 'Call', due: '2026-11-10' } }, // overdue
+    { id: 'd2', name: 'SRP', ownerId: 'u1', sources: [] }, // never contacted: quarterly update due
+    { id: 'd3', name: 'Intel', ownerId: 'u2', sources: [], lastTouchAt: '2026-11-01' },
+    { id: 'd4', name: 'Unassigned', ownerId: null, sources: [] },
+  ]
+  const events = [{ id: 'e1', name: 'Day of Compute', date: '2026-11-20' }] // upcoming: not a task
+  const input = { ...base, donors, events, imports: [] }
+  assert.deepEqual(pendingTasks(input, 'u1'), { total: 2, overdue: 1 })
+  assert.deepEqual(pendingTasks(input, 'u2'), { total: 0, overdue: 0 })
 })

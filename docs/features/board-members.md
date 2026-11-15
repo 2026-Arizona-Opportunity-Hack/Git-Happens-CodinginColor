@@ -8,7 +8,7 @@ covers:
 
 # Board members (admin)
 
-**Donors assigned**, at the top, lists each board member with how many donors they look after (sortable, most first), and under it how many donors are unassigned or still assigned to someone who has left the board. Assignments are changed on [All Donors](all-donors.md).
+**Donors and pending tasks**, at the top, lists each board member with how many donors they look after (sortable, most first) and their **pending tasks**: what their own Notifications page lists as overdue or due (next steps, quarterly updates, lapsed donors, drafts to approve), with the overdue ones called out. Admin-wide tasks such as unassigned donors and stale imports count toward no one. Under the table it says how many donors are unassigned or still assigned to someone who has left the board. Assignments are changed on [All Donors](all-donors.md).
 
 Below it, invite board members by email, change their role, or remove them. That part is WorkOS's [Users Management widget](https://workos.com/docs/widgets/user-management), whose columns we can't change, which is why the donor counts are a table of their own.
 

@@ -38,6 +38,15 @@ interface Input {
 
 const ORDER: Record<Urgency, number> = { overdue: 0, due: 1, upcoming: 2 }
 
+// One board member's open tasks, as their Notifications page counts them
+// (overdue and due; upcoming events are only a heads-up). Worked out as that
+// member, so the admin-wide tasks (unassigned donors, stale imports) count
+// toward no one.
+export function pendingTasks(input: Omit<Input, 'role' | 'memberId'>, memberId: string) {
+  const open = reminders({ ...input, role: 'board', memberId }).filter((r) => r.urgency !== 'upcoming')
+  return { total: open.length, overdue: open.filter((r) => r.urgency === 'overdue').length }
+}
+
 export function reminders({ role, memberId, today, donors: visible, gifts, drafts, events, imports }: Input): Reminder[] {
   const out: Reminder[] = []
   // Donor reminders are about the caller's own donors, admins included (admins

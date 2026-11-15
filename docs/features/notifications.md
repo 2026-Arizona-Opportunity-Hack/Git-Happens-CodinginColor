@@ -21,6 +21,8 @@ Donor reminders cover only the donors assigned to you, admins included. Admins a
 
 Each section shows 10 reminders at a time, with Previous/Next once there are more.
 
+The same count, worked out for each board member, is the **Pending tasks** column on [Board members](board-members.md) (`pendingTasks()`): their own overdue and due reminders, without the admin-wide ones.
+
 ## How it works
 
 Reminders are computed from the current data in `src/lib/reminders.ts` and never stored, so a reminder clears as soon as the work is done. The thresholds are constants at the top of that file and in `src/data/sources.ts`.
