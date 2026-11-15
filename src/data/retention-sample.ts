@@ -43,6 +43,9 @@ const rows: [string, number, string][] = [
   ['s10', 60, '2025-09-12'], ['s10', 60, '2025-12-12'], ['s10', 60, '2026-03-12'],
 ]
 
+// What each sample donor gives to, so Retention's "by program" table has rows.
+const programs: Record<string, Gift['program']> = { s2: 'AI Academy', s4: 'K12', s5: 'Day of Compute', s6: 'Day of Compute', s8: 'Summer Camp', s9: 'AI Academy', s10: 'Summer Camp' }
+
 export const sampleGifts: Gift[] = rows.map(([donorId, amount, date], i) => ({
-  id: `sg${i + 1}`, donorId, amount, date, source: sampleDonors.find((d) => d.id === donorId)!.sources[0], program: 'General',
+  id: `sg${i + 1}`, donorId, amount, date, source: sampleDonors.find((d) => d.id === donorId)!.sources[0], program: programs[donorId] ?? 'General',
 }))

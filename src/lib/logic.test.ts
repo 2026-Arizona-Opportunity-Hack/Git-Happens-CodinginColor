@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { calendarLink, inviteDue, nextOwner, periodLabel, periodOf, retentionStatus, suggestOwners } from './logic'
+import type { Gift } from '../data/types'
+import { calendarLink, cohorts, inviteDue, lapseBy, nextOwner, periodLabel, periodOf, retentionStatus, suggestOwners } from './logic'
 
 const members = [{ id: 'a', name: 'Ann', email: '' }, { id: 'b', name: 'Ben', email: '' }, { id: 'c', name: 'Cy', email: '' }]
 const owned = (...ids: (string | null)[]) => ids.map((ownerId) => ({ ownerId }))
@@ -39,11 +40,42 @@ test('undated gifts count toward lifetime giving but no year, and sort after dat
 })
 
 test('quarters count across a year end, so Q1 is compared with the Q4 before it', () => {
-  const gift = (amount: number, date: string) => ({ id: date, donorId: 'd', amount, date, source: 'zeffy' as const, program: 'General' as const })
+  const qgift = (amount: number, date: string) => ({ id: date, donorId: 'd', amount, date, source: 'zeffy' as const, program: 'General' as const })
   const q1 = periodOf('2027-02-10', 'quarter')
   assert.equal(periodOf('2026-12-31', 'quarter'), q1 - 1)
   assert.equal(periodLabel(q1, 'quarter'), 'Q1 2027')
-  assert.equal(retentionStatus([gift(100, '2026-11-01'), gift(150, '2027-02-10')], q1, 'quarter'), 'increased')
-  assert.equal(retentionStatus([gift(100, '2026-11-01')], q1, 'quarter'), 'lapsed')
-  assert.equal(retentionStatus([gift(100, '2026-02-01'), gift(100, '2027-02-10')], q1, 'quarter'), 'recovered')
+  assert.equal(retentionStatus([qgift(100, '2026-11-01'), qgift(150, '2027-02-10')], q1, 'quarter'), 'increased')
+  assert.equal(retentionStatus([qgift(100, '2026-11-01')], q1, 'quarter'), 'lapsed')
+  assert.equal(retentionStatus([qgift(100, '2026-02-01'), qgift(100, '2027-02-10')], q1, 'quarter'), 'recovered')
+})
+
+const gift = (donorId: string, date: string, source: Gift['source'] = 'zeffy', program: Gift['program'] = 'General'): Gift =>
+  ({ id: `${donorId}-${date}`, donorId, amount: 100, date, source, program })
+
+test('cohorts group donors by first gift and count who gave again each later year', () => {
+  const gifts = [
+    gift('a', '2024-03-01'), gift('a', '2025-03-01'), gift('a', '2026-03-01'),
+    gift('b', '2024-06-01'), gift('b', '2026-06-01'), // skipped a year
+    gift('c', '2025-01-01'),
+    gift('d', '2026-01-01'),
+    { ...gift('e', '2024-01-01'), date: null }, // undated gifts don't start a cohort
+  ]
+  assert.deepEqual(cohorts(gifts, 'year', 2026, 3), [
+    { period: 2024, size: 2, gaveAgain: [1, 2] },
+    { period: 2025, size: 1, gaveAgain: [0] },
+    { period: 2026, size: 1, gaveAgain: [] },
+  ])
+})
+
+test('lapse rate by source counts last period\'s donors who gave nothing this period', () => {
+  const gifts = [
+    gift('a', '2025-05-01', 'zeffy'), gift('a', '2026-05-01', 'zeffy'),
+    gift('b', '2025-05-01', 'zeffy'),
+    gift('c', '2025-05-01', 'benevity'), gift('c', '2026-05-01', 'spreadsheet'), // came back through another source: kept
+  ]
+  assert.deepEqual(lapseBy(gifts, 'year', 2026, 'source'), [
+    { key: 'zeffy', gave: 2, lapsed: 1 },
+    { key: 'benevity', gave: 1, lapsed: 0 },
+  ])
+  assert.deepEqual(lapseBy(gifts, 'year', 2026, 'program'), [{ key: 'General', gave: 3, lapsed: 1 }])
 })
