@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { toast } from 'sonner'
 import { reminders } from '@/lib/reminders'
 import { sampleData } from '@/data/sample-data'
-import type { BoardMember, Channel, Donor, CicEvent, Draft, DraftKind, Gift, ImportRecord, Interaction, RawDonorRow, Role, Source } from '@/data/types'
+import type { BoardMember, Channel, Donor, CicEvent, Draft, DraftKind, Gift, ImportRecord, Interaction, ProgramOutcome, RawDonorRow, Role, Source } from '@/data/types'
 
 // Client for the Worker API. The server scopes every read to the caller, so
 // `donors` is already the set this user may see. Actions call one route, then
@@ -20,6 +20,7 @@ interface Bootstrap {
   interactions: Interaction[]
   drafts: Draft[]
   imports: ImportRecord[] // newest first; empty for board members
+  outcomes: ProgramOutcome[]
   devTools?: boolean // development-only Dev tools page is enabled
 }
 
@@ -172,6 +173,10 @@ function useStoreState(real: Bootstrap, token: GetToken, reload: () => Promise<v
   const importRows = (rows: RawDonorRow[], files: Partial<Record<Source, string>> = {}) =>
     change(() => api<{ created: number; merged: number; clusters: number; gifts: number; skippedGifts: number; createdDonors: { id: string; name: string }[] }>(token, 'import', 'POST', { rows, files }))
 
+  // What a program achieved, quoted in funder packets and quarterly updates.
+  const saveOutcome = (o: Pick<ProgramOutcome, 'program' | 'studentsServed' | 'summary'>) =>
+    change(() => api(token, `outcomes/${encodeURIComponent(o.program)}`, 'PUT', { studentsServed: o.studentsServed, summary: o.summary }))
+
   // Fetched by the Members widget itself, whenever its token runs out.
   const widgetToken = useCallback(() => api<{ token: string }>(token, 'widget-token', 'POST').then((r) => r.token), [token])
 
@@ -188,7 +193,7 @@ function useStoreState(real: Bootstrap, token: GetToken, reload: () => Promise<v
   return {
     ...data, drafts, member, ownerName, chat, sample, setSample,
     createDraft, updateDraft, approveDraft, discardDraft, logInteraction, setNextStep, invite, reassign, assignOwners, importRows, clearDonors, widgetToken,
-    listApiKeys, createApiKey, revokeApiKey,
+    listApiKeys, createApiKey, revokeApiKey, saveOutcome,
   }
 }
 

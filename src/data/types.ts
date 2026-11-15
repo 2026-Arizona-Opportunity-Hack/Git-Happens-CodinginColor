@@ -64,6 +64,15 @@ export interface Draft {
   approvedBy?: string
 }
 
+// What a program achieved, for funder packets and quarterly updates. Admins
+// edit it on Program outcomes; later it can come from the curriculum platform.
+export interface ProgramOutcome {
+  program: Program
+  studentsServed: number | null
+  summary: string
+  updatedAt?: string
+}
+
 export interface CicEvent {
   id: string
   name: string
