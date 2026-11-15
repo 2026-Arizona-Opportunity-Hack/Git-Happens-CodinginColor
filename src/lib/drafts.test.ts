@@ -1,6 +1,21 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { draftBody } from './drafts'
+import { draftBody, draftChannel, thankableGift } from './drafts'
+
+test('a draft uses the channel the donor has, and none when they have no email or phone', () => {
+  assert.equal(draftChannel({ email: 'a@example.com', phone: '602-555-0100' }, 'text'), 'text')
+  assert.equal(draftChannel({ email: 'a@example.com' }, 'text'), 'email')
+  assert.equal(draftChannel({ phone: '602-555-0100' }), 'text')
+  assert.equal(draftChannel({ phone: '602-555-0100' }, 'email'), 'text')
+  assert.equal(draftChannel({}), undefined)
+})
+
+test('a thank-you is only for a gift in the last 60 days', () => {
+  const g = (date: string | null, amount = 50) => ({ date, amount })
+  assert.equal(thankableGift([g('2025-04-10'), g(null)], '2026-11-15'), undefined)
+  assert.deepEqual(thankableGift([g('2026-09-01', 25), g('2026-10-20', 75)], '2026-11-15'), g('2026-10-20', 75))
+  assert.equal(thankableGift([g('2026-12-01')], '2026-11-15'), undefined) // future-dated
+})
 
 const donor = { id: 'd1', name: 'Ana Ruiz', email: 'ana@example.com', ownerId: 'bm1', sources: [] }
 const owner = { id: 'bm1', name: 'Priya Shah', email: 'priya@example.org' }

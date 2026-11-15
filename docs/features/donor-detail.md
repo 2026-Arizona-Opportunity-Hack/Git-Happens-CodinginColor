@@ -14,7 +14,7 @@ One donor's page. The header shows their organization, email and phone (US numbe
 - **Timeline** of gifts and communications.
 - **Next step:** set one, add it to Google Calendar, or invite the donor to an upcoming event in **one click**. That sets the next step "Invite to <event>", due a week before it, plus a draft invitation to approve in [Follow-ups](follow-ups.md).
 - **Log** a text, email or call.
-- **Draft** a thank-you or update.
+- **Draft** a thank-you or update. It goes by email if the donor has an address, else by text; with neither, the buttons are off and say "No contact info". Thank-you needs a gift in the last 60 days.
 - **Debrief** opens the [assistant](assistant.md) to describe a conversation with the donor, typed or dictated.
 - **One-click funder packet:** a Markdown file with lifetime giving, totals by year and by program and every gift, ready to paste into a renewal. A toast names the downloaded file (e.g. `CIC_FunderPacket_AaliyahColeman_2026.md`), or says it couldn't be made.
 - **Custom fields** created on [Update Donors](update-donors.md).

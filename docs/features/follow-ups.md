@@ -23,6 +23,8 @@ Every draft (thank-you, quarterly update, lapsed nudge, follow-up, invitation) i
 
 A text draft names the number it goes to, formatted as (555) 555-1234 for US numbers.
 
+A draft goes out by email when the donor has an address, else by text. A donor with neither gets no draft ("No contact info"), and the API refuses one. A **thank-you** is only offered for a gift in the last 60 days (`THANK_YOU_DAYS` in `src/lib/drafts.ts`). Thanking a lapsed donor for a gift from last year reads as a form letter, so use a lapsed nudge instead.
+
 **Template emails** at the bottom shows the standard thank-you, update, nudge and follow-up filled in for any donor. **Use this template** adds it to the drafts as written, without the AI.
 
 ## Sending

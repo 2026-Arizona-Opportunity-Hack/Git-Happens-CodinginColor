@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import type { Channel, Donor, Gift } from '@/data/types'
+import { draftChannel, THANK_YOU_DAYS, thankableGift } from '@/lib/drafts'
 import { funderPacket } from '@/lib/packet'
 import { useStore } from '@/store'
 import { useAsk } from '@/components/ChatWidget'
@@ -66,10 +67,13 @@ export default function DonorDetail() {
     toast.success(`Next step set for ${fmtDate(r.nextStep.due)}, and an invitation drafted.`, { action: { label: 'Review draft', onClick: () => nav('/follow-ups') } })
   }
 
+  // Email if there's an address, else text; neither means no draft to send.
+  const draftVia = draftChannel(donor)
+  const thankable = thankableGift(gifts, s.today)
   const draft = async (kind: Parameters<typeof s.createDraft>[1]) => {
     // AI-written drafts can take several seconds.
     const t = toast.loading('Writing the draft…')
-    if (!(await s.createDraft(donor.id, kind, donor.email ? 'email' : 'text'))) return void toast.dismiss(t)
+    if (!(await s.createDraft(donor.id, kind, draftVia))) return void toast.dismiss(t)
     toast.success('Draft created. Review it in Follow-ups.', { id: t, action: { label: 'Open', onClick: () => nav('/follow-ups') } })
   }
 
@@ -236,9 +240,11 @@ export default function DonorDetail() {
           <Card>
             <CardHeader><CardTitle>Draft a message</CardTitle></CardHeader>
             <CardContent className="grid gap-2">
-              <Button variant="outline" onClick={() => draft('thank-you')}>Thank-you</Button>
-              <Button variant="outline" onClick={() => draft('quarterly-update')}>Quarterly update</Button>
-              <Button variant="outline" onClick={() => draft('follow-up')}>Follow-up</Button>
+              {!draftVia && <p className="text-sm text-muted-foreground">No contact info: add an email or phone number for {donor.name} before drafting a message.</p>}
+              <Button variant="outline" disabled={!draftVia || !thankable} aria-describedby={draftVia && !thankable ? 'no-thank-you' : undefined} onClick={() => draft('thank-you')}>Thank-you</Button>
+              {draftVia && !thankable && <p id="no-thank-you" className="text-sm text-muted-foreground">No gift in the last {THANK_YOU_DAYS} days to thank them for.</p>}
+              <Button variant="outline" disabled={!draftVia} onClick={() => draft('quarterly-update')}>Quarterly update</Button>
+              <Button variant="outline" disabled={!draftVia} onClick={() => draft('follow-up')}>Follow-up</Button>
             </CardContent>
           </Card>
         </aside>

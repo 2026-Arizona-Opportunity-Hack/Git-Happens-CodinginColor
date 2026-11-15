@@ -2,7 +2,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose'
 import type { BoardMember, Channel, CicEvent, Donor, Draft, DraftKind, Gift, ImportRecord, Interaction, NextStep, Program, RawDonorRow, Source } from '../src/data/types'
 import { dedupe, matchDonor, mergeNotes, splitGifts } from '../src/lib/dedupe'
 import { cleanDraft, draftPrompt, inert } from '../src/lib/ai-draft'
-import { draftBody } from '../src/lib/drafts'
+import { draftBody, draftChannel } from '../src/lib/drafts'
 import { parseIcs } from '../src/lib/ical'
 import { inviteDue } from '../src/lib/logic'
 import { date, extraFields, HttpError, oneOf, optStr, periodRange, str, summarize, type SummaryContact, type SummaryGift } from '../src/lib/api'
@@ -516,7 +516,9 @@ async function route(req: Request, env: Env): Promise<Response> {
     const b = await body(req)
     const donor = await loadDonor(env, s, str(b.donorId, 'donorId', 50))
     const kind = oneOf(b.kind, DRAFT_KINDS, 'kind')
-    const channel = b.channel === undefined ? 'email' : oneOf(b.channel, ['email', 'text'] as const, 'channel')
+    // The channel asked for if the donor has it, else the one they do have.
+    const channel = draftChannel(donor, b.channel === undefined ? undefined : oneOf(b.channel, ['email', 'text'] as const, 'channel'))
+    if (!channel) throw new HttpError(400, 'Donor has no email or phone number to send a draft to')
     // A body the caller wrote (the assistant's follow-up from a debrief) is
     // used as is, without the gateway; it's still pending until a human approves it.
     // template: true marks a body as a template's (Follow-ups' Template emails), not the AI's.

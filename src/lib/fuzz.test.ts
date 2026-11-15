@@ -256,6 +256,7 @@ forAll("the assistant's buttons only touch the person's donors and pending draft
   const role = r.pick(['admin', 'board'] as const)
   const store: ActionStore = {
     today: '2026-11-15', session: { role }, donors, drafts,
+    gifts: [{ id: 'g1', donorId: 'd1', amount: 100, date: '2026-10-01', source: 'zeffy', program: 'General' }],
     events: [{ id: 'e1', name: 'Day of Compute', date: '2026-12-05' }, { id: 'e0', name: 'Camp', date: '2026-06-01' }],
     boardMembers: [{ id: 'u2', name: 'Ben Ortiz', email: 'ben@example.org' }],
     logInteraction: rec('log'), setNextStep: rec('next-step'), invite: rec('invite'), createDraft: rec('draft'),
