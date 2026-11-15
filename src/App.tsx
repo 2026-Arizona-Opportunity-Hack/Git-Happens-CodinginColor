@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthKitProvider, useAuth } from '@workos-inc/authkit-react'
-import { BarChart3, Bell, Code2, Contact, Home, ListTodo, LogOut, Menu, ShieldAlert, Upload, UserCog, UserRound, Users, Wrench, X, type LucideIcon } from 'lucide-react'
+import { BarChart3, Bell, Code2, Contact, Home, ListTodo, LogOut, Menu, ShieldAlert, Upload, UserCog, UserRound, Users, X, type LucideIcon } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
 import { StoreProvider, useReminders, useStore } from '@/store'
@@ -19,13 +19,12 @@ const FollowUps = lazy(() => import('@/pages/FollowUps'))
 const Retention = lazy(() => import('@/pages/Retention'))
 const Import = lazy(() => import('@/pages/Import'))
 const Notifications = lazy(() => import('@/pages/Notifications'))
-const DevTools = lazy(() => import('@/pages/DevTools'))
 const Members = lazy(() => import('@/pages/Members'))
 const Account = lazy(() => import('@/pages/Account'))
 const Api = lazy(() => import('@/pages/Api'))
 
 // `keywords` are other words people might search for to find the page.
-type NavItem = { to: string; label: string; icon: LucideIcon; keywords?: string; adminOnly?: boolean; devOnly?: boolean }
+type NavItem = { to: string; label: string; icon: LucideIcon; keywords?: string; adminOnly?: boolean }
 
 // Similar pages sit together; group headings show on wide screens only.
 const NAV: { heading: string; items: NavItem[] }[] = [
@@ -51,8 +50,6 @@ const NAV: { heading: string; items: NavItem[] }[] = [
     items: [
       { to: '/members', label: 'Board members', icon: UserCog, keywords: 'invite users people team roles admin permissions remove', adminOnly: true },
       { to: '/api', label: 'Read API', icon: Code2, keywords: 'api keys tokens integration developer org dashboard revoke', adminOnly: true },
-      // DEVELOPMENT ONLY: shown while DEV_TOOLS is on; remove before launch.
-      { to: '/dev', label: 'Dev tools', icon: Wrench, keywords: 'clear reset delete database', adminOnly: true, devOnly: true },
       { to: '/account', label: 'My account', icon: UserRound, keywords: 'profile name photo password two-factor 2fa mfa security sessions signed in' },
     ],
   },
@@ -81,19 +78,6 @@ function SignedInAs() {
         <LogOut aria-hidden /> Sign out
       </Button>
     </div>
-  )
-}
-
-// Pages that never show donor records, so sample mode doesn't apply to them.
-const REAL_ONLY = ['/members', '/api', '/account']
-
-function SampleToggle() {
-  const { sample, setSample } = useStore()
-  return (
-    <label className="mb-4 flex cursor-pointer items-center justify-between gap-2 text-sm font-medium">
-      Use sample data
-      <input type="checkbox" role="switch" aria-label="Use sample data" className="size-4 accent-cic-dark" checked={sample} onChange={(e) => setSample(e.target.checked)} />
-    </label>
   )
 }
 
@@ -128,20 +112,8 @@ function useMobileMenu(button: React.RefObject<HTMLButtonElement | null>) {
   return { open, toggle: () => setOpenOn(open ? null : pathname) }
 }
 
-function SampleBanner() {
-  const { sample, setSample } = useStore()
-  const { pathname } = useLocation()
-  if (!sample || REAL_ONLY.includes(pathname)) return null
-  return (
-    <div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-cic-dark bg-cic-tint px-3 py-2 text-sm text-cic-dark">
-      Showing made-up sample donors. Nothing here is saved.
-      <Button variant="outline" size="sm" className="bg-white" onClick={() => setSample(false)}>Use real data</Button>
-    </div>
-  )
-}
-
 function Shell() {
-  const { session, devTools, donors } = useStore()
+  const { session, donors } = useStore()
   // A donor page lives under /donors/:id, so NavLink alone would light up My
   // Donors for anyone's donor. Light it only for your own, All Donors otherwise.
   const { pathname } = useLocation()
@@ -154,7 +126,7 @@ function Shell() {
   // Badge counts what needs action now; "coming up" items don't nag.
   const actionable = useReminders().filter((r) => r.urgency !== 'upcoming').length
   const chat = useChat()
-  const canSee = (n: NavItem) => (!n.adminOnly || session.role === 'admin') && (!n.devOnly || devTools)
+  const canSee = (n: NavItem) => !n.adminOnly || session.role === 'admin'
   const menuButton = useRef<HTMLButtonElement>(null)
   const menu = useMobileMenu(menuButton)
   return (
@@ -219,7 +191,6 @@ function Shell() {
           })}
         </nav>
         <div className="mt-6 md:mt-auto md:pt-6">
-          <SampleToggle />
           <SiteSearch pages={NAV.flatMap((g) => g.items).filter(canSee)} />
           <SignedInAs />
         </div>
@@ -228,7 +199,6 @@ function Shell() {
       <main id="main" className="mx-auto w-full max-w-6xl min-w-0 p-4 pb-24 md:p-8 md:pb-24 lg:pb-8">
         <InstallPrompt />
         <ScrollToTop />
-        <SampleBanner />
         <Suspense fallback={<PageSkeleton />}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
@@ -243,7 +213,6 @@ function Shell() {
           <Route path="/api" element={session.role === 'admin' && <Api />} />
           {/* The assistant sits beside every page now; old links land on the Dashboard. */}
           <Route path="/assistant" element={<Navigate to="/" replace />} />
-          <Route path="/dev" element={devTools ? admin(<DevTools />) : <Navigate to="/" replace />} />
           <Route path="/account" element={<Account />} />
         </Routes>
         </Suspense>
