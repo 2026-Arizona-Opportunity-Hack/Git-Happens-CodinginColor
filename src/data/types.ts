@@ -91,4 +91,6 @@ export interface RawDonorRow {
   date?: string
   program?: Program
   extra?: Record<string, string> // custom columns chosen while staging
+  // Why this row's gift can't be saved, for the staging warning (client only).
+  giftIssue?: 'no-date' | 'bad-date' | 'bad-amount'
 }

@@ -26,6 +26,7 @@ export const latestImport = (imports: ImportRecord[], source: Source) =>
 
 interface Input {
   role: Role
+  memberId: string // the signed-in person
   today: string
   donors: Donor[]
   gifts: Gift[]
@@ -36,8 +37,12 @@ interface Input {
 
 const ORDER: Record<Urgency, number> = { overdue: 0, due: 1, upcoming: 2 }
 
-export function reminders({ role, today, donors, gifts, drafts, events, imports }: Input): Reminder[] {
+export function reminders({ role, memberId, today, donors: visible, gifts, drafts, events, imports }: Input): Reminder[] {
   const out: Reminder[] = []
+  // Donor reminders are about the caller's own donors, admins included (admins
+  // can see every donor, but follow up only on theirs). Org-wide admin tasks,
+  // unassigned donors and stale exports, are counted from everything visible.
+  const donors = visible.filter((d) => d.ownerId === memberId)
   const ids = new Set(donors.map((d) => d.id))
   const year = yearOf(today)
 
@@ -49,7 +54,7 @@ export function reminders({ role, today, donors, gifts, drafts, events, imports 
         detail: `Drafted ${fmtDate(d.createdAt)}; nothing is sent until someone approves it`,
       })
 
-  const unassigned = donors.filter((d) => !d.ownerId).length
+  const unassigned = visible.filter((d) => !d.ownerId).length
   if (role === 'admin' && unassigned > 0)
     out.push({
       id: 'unassigned', category: 'donor', urgency: 'due', to: '/all-donors',

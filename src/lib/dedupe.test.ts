@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { RawDonorRow } from '../data/types'
 import { SAMPLE_CSV } from '../data/samples'
-import { autoMapping, csvHeaders, dedupe, matchDonor, NEW_COLUMN, rowsFromCsv, sameGift, SKIP, splitGifts } from './dedupe'
+import { autoMapping, csvHeaders, dedupe, matchDonor, NEW_COLUMN, parseAmount, parseDate, rowsFromCsv, sameGift, SKIP, splitGifts } from './dedupe'
 
 const row = (r: Partial<RawDonorRow>): RawDonorRow => ({ source: 'spreadsheet', name: 'Kevin Tran', ...r })
 
@@ -66,9 +66,45 @@ test('the mapping decides what is read: remapped, skipped and new columns', () =
   assert.deepEqual(rows, [{
     source: 'zeffy', name: 'Ada Lovelace', email: undefined, phone: undefined, org: undefined,
     amount: 50, date: undefined, program: 'AI Academy', extra: { Campaign: 'Giving Tuesday' },
+    giftIssue: 'no-date', // amount but no date column: flagged so staging can warn
   }])
 })
 
 test('a file with no name column yields no donors', () => {
   assert.equal(rowsFromCsv('Mail\na@b.c', 'zeffy', { Mail: 'email' }).length, 0)
+})
+
+test('dates in common export formats become YYYY-MM-DD; impossible ones are rejected', () => {
+  const cases: [string, string | undefined][] = [
+    ['2026-11-14', '2026-11-14'], ['2026-11-14T15:04:05Z', '2026-11-14'], ['2026-11-14 15:04', '2026-11-14'],
+    ['11/14/2026', '2026-11-14'], ['1/5/26', '2026-01-05'], ['11-14-2026', '2026-11-14'], ['2026/11/14', '2026-11-14'],
+    ['Nov 14, 2026', '2026-11-14'], ['November 14 2026', '2026-11-14'], ['14 Nov 2026', '2026-11-14'],
+    ['2/30/2026', undefined], ['soon', undefined], ['', undefined],
+  ]
+  for (const [input, want] of cases) assert.equal(parseDate(input), want, input)
+})
+
+test('amounts with currency symbols and separators parse; zero, negative and text do not', () => {
+  assert.equal(parseAmount('$1,250.00'), 1250)
+  assert.equal(parseAmount('USD 50'), 50)
+  assert.equal(parseAmount('0'), undefined)
+  assert.equal(parseAmount('-20'), undefined)
+  assert.equal(parseAmount('n/a'), undefined)
+})
+
+test('a slashed-date export with a byte-order mark imports its gifts', () => {
+  const rows = rowsFromCsv('\uFEFFName,Amount,Date\nAda,$25,11/14/2026', 'spreadsheet')
+  assert.equal(rows[0].name, 'Ada')
+  assert.equal(rows[0].amount, 25)
+  assert.equal(rows[0].date, '2026-11-14')
+  assert.equal(rows[0].giftIssue, undefined)
+})
+
+test('an unreadable date is flagged instead of silently dropping the gift', () => {
+  assert.equal(rowsFromCsv('Name,Amount,Date\nAda,25,someday', 'spreadsheet')[0].giftIssue, 'bad-date')
+})
+
+test('a new column uses the name the admin typed', () => {
+  const rows = rowsFromCsv('Name,Camp\nAda,Giving Tuesday', 'zeffy', { Name: 'name', Camp: NEW_COLUMN + 'Campaign 2026' })
+  assert.deepEqual(rows[0].extra, { 'Campaign 2026': 'Giving Tuesday' })
 })

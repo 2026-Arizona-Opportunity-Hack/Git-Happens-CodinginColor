@@ -189,5 +189,5 @@ export const useStore = () => useContext(Ctx)!
 // Reminders for the signed-in user; drives the Notifications page and nav badge.
 export function useReminders() {
   const s = useStore()
-  return reminders({ ...s, role: s.session.role })
+  return reminders({ ...s, role: s.session.role, memberId: s.session.memberId })
 }

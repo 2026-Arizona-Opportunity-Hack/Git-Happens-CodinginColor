@@ -6,7 +6,7 @@ import { reminders } from './reminders'
 const imp = (source: Source, importedAt: string): ImportRecord => ({ id: `${source}-${importedAt}`, source, rowCount: 1, importedAt, importedBy: 'u1' })
 const base = { today: '2026-11-14', donors: [], gifts: [], drafts: [], events: [] }
 const sheetReminders = (role: 'admin' | 'board', imports: ImportRecord[]) =>
-  reminders({ ...base, role, imports }).filter((r) => r.category === 'spreadsheet')
+  reminders({ ...base, role, memberId: 'u1', imports }).filter((r) => r.category === 'spreadsheet')
 
 test('admins are reminded about exports never imported or older than 30 days', () => {
   const rs = sheetReminders('admin', [
@@ -24,7 +24,7 @@ test('board members get no spreadsheet reminders', () => {
 
 test('an overdue next step is overdue and sorts first', () => {
   const donor = { id: 'd1', name: 'APS', ownerId: 'u1', sources: [], lastTouchAt: '2026-11-01', nextStep: { text: 'Call', due: '2026-11-10' } }
-  const [first] = reminders({ ...base, role: 'board', imports: [], donors: [donor] })
+  const [first] = reminders({ ...base, role: 'board', memberId: 'u1', imports: [], donors: [donor] })
   assert.equal(first.urgency, 'overdue')
   assert.match(first.detail, /4 days overdue/)
 })
@@ -35,8 +35,18 @@ test('admins are told how many donors need a board member; board members are not
     { id: 'd2', name: 'B', ownerId: null, sources: [], lastTouchAt: '2026-11-01' },
     { id: 'd3', name: 'C', ownerId: 'u1', sources: [], lastTouchAt: '2026-11-01' },
   ]
-  const admin = reminders({ ...base, role: 'admin', imports: [], donors }).find((r) => r.id === 'unassigned')
+  const admin = reminders({ ...base, role: 'admin', memberId: 'u1', imports: [], donors }).find((r) => r.id === 'unassigned')
   assert.equal(admin?.title, '2 donors need a board member')
   assert.equal(admin?.to, '/all-donors')
-  assert.equal(reminders({ ...base, role: 'board', imports: [], donors }).some((r) => r.id === 'unassigned'), false)
+  assert.equal(reminders({ ...base, role: 'board', memberId: 'u1', imports: [], donors }).some((r) => r.id === 'unassigned'), false)
+})
+
+test("an admin's donor reminders only cover donors assigned to them", () => {
+  const donors = [
+    { id: 'mine', name: 'Mine', ownerId: 'admin1', sources: [] }, // never contacted: quarterly update due
+    { id: 'theirs', name: 'Theirs', ownerId: 'u2', sources: [] },
+  ]
+  const ids = reminders({ ...base, role: 'admin', memberId: 'admin1', imports: [], donors }).map((r) => r.id)
+  assert.ok(ids.includes('touch-mine'))
+  assert.ok(!ids.includes('touch-theirs'))
 })

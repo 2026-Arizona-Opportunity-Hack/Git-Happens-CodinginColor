@@ -118,6 +118,7 @@ export function splitGifts(rows: RawDonorRow[], existing: GiftLike[]) {
 // Minimal CSV parser (quoted fields, commas inside quotes). Good enough for
 // Zeffy/Benevity exports; swap for papaparse if the real files get gnarly.
 export function parseCsv(text: string): Record<string, string>[] {
+  text = text.replace(/^\uFEFF/, '') // Excel/Sheets byte-order mark
   const lines: string[][] = []
   let row: string[] = []
   let field = ''
@@ -150,7 +151,7 @@ export function parseCsv(text: string): Record<string, string>[] {
 // from common export headers; the admin can change any of it while staging.
 
 export const SKIP = '__skip__' // "Do not save"
-export const NEW_COLUMN = '__new__' // "Create a new column" named after the CSV header
+export const NEW_COLUMN = 'new:' // prefix: new:<name>, "Create a new column" with a name the admin types
 export const CUSTOM = 'custom:' // prefix: custom:<field name>
 
 export const DB_FIELDS = [
@@ -184,7 +185,7 @@ export type ColumnMapping = Record<string, string> // CSV header -> target
 
 // The header row as written (original case).
 export function csvHeaders(text: string): string[] {
-  const firstLine = text.split(/\r?\n/).find((l) => l.trim()) ?? ''
+  const firstLine = text.replace(/^\uFEFF/, '').split(/\r?\n/).find((l) => l.trim()) ?? ''
   return parseCsvHeader(firstLine)
 }
 
@@ -207,7 +208,7 @@ export function autoMapping(headers: string[], customFields: string[] = []): Col
 // What a target is called in the UI.
 export function targetLabel(target: string, header: string): string {
   if (target === SKIP) return 'Do not save'
-  if (target === NEW_COLUMN) return `New column: ${header}`
+  if (target.startsWith(NEW_COLUMN)) return `New column: ${target.slice(NEW_COLUMN.length).trim() || header}`
   if (target.startsWith(CUSTOM)) return `${target.slice(CUSTOM.length)} (custom)`
   return DB_FIELDS.find((f) => f.key === target)?.label ?? target
 }
@@ -231,6 +232,36 @@ function parseCsvHeader(line: string): string[] {
   return out.filter((h) => h)
 }
 
+// "$1,250.00", "1250", "USD 50" -> number; anything else (or <= 0) -> undefined.
+export function parseAmount(v?: string): number | undefined {
+  const n = Number((v ?? '').replace(/[^0-9.-]/g, ''))
+  return v && /\d/.test(v) && Number.isFinite(n) && n > 0 ? n : undefined
+}
+
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+
+// Dates as exports write them -> YYYY-MM-DD, or undefined when unreadable.
+// Accepts 2026-11-14 (with any time after it), 11/14/2026, 11-14-26,
+// 2026/11/14, Nov 14, 2026 and 14 Nov 2026. Slashed dates are US order.
+export function parseDate(v?: string): string | undefined {
+  const s = v?.trim().toLowerCase()
+  if (!s) return undefined
+  const out = (y: number, m: number, d: number) => {
+    if (y < 100) y += 2000
+    const t = new Date(Date.UTC(y, m - 1, d))
+    return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d ? t.toISOString().slice(0, 10) : undefined
+  }
+  let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:$|[t\s])/)
+  if (m) return out(+m[1], +m[2], +m[3])
+  m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2}|\d{4})(?:$|\s)/)
+  if (m) return out(+m[3], +m[1], +m[2])
+  m = s.match(/^([a-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})/)
+  if (m && MONTHS.includes(m[1])) return out(+m[3], MONTHS.indexOf(m[1]) + 1, +m[2])
+  m = s.match(/^(\d{1,2})\s+([a-z]{3})[a-z]*\.?,?\s+(\d{4})/)
+  if (m && MONTHS.includes(m[2])) return out(+m[3], MONTHS.indexOf(m[2]) + 1, +m[1])
+  return undefined
+}
+
 // Rows from a CSV using the given mapping (auto-detected when omitted).
 export function rowsFromCsv(text: string, source: Source, mapping: ColumnMapping = autoMapping(csvHeaders(text))): RawDonorRow[] {
   const entries = Object.entries(mapping).filter(([, t]) => t !== SKIP)
@@ -240,12 +271,21 @@ export function rowsFromCsv(text: string, source: Source, mapping: ColumnMapping
     return (h && rec[h.trim().toLowerCase()]) || undefined
   }
   const customs = entries
-    .filter(([, t]) => t === NEW_COLUMN || t.startsWith(CUSTOM))
-    .map(([h, t]) => ({ key: h.trim().toLowerCase(), name: t === NEW_COLUMN ? h.trim() : t.slice(CUSTOM.length) }))
+    .filter(([, t]) => t.startsWith(NEW_COLUMN) || t.startsWith(CUSTOM))
+    .map(([h, t]) => ({
+      key: h.trim().toLowerCase(),
+      name: t.startsWith(NEW_COLUMN) ? t.slice(NEW_COLUMN.length).trim() || h.trim() : t.slice(CUSTOM.length),
+    }))
   return parseCsv(text)
     .map((rec): RawDonorRow => {
       const name = val(rec, 'name') ?? [val(rec, 'firstName'), val(rec, 'lastName')].filter(Boolean).join(' ')
-      const amount = Number((val(rec, 'amount') ?? '').replace(/[$,]/g, ''))
+      const rawAmount = val(rec, 'amount'), rawDate = val(rec, 'date')
+      const amount = parseAmount(rawAmount)
+      const date = parseDate(rawDate)
+      const giftIssue = rawAmount && amount === undefined ? 'bad-amount' as const
+        : amount !== undefined && !rawDate ? 'no-date' as const
+        : amount !== undefined && !date ? 'bad-date' as const
+        : undefined
       const program = PROGRAMS.find((p) => p.toLowerCase() === val(rec, 'program')?.toLowerCase())
       const extra = Object.fromEntries(customs.filter((c) => rec[c.key]).map((c) => [c.name, rec[c.key]]))
       return {
@@ -254,10 +294,11 @@ export function rowsFromCsv(text: string, source: Source, mapping: ColumnMapping
         email: val(rec, 'email'),
         phone: val(rec, 'phone'),
         org: val(rec, 'org'),
-        amount: Number.isFinite(amount) && amount > 0 ? amount : undefined,
-        date: val(rec, 'date'),
+        amount,
+        date,
         program,
         extra: Object.keys(extra).length ? extra : undefined,
+        ...(giftIssue && { giftIssue }),
       }
     })
     .filter((r) => r.name)

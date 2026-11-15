@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
+import { Download } from 'lucide-react'
 import { PageHeader, SectionTitle } from '@/components/common'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,13 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { Donor } from '@/data/types'
 import { fmtDate, money, UNASSIGNED } from '@/lib/logic'
+import { donorsCsv, download } from '@/lib/export'
 import { useStore } from '@/store'
 
 // Every donor and who looks after them. This is where an admin manages board
 // member responsibilities: pick a board member in a row, then Update (one row)
 // or Update all (every changed row). Nothing is saved until then.
 export default function AllDonors() {
-  const { donors, gifts, boardMembers, assignOwners } = useStore()
+  const { donors, gifts, boardMembers, assignOwners, ownerName, today } = useStore()
   const location = useLocation()
   // From the New Donors popup: {donorId: suggested board member}, not saved yet.
   const suggested = (location.state as { suggested?: Record<string, string> } | null)?.suggested ?? {}
@@ -119,6 +121,12 @@ export default function AllDonors() {
     <>
       <PageHeader
         title="All Donors"
+        actions={
+          // Exports what's saved (not unsaved dropdown choices), every donor regardless of the search.
+          <Button variant="outline" disabled={donors.length === 0} onClick={() => download(`all-donors-${today}.csv`, donorsCsv(donors, gifts, ownerName, today))}>
+            <Download aria-hidden /> Export CSV
+          </Button>
+        }
         description={`Every donor and the board member responsible for them: ${donors.length} donors, ${totalUnassigned} unassigned. Choose a board member, then click Update for one row or Update all at the bottom.`}
       />
       <Input className="mb-4 max-w-sm" placeholder="Search name, org or email" aria-label="Search all donors" value={q} onChange={(e) => setQ(e.target.value)} />

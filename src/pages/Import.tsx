@@ -61,7 +61,14 @@ export default function Import() {
     return { cluster: c, match, ...split }
   })
   const newGifts = plan.reduce((n, p) => n + p.keep.length, 0)
+  const newTotal = plan.reduce((n, p) => n + p.keep.reduce((t, g) => t + g.amount, 0), 0)
   const dupGifts = plan.reduce((n, p) => n + p.skipped.length, 0)
+  // Rows whose gift would be dropped: say why, so money never disappears silently.
+  const issues = {
+    'no-date': rows.filter((r) => r.giftIssue === 'no-date'),
+    'bad-date': rows.filter((r) => r.giftIssue === 'bad-date'),
+    'bad-amount': rows.filter((r) => r.giftIssue === 'bad-amount'),
+  }
   // A file with no name column yields no donors at all; say so instead of saving nothing.
   const nameless = loaded.filter(([src]) => !Object.values(mappingFor(src)).some((t) => ['name', 'firstName', 'lastName'].includes(t))).map(([src]) => src)
 
@@ -155,6 +162,21 @@ export default function Import() {
             </DialogDescription>
           </DialogHeader>
 
+          <div role="status" className="rounded-md bg-cic-tint p-3 text-cic-dark">
+            <strong>{newGifts} gift{newGifts === 1 ? '' : 's'} totaling {money(newTotal)}</strong> will be recorded
+            {dupGifts > 0 && <> ({dupGifts} skipped: already recorded for that donor, same amount within {SAME_GIFT_DAYS} days)</>}.
+            {' '}{plan.filter((p) => !p.match).length} new donor{plan.filter((p) => !p.match).length === 1 ? '' : 's'}, {plan.filter((p) => p.match).length} already in the database.
+          </div>
+          {(['no-date', 'bad-date', 'bad-amount'] as const).filter((k) => issues[k].length).map((k) => (
+            <p key={k} role="alert" className="rounded-md bg-amber-100 p-3 text-amber-950">
+              <strong>{issues[k].length} gift{issues[k].length === 1 ? '' : 's'} won't be saved: </strong>
+              {k === 'no-date' && 'they have an amount but no date. Map the file\'s date column to Gift date below.'}
+              {k === 'bad-date' && 'their date couldn\'t be read (use a format like 2026-11-14, 11/14/2026 or Nov 14, 2026).'}
+              {k === 'bad-amount' && 'their amount couldn\'t be read as a positive number.'}
+              {' '}For example: {issues[k].slice(0, 3).map((r) => r.name).join(', ')}.
+            </p>
+          ))}
+
           {loaded.map(([src]) => {
             const mapping = mappingFor(src)
             const auto = autoFor(src)
@@ -183,8 +205,7 @@ export default function Import() {
 
           <details className="rounded-md border p-3">
             <summary className="cursor-pointer font-semibold text-cic-dark">
-              Preview donors: {rows.length} rows → {clusters.length} donors ({plan.filter((p) => !p.match).length} new, {plan.filter((p) => p.match).length} already in the database).{' '}
-              {newGifts} gifts to record, {dupGifts} skipped as duplicates (same donor and amount within {SAME_GIFT_DAYS} days); {dupes.length} merged across files.
+              Preview donors: {rows.length} rows → {clusters.length} donors, {dupes.length} merged across files
             </summary>
             <div className="mt-3">
             <Table>
@@ -329,14 +350,15 @@ function ColumnTable({ title, count, note, headers, mapping, customFields, onCha
           </thead>
           <tbody>
             {headers.map((h) => {
-              const taken = new Set(Object.entries(mapping).filter(([other, t]) => other !== h && t !== SKIP && t !== NEW_COLUMN).map(([, t]) => t))
+              const taken = new Set(Object.entries(mapping).filter(([other, t]) => other !== h && t !== SKIP && !t.startsWith(NEW_COLUMN)).map(([, t]) => t))
+              const value = mapping[h]
+              const isNew = value.startsWith(NEW_COLUMN)
               const options = [
                 SKIP,
                 ...DB_FIELDS.map((f) => f.key as string).filter((k) => !taken.has(k)),
                 ...customFields.map((f) => CUSTOM + f).filter((k) => !taken.has(k)),
-                NEW_COLUMN,
+                isNew ? value : NEW_COLUMN + h, // defaults to the file's header; renamed in the box beside it
               ]
-              const value = mapping[h]
               return (
                 <tr key={h} className="border-b last:border-0">
                   <td className="px-4 py-2">{h}</td>
@@ -350,8 +372,18 @@ function ColumnTable({ title, count, note, headers, mapping, customFields, onCha
                       value={value}
                       onChange={(e) => onChange(h, e.target.value)}
                     >
-                      {options.map((o) => <option key={o} value={o}>{o === NEW_COLUMN ? `Create a new column (“${h}”)` : targetLabel(o, h)}</option>)}
+                      {options.map((o) => <option key={o} value={o}>{o.startsWith(NEW_COLUMN) ? 'Create a new column…' : targetLabel(o, h)}</option>)}
                     </select>
+                    {isNew && (
+                      <Input
+                        className="mt-2"
+                        aria-label={`Name for the new column from ${h}`}
+                        placeholder="New column name"
+                        maxLength={60}
+                        value={value.slice(NEW_COLUMN.length)}
+                        onChange={(e) => onChange(h, NEW_COLUMN + e.target.value)}
+                      />
+                    )}
                   </td>
                 </tr>
               )
