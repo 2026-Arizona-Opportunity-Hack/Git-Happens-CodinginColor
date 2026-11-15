@@ -9,16 +9,18 @@ import { cn } from '@/lib/utils'
 import { Assistant, useChat } from '@/components/ChatWidget'
 import { SiteSearch } from '@/components/SiteSearch'
 import { InstallPrompt } from '@/components/InstallPrompt'
+import { AppSkeleton, Logo, PageSkeleton } from '@/components/Loading'
 import Dashboard from '@/pages/Dashboard'
-import Donors from '@/pages/Donors'
-import AllDonors from '@/pages/AllDonors'
-import DonorDetail from '@/pages/DonorDetail'
-import FollowUps from '@/pages/FollowUps'
-import Retention from '@/pages/Retention'
-import Outcomes from '@/pages/Outcomes'
-import Import from '@/pages/Import'
-import Notifications from '@/pages/Notifications'
-import DevTools from '@/pages/DevTools'
+// Other pages load when first opened; PageSkeleton shows meanwhile.
+const Donors = lazy(() => import('@/pages/Donors'))
+const AllDonors = lazy(() => import('@/pages/AllDonors'))
+const DonorDetail = lazy(() => import('@/pages/DonorDetail'))
+const FollowUps = lazy(() => import('@/pages/FollowUps'))
+const Retention = lazy(() => import('@/pages/Retention'))
+const Outcomes = lazy(() => import('@/pages/Outcomes'))
+const Import = lazy(() => import('@/pages/Import'))
+const Notifications = lazy(() => import('@/pages/Notifications'))
+const DevTools = lazy(() => import('@/pages/DevTools'))
 const Members = lazy(() => import('@/pages/Members'))
 const Account = lazy(() => import('@/pages/Account'))
 const Api = lazy(() => import('@/pages/Api'))
@@ -111,9 +113,7 @@ function Shell() {
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:p-2">Skip to content</a>
       <aside className="border-b border-sidebar-border bg-sidebar p-4 md:sticky md:top-0 md:flex md:h-screen md:flex-col md:overflow-y-auto md:border-r md:border-b-0">
         <div className="mb-6 flex items-center gap-2">
-          <div aria-hidden className="flex size-8 items-center justify-center rounded-md bg-cic-dark text-sm font-bold text-white">
-            C<span className="text-cic-green">i</span>C
-          </div>
+          <Logo />
           <div className="leading-tight">
             <div className="font-bold text-cic-dark">Coding in Color</div>
             <div className="text-xs text-muted-foreground">Donor Relationships</div>
@@ -163,6 +163,7 @@ function Shell() {
       <main id="main" className="mx-auto w-full max-w-6xl min-w-0 p-4 pb-24 md:p-8 md:pb-24 lg:pb-8">
         <InstallPrompt />
         <SampleBanner />
+        <Suspense fallback={<PageSkeleton />}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/notifications" element={<Notifications />} />
@@ -173,13 +174,14 @@ function Shell() {
           <Route path="/retention" element={admin(<Retention />)} />
           <Route path="/outcomes" element={admin(<Outcomes />)} />
           <Route path="/import" element={admin(<Import />)} />
-          <Route path="/members" element={session.role === 'admin' && <Suspense fallback={<p role="status">Loading…</p>}><Members /></Suspense>} />
-          <Route path="/api" element={session.role === 'admin' && <Suspense fallback={<p role="status">Loading…</p>}><Api /></Suspense>} />
+          <Route path="/members" element={session.role === 'admin' && <Members />} />
+          <Route path="/api" element={session.role === 'admin' && <Api />} />
           {/* The assistant sits beside every page now; old links land on the Dashboard. */}
           <Route path="/assistant" element={<Navigate to="/" replace />} />
           <Route path="/dev" element={devTools ? admin(<DevTools />) : <Navigate to="/" replace />} />
-          <Route path="/account" element={<Suspense fallback={<p role="status">Loading…</p>}><Account /></Suspense>} />
+          <Route path="/account" element={<Account />} />
         </Routes>
+        </Suspense>
       </main>
       <Assistant chat={chat} />
       <Toaster />
@@ -214,7 +216,7 @@ function NotAMember() {
 // Only signed-in users get past here; the Worker re-checks every request.
 function SignedInApp() {
   const { user, isLoading, signIn, signOut, getAccessToken } = useAuth()
-  if (isLoading) return <Centered><p role="status">Checking your sign-in…</p></Centered>
+  if (isLoading) return <AppSkeleton label="Checking your sign-in…" />
   if (!user)
     return (
       <Centered>
@@ -251,7 +253,8 @@ export default function App() {
       .then((c) => setClientId(c.workosClientId))
       .catch(() => setError(true))
   }, [])
-  if (!clientId) return <Centered><p role="status">{error ? 'Could not reach the server.' : 'Loading…'}</p></Centered>
+  if (error) return <Centered><p role="alert">Could not reach the server. Check your connection and refresh.</p></Centered>
+  if (!clientId) return <AppSkeleton label="Loading…" />
   // devMode keeps the session in localStorage; it's required without a WorkOS
   // custom domain, which costs more than this project's hosting budget.
   return (

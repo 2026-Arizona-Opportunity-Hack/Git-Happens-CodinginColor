@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DataTable, type ColumnDef } from '@/components/ui/data-table'
+import { TableSkeleton } from '@/components/Loading'
 import { fmtDate } from '@/lib/logic'
 import { useStore, type ApiKey } from '@/store'
 
@@ -99,7 +100,7 @@ export default function Api() {
         {error ? (
           <p className="text-muted-foreground">Could not load keys.</p>
         ) : !keys ? (
-          <p role="status" className="text-muted-foreground">Loading…</p>
+          <div role="status"><span className="sr-only">Loading keys…</span><TableSkeleton rows={3} /></div>
         ) : keys.length === 0 ? (
           <p className="text-muted-foreground">No keys yet.</p>
         ) : (
