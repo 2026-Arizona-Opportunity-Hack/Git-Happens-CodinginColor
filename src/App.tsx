@@ -88,6 +88,17 @@ function SampleToggle() {
   )
 }
 
+// BrowserRouter keeps the old scroll position, so a link from far down one
+// page opened the next page halfway down. A link to a #section (the dashboard's
+// counts) is left to that page to scroll to.
+function ScrollToTop() {
+  const { pathname, hash } = useLocation()
+  useEffect(() => {
+    if (!hash) window.scrollTo(0, 0)
+  }, [pathname, hash])
+  return null
+}
+
 function SampleBanner() {
   const { sample, setSample } = useStore()
   const { pathname } = useLocation()
@@ -162,6 +173,7 @@ function Shell() {
       </aside>
       <main id="main" className="mx-auto w-full max-w-6xl min-w-0 p-4 pb-24 md:p-8 md:pb-24 lg:pb-8">
         <InstallPrompt />
+        <ScrollToTop />
         <SampleBanner />
         <Suspense fallback={<PageSkeleton />}>
         <Routes>
