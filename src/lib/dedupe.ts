@@ -1,4 +1,4 @@
-import type { RawDonorRow, Source } from '../data/types'
+import type { Donor, RawDonorRow, Source } from '../data/types'
 
 // Dedupe strategy, strongest signal first:
 //   1. normalized email
@@ -70,6 +70,49 @@ export function dedupe(rows: RawDonorRow[]): DonorCluster[] {
     rows: rs,
     matchedOn: [...(reasons.get(root) ?? [])],
   }))
+}
+
+// An existing donor this cluster belongs to, using the same keys as dedupe().
+// Shared by the server (on commit) and the Import preview, so they agree.
+export function matchDonor<D extends Pick<Donor, 'name' | 'email' | 'phone'>>(c: DonorCluster, donors: D[]): D | undefined {
+  return donors.find(
+    (d) =>
+      (c.email && normEmail(d.email) === normEmail(c.email)) ||
+      (c.phone && normPhone(d.phone) === normPhone(c.phone)) ||
+      normName(d.name) === normName(c.name),
+  )
+}
+
+// --- Gift dedupe --------------------------------------------------------------
+// The same donation often shows up twice: in Zeffy/Benevity *and* hand-entered
+// in the spreadsheet, or in an export that is simply imported again. For one
+// donor, a gift with the same amount and a date within SAME_GIFT_DAYS of one
+// already recorded (or already kept from this import) is treated as the same
+// gift. The window absorbs a payment date vs. a hand-typed date drifting by a
+// day or two. Cost: two genuinely separate equal gifts that close together
+// collapse into one, so skipped gifts are shown in the preview.
+export const SAME_GIFT_DAYS = 3
+
+interface GiftLike { amount: number; date: string }
+
+const dayNumber = (iso: string) => Math.round(new Date(iso.slice(0, 10) + 'T12:00:00Z').getTime() / 86_400_000)
+
+export const sameGift = (a: GiftLike, b: GiftLike) =>
+  Math.abs(a.amount - b.amount) < 0.005 && Math.abs(dayNumber(a.date) - dayNumber(b.date)) <= SAME_GIFT_DAYS
+
+// Splits one donor's incoming rows into gifts to record and duplicates to skip.
+// Rows without an amount and date are neither: they carry contact info only.
+export function splitGifts(rows: RawDonorRow[], existing: GiftLike[]) {
+  const seen: GiftLike[] = [...existing]
+  const keep: (RawDonorRow & GiftLike)[] = []
+  const skipped: (RawDonorRow & GiftLike)[] = []
+  for (const r of rows) {
+    if (!r.amount || !r.date) continue
+    const g = r as RawDonorRow & GiftLike
+    if (seen.some((s) => sameGift(s, g))) skipped.push(g)
+    else { keep.push(g); seen.push(g) }
+  }
+  return { keep, skipped }
 }
 
 // Minimal CSV parser (quoted fields, commas inside quotes). Good enough for

@@ -1,6 +1,6 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import type { BoardMember, Channel, Donor, Draft, DraftKind, Gift, Interaction, NextStep, Program, RawDonorRow, Source } from '../src/data/types'
-import { dedupe, normEmail, normName, normPhone } from '../src/lib/dedupe'
+import { dedupe, matchDonor, splitGifts } from '../src/lib/dedupe'
 import { draftBody } from '../src/lib/drafts'
 import { nextOwner } from '../src/lib/logic'
 
@@ -377,19 +377,22 @@ async function route(req: Request, env: Env): Promise<Response> {
       }
     })
 
-    const existing = await db.prepare('SELECT * FROM donors').all()
+    const [existing, existingGifts] = await db.batch<Row>([
+      db.prepare('SELECT * FROM donors'),
+      db.prepare('SELECT donor_id, amount, date FROM gifts'),
+    ])
     const donors = existing.results.map(toDonor)
+    // Gifts per donor: what D1 holds plus what this import has queued, so two
+    // clusters landing on the same donor can't both add one gift.
+    const known = new Map<string, { amount: number; date: string }[]>()
+    for (const g of existingGifts.results)
+      known.set(g.donor_id as string, [...(known.get(g.donor_id as string) ?? []), { amount: g.amount as number, date: g.date as string }])
     const boardMembers = await listMembers(env)
     const writes: D1PreparedStatement[] = []
-    let created = 0, merged = 0
+    let created = 0, merged = 0, gifts = 0, skippedGifts = 0
     const clusters = dedupe(rows)
     for (const c of clusters) {
-      const match = donors.find(
-        (d) =>
-          (c.email && normEmail(d.email) === normEmail(c.email)) ||
-          (c.phone && normPhone(d.phone) === normPhone(c.phone)) ||
-          normName(d.name) === normName(c.name),
-      )
+      const match = matchDonor(c, donors)
       let donorId: string
       if (match) {
         merged++
@@ -407,13 +410,18 @@ async function route(req: Request, env: Env): Promise<Response> {
         writes.push(db.prepare('INSERT INTO donors (id, name, email, phone, org, owner_id, sources) VALUES (?, ?, ?, ?, ?, ?, ?)')
           .bind(d.id, d.name, d.email ?? null, d.phone ?? null, d.org ?? null, d.ownerId, JSON.stringify(d.sources)))
       }
-      for (const r of c.rows)
-        if (r.amount && r.date)
-          writes.push(db.prepare('INSERT INTO gifts (id, donor_id, amount, date, source, program) VALUES (?, ?, ?, ?, ?, ?)')
-            .bind(id('g'), donorId, r.amount, r.date, r.source, r.program ?? 'General'))
+      // Skip gifts this donor already has (same amount, near-same date), so
+      // re-imports and donations reported by two sources aren't double counted.
+      const { keep, skipped } = splitGifts(c.rows, known.get(donorId) ?? [])
+      known.set(donorId, [...(known.get(donorId) ?? []), ...keep])
+      gifts += keep.length
+      skippedGifts += skipped.length
+      for (const r of keep)
+        writes.push(db.prepare('INSERT INTO gifts (id, donor_id, amount, date, source, program) VALUES (?, ?, ?, ?, ?, ?)')
+          .bind(id('g'), donorId, r.amount, r.date, r.source, r.program ?? 'General'))
     }
     if (writes.length) await db.batch(writes) // one transaction: all or nothing
-    return json({ created, merged, clusters: clusters.length })
+    return json({ created, merged, clusters: clusters.length, gifts, skippedGifts })
   }
 
   throw new HttpError(404, 'Not found')
