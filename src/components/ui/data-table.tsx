@@ -30,7 +30,8 @@ const PAGE_SIZES = [10, 25, 50, 100]
 
 // The one table every page uses: CIC-dark header, striped rows, sortable
 // headers (any column with an accessor) and pagination once rows pass a page.
-// Filtering stays in the page, so search boxes keep working the way they do.
+// Filtering stays in the page (it decides `data`); pass the filter controls as
+// `toolbar` and they sit inside the table's card, above the header.
 export function DataTable<T>({
   columns,
   data,
@@ -40,6 +41,7 @@ export function DataTable<T>({
   initialSorting = [],
   rowClassName,
   caption,
+  toolbar,
 }: {
   columns: ColumnDef<T, any>[]
   data: T[]
@@ -49,6 +51,7 @@ export function DataTable<T>({
   initialSorting?: SortingState
   rowClassName?: (row: Row<T>) => string | undefined
   caption?: string
+  toolbar?: React.ReactNode
 }) {
   const sizeLabel = React.useId()
   const [sorting, setSorting] = React.useState<SortingState>(initialSorting)
@@ -77,6 +80,7 @@ export function DataTable<T>({
 
   return (
     <Card className="gap-0 py-0">
+      {toolbar && <div className="border-b bg-muted/40 p-4">{toolbar}</div>}
       <Table>
         {caption && <caption className="sr-only">{caption}</caption>}
         <TableHeader>
