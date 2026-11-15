@@ -14,7 +14,7 @@ The donors assigned to the signed-in person. Admins have one too, since they can
 
 **Filters** come from the column headers, as in Excel: the funnel on Donor (name, organization or email), Last gift (a gift in a date range), Status, Next step (overdue, due in 7 days, later, none) and Sources. Active filters show as removable chips above the table, and exports follow them.
 
-**Export CSV** and **Export Excel** (.xlsx) download them with every column: contact details, board member, giving totals, status, next step and custom fields.
+**Export CSV** and **Export Excel** (.xlsx) download them with every column: contact details, board member, giving totals, status, next step, last contact, notes and custom fields.
 
 ## Where the code is
 

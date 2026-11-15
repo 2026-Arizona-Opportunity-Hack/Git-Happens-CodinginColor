@@ -6,7 +6,7 @@ import { donorsCsv, donorsXlsx, download } from './export'
 import { crc32 } from './xlsx'
 
 const donors: Donor[] = [
-  { id: 'd1', name: 'Smith, "Jo"', email: 'jo@x.org', ownerId: 'u1', sources: ['zeffy', 'benevity'], extra: { Campaign: 'Giving Tuesday' } },
+  { id: 'd1', name: 'Smith, "Jo"', email: 'jo@x.org', ownerId: 'u1', sources: ['zeffy', 'benevity'], extra: { Campaign: 'Giving Tuesday' }, notes: 'Loves robotics, prefers email\nMet at Day of Compute' },
   { id: 'd2', name: '=HYPERLINK("http://evil")', ownerId: null, sources: [] },
 ]
 const gifts: Gift[] = [
@@ -25,6 +25,8 @@ test('export has every donor column, totals and custom fields, and round-trips t
   assert.equal(a['number of gifts'], '2')
   assert.equal(a['first gift'], '2025-03-01')
   assert.equal(a.campaign, 'Giving Tuesday')
+  assert.equal(a.notes, 'Loves robotics, prefers email\nMet at Day of Compute') // commas and line breaks survive
+  assert.equal(b.notes, '')
   assert.equal(b['board member'], 'Unassigned')
 })
 

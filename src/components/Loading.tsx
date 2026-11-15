@@ -74,7 +74,7 @@ export function AppSkeleton({ label }: { label: string }) {
           ))}
         </div>
       </aside>
-      <main className="mx-auto w-full max-w-6xl min-w-0 p-4 md:p-8">
+      <main className="mx-auto w-full max-w-screen-2xl min-w-0 p-4 md:p-8">
         <PageSkeleton label={label} />
       </main>
     </div>

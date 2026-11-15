@@ -196,7 +196,7 @@ function Shell() {
         </div>
         </div>
       </aside>
-      <main id="main" className="mx-auto w-full max-w-6xl min-w-0 p-4 pb-24 md:p-8 md:pb-24 lg:pb-8">
+      <main id="main" className="mx-auto w-full max-w-screen-2xl min-w-0 p-4 pb-24 md:p-8 md:pb-24 lg:pb-8">
         <InstallPrompt />
         <ScrollToTop />
         <Suspense fallback={<PageSkeleton />}>
