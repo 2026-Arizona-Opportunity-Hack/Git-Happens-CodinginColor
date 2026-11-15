@@ -4,10 +4,10 @@ import { PageHeader, StatusBadge } from '@/components/common'
 import { Download, FileSpreadsheet } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+import { DataTable, type ColumnDef } from '@/components/ui/data-table'
 import { Input } from '@/components/ui/input'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useStore } from '@/store'
+import type { Donor } from '@/data/types'
 import { fmtDate, money, retentionStatus, yearOf } from '@/lib/logic'
 import { donorsCsv, donorsXlsx, download } from '@/lib/export'
 
@@ -27,7 +27,6 @@ export default function Donors() {
         status: retentionStatus(gs, yearOf(today)),
       }
     })
-    .sort((a, b) => b.lifetime - a.lifetime)
 
   return (
     <>
@@ -46,47 +45,54 @@ export default function Donors() {
         description={`The ${mine.length} donor${mine.length === 1 ? '' : 's'} assigned to you, deduped across the spreadsheet, Zeffy, Benevity, AZ Gives and United Way.`}
       />
       <Input className="mb-4 max-w-sm" placeholder="Search name, org or email" aria-label="Search donors" value={q} onChange={(e) => setQ(e.target.value)} />
-      <Card className="py-0">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-cic-dark hover:bg-cic-dark">
-              {['Donor', 'Lifetime', 'Last gift', 'Status', 'Next step', 'Sources'].map((h) => (
-                <TableHead key={h} className="text-white">{h}</TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map(({ d, lifetime, last, status }) => (
-              <TableRow key={d.id} className="even:bg-cic-tint/60">
-                <TableCell>
-                  <Link to={`/donors/${d.id}`} className="font-medium text-cic-dark underline">{d.name}</Link>
-                  {d.org && d.org !== d.name && <div className="text-xs text-muted-foreground">{d.org}</div>}
-                </TableCell>
-                <TableCell>{money(lifetime)}</TableCell>
-                <TableCell>{last ? fmtDate(last) : '—'}</TableCell>
-                <TableCell><StatusBadge status={status} /></TableCell>
-                <TableCell className="max-w-56 truncate">
-                  {d.nextStep ? (
-                    <span className={d.nextStep.due < today ? 'font-semibold text-red-800' : ''}>
-                      {d.nextStep.text} · {fmtDate(d.nextStep.due)}
-                    </span>
-                  ) : <span className="text-muted-foreground">None</span>}
-                </TableCell>
-                <TableCell className="space-x-1">
-                  {d.sources.map((s) => <Badge key={s} variant="outline">{s}</Badge>)}
-                </TableCell>
-              </TableRow>
-            ))}
-            {rows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
-                  {mine.length === 0 ? 'No donors are assigned to you yet.' : 'No donors match that search.'}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </Card>
+      <DataTable
+        caption="My donors"
+        columns={columns(today)}
+        data={rows}
+        getRowId={(r) => r.d.id}
+        initialSorting={[{ id: 'lifetime', desc: true }]}
+        empty={mine.length === 0 ? 'No donors are assigned to you yet.' : 'No donors match that search.'}
+      />
     </>
   )
 }
+
+type DonorRow = { d: Donor; lifetime: number; last?: string; status: ReturnType<typeof retentionStatus> }
+
+const columns = (today: string): ColumnDef<DonorRow>[] => [
+  {
+    id: 'donor',
+    header: 'Donor',
+    accessorFn: (r) => r.d.name,
+    cell: ({ row: { original: { d } } }) => (
+      <>
+        <Link to={`/donors/${d.id}`} className="font-medium text-cic-dark underline">{d.name}</Link>
+        {d.org && d.org !== d.name && <div className="text-xs text-muted-foreground">{d.org}</div>}
+      </>
+    ),
+  },
+  { id: 'lifetime', header: 'Lifetime', accessorFn: (r) => r.lifetime, cell: ({ getValue }) => money(getValue<number>()) },
+  // Undefined dates sort last whichever way the column goes.
+  { id: 'last', header: 'Last gift', accessorFn: (r) => r.last, sortUndefined: 'last', cell: ({ getValue }) => (getValue<string>() ? fmtDate(getValue<string>()) : '—') },
+  { id: 'status', header: 'Status', accessorFn: (r) => r.status, cell: ({ getValue }) => <StatusBadge status={getValue<DonorRow['status']>()} /> },
+  {
+    id: 'next',
+    header: 'Next step',
+    accessorFn: (r) => r.d.nextStep?.due,
+    sortUndefined: 'last',
+    meta: { className: 'max-w-56 truncate' },
+    cell: ({ row: { original: { d } } }) =>
+      d.nextStep ? (
+        <span className={d.nextStep.due < today ? 'font-semibold text-red-800' : ''}>
+          {d.nextStep.text} · {fmtDate(d.nextStep.due)}
+        </span>
+      ) : <span className="text-muted-foreground">None</span>,
+  },
+  {
+    id: 'sources',
+    header: 'Sources',
+    enableSorting: false,
+    meta: { className: 'space-x-1' },
+    cell: ({ row: { original: { d } } }) => d.sources.map((s) => <Badge key={s} variant="outline">{s}</Badge>),
+  },
+]
