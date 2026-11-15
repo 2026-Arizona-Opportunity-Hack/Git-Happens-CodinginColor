@@ -14,7 +14,7 @@ import type { Channel, Donor, Gift, ProgramOutcome } from '@/data/types'
 import { funderPacket } from '@/lib/packet'
 import { useStore } from '@/store'
 import { useAsk } from '@/components/ChatWidget'
-import { byDateDesc, calendarLink, fmtDate, money, retentionStatus, totalsByYear, UNASSIGNED, yearOf } from '@/lib/logic'
+import { byDateDesc, calendarLink, donorTimeline, fmtDate, money, retentionStatus, totalsByYear, UNASSIGNED, yearOf } from '@/lib/logic'
 
 const CHANNEL_ICON = { email: Mail, text: MessageSquare, call: Phone, 'in-person': Users, note: StickyNote }
 
@@ -44,10 +44,7 @@ export default function DonorDetail() {
 
   const gifts = s.gifts.filter((g) => g.donorId === donor.id).sort(byDateDesc)
   const touches = s.interactions.filter((i) => i.donorId === donor.id)
-  const timeline = [
-    ...gifts.map((g) => ({ date: g.date, kind: 'gift' as const, g })),
-    ...touches.map((i) => ({ date: i.date, kind: 'touch' as const, i })),
-  ].sort(byDateDesc)
+  const timeline = donorTimeline(gifts, touches)
   const byYear = [...totalsByYear(gifts).entries()].sort((a, b) => a[0] - b[0])
   const max = Math.max(1, ...byYear.map(([, v]) => v))
   const upcoming = s.events.filter((e) => e.date >= s.today)

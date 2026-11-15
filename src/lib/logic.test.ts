@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Gift } from '../data/types'
-import { calendarLink, cohorts, inviteDue, lapseBy, nextOwner, periodLabel, periodOf, retentionStatus, suggestOwners } from './logic'
+import { calendarLink, cohorts, donorTimeline, inviteDue, lapseBy, nextOwner, periodLabel, periodOf, retentionStatus, suggestOwners } from './logic'
 
 const members = [{ id: 'a', name: 'Ann', email: '' }, { id: 'b', name: 'Ben', email: '' }, { id: 'c', name: 'Cy', email: '' }]
 const owned = (...ids: (string | null)[]) => ids.map((ownerId) => ({ ownerId }))
@@ -89,4 +89,13 @@ test('retention compares each donor with the year before: new, recovered, increa
   assert.equal(retentionStatus(g(['2025-02-01', 50], ['2026-02-01', 20]), 2026), 'decreased')
   assert.equal(retentionStatus(g(['2025-02-01', 50]), 2026), 'lapsed')
   assert.equal(retentionStatus(g(['2023-02-01', 50]), 2026), 'inactive')
+})
+
+test('the donor timeline mixes gifts and contacts newest first, undated gifts last', () => {
+  const gifts: Gift[] = [
+    { id: 'g1', donorId: 'd', amount: 50, date: '2026-03-01', source: 'zeffy', program: 'General' },
+    { id: 'g2', donorId: 'd', amount: 20, date: null, source: 'spreadsheet', program: 'General' },
+  ]
+  const touches = [{ id: 'i1', donorId: 'd', byId: 'u1', channel: 'text' as const, date: '2026-06-01', summary: 'Thanked her' }]
+  assert.deepEqual(donorTimeline(gifts, touches).map((t) => [t.kind, t.date]), [['touch', '2026-06-01'], ['gift', '2026-03-01'], ['gift', null]])
 })
