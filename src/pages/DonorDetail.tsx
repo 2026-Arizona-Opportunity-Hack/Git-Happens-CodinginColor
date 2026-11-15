@@ -165,10 +165,10 @@ export default function DonorDetail() {
             <CardContent>
               <form
                 className="space-y-3"
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault()
-                  s.setNextStep(donor.id, stepText && stepDue ? { text: stepText, due: stepDue, eventId: stepEvent } : undefined)
-                  toast.success('Next step saved')
+                  if (await s.setNextStep(donor.id, stepText && stepDue ? { text: stepText, due: stepDue, eventId: stepEvent } : undefined))
+                    toast.success('Next step saved')
                 }}
               >
                 <div>
@@ -208,10 +208,9 @@ export default function DonorDetail() {
             <CardContent>
               <form
                 className="space-y-3"
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault()
-                  if (!note.trim()) return
-                  s.logInteraction(donor.id, channel, note.trim())
+                  if (!note.trim() || !(await s.logInteraction(donor.id, channel, note.trim()))) return
                   setNote('')
                   toast.success('Logged')
                 }}

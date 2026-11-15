@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthKitProvider, useAuth } from '@workos-inc/authkit-react'
 import { BarChart3, Bell, Code2, Contact, Home, ListTodo, LogOut, ShieldAlert, Upload, UserCog, UserRound, Users, Wrench, type LucideIcon } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
@@ -70,6 +70,31 @@ function SignedInAs() {
   )
 }
 
+// Pages that never show donor records, so sample mode doesn't apply to them.
+const REAL_ONLY = ['/members', '/api', '/account']
+
+function SampleToggle() {
+  const { sample, setSample } = useStore()
+  return (
+    <label className="mb-4 flex cursor-pointer items-center justify-between gap-2 text-sm font-medium">
+      Use sample data
+      <input type="checkbox" role="switch" className="size-4 accent-cic-dark" checked={sample} onChange={(e) => setSample(e.target.checked)} />
+    </label>
+  )
+}
+
+function SampleBanner() {
+  const { sample, setSample } = useStore()
+  const { pathname } = useLocation()
+  if (!sample || REAL_ONLY.includes(pathname)) return null
+  return (
+    <div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-cic-dark bg-cic-tint px-3 py-2 text-sm text-cic-dark">
+      Showing made-up sample donors. Nothing here is saved.
+      <Button variant="outline" size="sm" className="bg-white" onClick={() => setSample(false)}>Use real data</Button>
+    </div>
+  )
+}
+
 function Shell() {
   const { session, devTools } = useStore()
   // Admin pages: the Worker enforces it too; this keeps board members off them.
@@ -126,12 +151,14 @@ function Shell() {
           })}
         </nav>
         <div className="mt-6 md:mt-auto md:pt-6">
+          <SampleToggle />
           <DonorSearch />
           <SignedInAs />
         </div>
       </aside>
       <main id="main" className="mx-auto w-full max-w-6xl p-4 pb-24 md:p-8 md:pb-24">
         <InstallPrompt />
+        <SampleBanner />
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/notifications" element={<Notifications />} />

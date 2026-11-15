@@ -4,12 +4,9 @@ import { ChevronRight } from 'lucide-react'
 import { PageHeader, Stat, StatusBadge } from '@/components/common'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { sampleDonors, sampleGifts } from '@/data/retention-sample'
-import type { Donor } from '@/data/types'
 import { useStore } from '@/store'
-import { byDateDesc, fmtDate, money, periodLabel, periodOf, retentionStatus, totalsByPeriod, type Period, type RetentionStatus } from '@/lib/logic'
+import { money, periodLabel, periodOf, retentionStatus, totalsByPeriod, type Period, type RetentionStatus } from '@/lib/logic'
 
 const SHOWN = { year: 3, quarter: 4 } // how many periods get a tab
 
@@ -21,15 +18,12 @@ const GROUPS: { title: string; statuses: RetentionStatus[]; empty: string }[] = 
 ]
 
 export default function Retention() {
-  const store = useStore()
-  const [sample, setSample] = useState(false)
-  const { donors, gifts } = sample ? { donors: sampleDonors, gifts: sampleGifts } : store
+  const { donors, gifts, today, setSample } = useStore()
   const [unit, setUnit] = useState<Period>('year')
-  const current = periodOf(store.today, unit)
+  const current = periodOf(today, unit)
   const periods = Array.from({ length: SHOWN[unit] }, (_, i) => current - SHOWN[unit] + 1 + i)
   const [picked, setPicked] = useState<number | null>(null)
   const period = picked !== null && periods.includes(picked) ? picked : current
-  const [opened, setOpened] = useState<Donor | null>(null) // sample donors have no page, so they open here
   const label = (n: number) => periodLabel(n, unit)
   const noun = unit === 'year' ? 'year' : 'quarter'
 
@@ -47,35 +41,12 @@ export default function Retention() {
   const prevTotal = rows.reduce((s, r) => s + r.prev, 0)
   const active = prevDonors > 0 || curDonors > 0
 
-  const sampleToggle = (
-    <Button variant="outline" onClick={() => setSample(!sample)}>{sample ? 'Use real data' : 'Use sample data'}</Button>
-  )
-  const rowClass = 'flex items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-muted focus-visible:bg-muted focus-visible:outline-none'
-  const rowBody = (r: (typeof rows)[number]) => (
-    <>
-      <span className="min-w-0 flex-1">
-        <span className="block font-medium text-cic-dark">{r.d.name}</span>
-        <span className="mt-1 flex flex-wrap items-center gap-2 text-muted-foreground tabular-nums">
-          <StatusBadge status={r.status} /> {money(r.prev)} → {money(r.cur)}
-        </span>
-      </span>
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-    </>
-  )
-
   return (
     <>
       <PageHeader
         title="Retention"
         description={`Who kept giving, who gave more, who stopped, ${noun} over ${noun}.`}
-        actions={gifts.length > 0 || sample ? sampleToggle : undefined}
       />
-
-      {sample && (
-        <p className="mb-4 rounded-md border border-cic-dark bg-cic-tint px-3 py-2 text-sm text-cic-dark" role="status">
-          Showing made-up sample donors. Nothing here is saved.
-        </p>
-      )}
 
       {gifts.length === 0 ? (
         <Card>
@@ -84,7 +55,7 @@ export default function Retention() {
             <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">Import donors to see who keeps giving, or try the page with sample data.</p>
             <div className="mt-6 flex flex-wrap justify-center gap-2">
               <Link to="/import" className={buttonVariants()}>Import donors</Link>
-              {sampleToggle}
+              <Button variant="outline" onClick={() => setSample(true)}>Use sample data</Button>
             </div>
           </CardContent>
         </Card>
@@ -141,9 +112,15 @@ export default function Retention() {
                           <ul className="divide-y">
                             {list.map((r) => (
                               <li key={r.d.id}>
-                                {sample
-                                  ? <button type="button" className={`${rowClass} w-full`} onClick={() => setOpened(r.d)}>{rowBody(r)}</button>
-                                  : <Link to={`/donors/${r.d.id}`} className={rowClass}>{rowBody(r)}</Link>}
+                                <Link to={`/donors/${r.d.id}`} className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-muted focus-visible:bg-muted focus-visible:outline-none">
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block font-medium text-cic-dark">{r.d.name}</span>
+                                    <span className="mt-1 flex flex-wrap items-center gap-2 text-muted-foreground tabular-nums">
+                                      <StatusBadge status={r.status} /> {money(r.prev)} → {money(r.cur)}
+                                    </span>
+                                  </span>
+                                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                                </Link>
                               </li>
                             ))}
                           </ul>
@@ -159,20 +136,6 @@ export default function Retention() {
           )}
         </>
       )}
-
-      <Dialog open={!!opened} onOpenChange={(o) => !o && setOpened(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{opened?.name}</DialogTitle>
-          </DialogHeader>
-          <p className="text-muted-foreground">A sample donor, so there's no donor page. Their gifts:</p>
-          <ul className="divide-y">
-            {gifts.filter((g) => g.donorId === opened?.id).sort(byDateDesc).map((g) => (
-              <li key={g.id} className="flex justify-between py-1.5"><span>{fmtDate(g.date)}</span><span className="tabular-nums">{money(g.amount)}</span></li>
-            ))}
-          </ul>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }
