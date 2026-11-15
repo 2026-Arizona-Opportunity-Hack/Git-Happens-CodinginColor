@@ -62,7 +62,7 @@ The repo needs two Actions secrets:
 
 The Worker also needs the WorkOS secret key. Set it once (or whenever the key is rotated) with `bunx wrangler secret put WORKOS_API_KEY` and paste the Staging `sk_test_…` key. Without it every API call fails.
 
-It also needs the cookie key: run `openssl rand -base64 32 | bunx wrangler secret put WORKOS_COOKIE_PASSWORD` once. Without it nobody can sign in; changing it signs everyone out.
+It also needs the cookie key: run `head -c 32 /dev/urandom | base64 | bunx wrangler secret put WORKOS_COOKIE_PASSWORD` once (check the command before it succeeds: an empty value is saved silently). With a missing or short value, nobody can sign in; changing it signs everyone out.
 
 ## Events calendar
 
