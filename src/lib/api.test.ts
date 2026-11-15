@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { contactFields, date, extraFields, HttpError, oneOf, optStr, periodRange, str, summarize } from './api'
+import { contactError, contactFields, date, extraFields, HttpError, oneOf, optStr, periodRange, str, summarize } from './api'
 
 const rejects = (fn: () => unknown, message: RegExp) =>
   assert.throws(fn, (e: unknown) => e instanceof HttpError && e.status === 400 && message.test(e.message))
@@ -21,6 +21,11 @@ test('contact edits check email and phone, and blank clears a field', () => {
   assert.deepEqual(contactFields({ phone: null }), { phone: null })
   for (const bad of [{}, null, { email: 'not-an-email' }, { email: 'a@b' }, { phone: '123' }, { phone: '555-CALL-NOW' }, { phone: '1'.repeat(16) }, { email: 'x'.repeat(195) + '@b.org' }, { email: 5 }])
     assert.throws(() => contactFields(bad), HttpError)
+  // The donor page shows these before saving, so they must agree with the server.
+  assert.equal(contactError('phone', '(520) 555-0199'), null)
+  assert.match(contactError('phone', '12')!, /7 to 15 digits/)
+  assert.match(contactError('email', 'abc')!, /name@example.org/)
+  assert.throws(() => contactFields({ phone: '12' }), /7 to 15 digits/)
 })
 
 test('enums and dates only accept what the API allows', () => {

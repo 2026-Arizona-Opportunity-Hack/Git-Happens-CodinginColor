@@ -28,6 +28,14 @@ export function date(v: unknown, field: string): string {
 }
 // A donor's contact details: only the fields sent change, and '' or null
 // clears one. Phones keep their formatting but need 7 to 15 digits.
+// What's wrong with one trimmed, non-empty contact value, or null. The
+// donor page's Contact card shows the same message before it saves.
+export function contactError(field: 'email' | 'phone', v: string): string | null {
+  if (field === 'email') return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? null : 'Email must look like name@example.org'
+  const digits = v.replace(/\D/g, '').length
+  return digits >= 7 && digits <= 15 && /^[\d\s()+.-]+$/.test(v) ? null : 'Phone must be 7 to 15 digits, using only digits, spaces and ( ) + . -'
+}
+
 export function contactFields(v: unknown): { email?: string | null; phone?: string | null } {
   if (!v || typeof v !== 'object') throw new HttpError(400, 'body must be an object')
   const b = v as Record<string, unknown>
@@ -39,10 +47,9 @@ export function contactFields(v: unknown): { email?: string | null; phone?: stri
     if (typeof x !== 'string' || x.length > 200) throw new HttpError(400, `${k} must be a string up to 200 chars`)
     out[k] = x.trim()
   }
-  if (out.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(out.email)) throw new HttpError(400, 'email must look like name@example.org')
-  if (out.phone) {
-    const digits = out.phone.replace(/\D/g, '').length
-    if (digits < 7 || digits > 15 || !/^[\d\s()+.-]+$/.test(out.phone)) throw new HttpError(400, 'phone must be 7 to 15 digits')
+  for (const k of ['email', 'phone'] as const) {
+    const err = out[k] ? contactError(k, out[k]) : null
+    if (err) throw new HttpError(400, err)
   }
   if (!('email' in out) && !('phone' in out)) throw new HttpError(400, 'send email, phone or both')
   return out

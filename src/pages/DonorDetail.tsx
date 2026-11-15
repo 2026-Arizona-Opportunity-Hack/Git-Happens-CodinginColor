@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import type { Channel, Donor, Gift } from '@/data/types'
 import { draftChannel, THANK_YOU_DAYS, thankableGift } from '@/lib/drafts'
 import { funderPacket } from '@/lib/packet'
+import { contactError } from '@/lib/api'
 import { useStore } from '@/store'
 import { useAsk } from '@/components/ChatWidget'
 import { fmtPhone } from '@/lib/utils'
@@ -270,9 +271,21 @@ function Contact({ donor, readOnly, save }: {
   const [email, setEmail] = useState(donor.email ?? '')
   const [phone, setPhone] = useState(donor.phone ?? '')
   const [busy, setBusy] = useState(false)
+  // Checked on Save with the server's rule, so both fields show their error
+  // under the field instead of a browser bubble or a passing toast.
+  const [errors, setErrors] = useState<{ email?: string; phone?: string }>({})
   const changed = email.trim() !== (donor.email ?? '') || phone.trim() !== (donor.phone ?? '')
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    const found = {
+      email: (email.trim() && contactError('email', email.trim())) || undefined,
+      phone: (phone.trim() && contactError('phone', phone.trim())) || undefined,
+    }
+    setErrors(found)
+    if (found.email || found.phone) {
+      document.getElementById(found.email ? 'donor-email' : 'donor-phone')?.focus()
+      return
+    }
     setBusy(true)
     const ok = await save(donor.id, { email: email.trim(), phone: phone.trim() })
     setBusy(false)
@@ -282,14 +295,18 @@ function Contact({ donor, readOnly, save }: {
     <Card id="donor-contact">
       <CardHeader><CardTitle>Contact</CardTitle></CardHeader>
       <CardContent>
-        <form className="grid gap-3" onSubmit={submit}>
+        <form className="grid gap-3" onSubmit={submit} noValidate>
           <div className="grid gap-1">
             <Label htmlFor="donor-email">Email</Label>
-            <Input id="donor-email" type="email" maxLength={200} value={email} readOnly={readOnly} onChange={(e) => setEmail(e.target.value)} />
+            <Input id="donor-email" type="email" maxLength={200} value={email} readOnly={readOnly} onChange={(e) => setEmail(e.target.value)}
+              aria-invalid={!!errors.email} aria-describedby={errors.email ? 'donor-email-error' : undefined} />
+            {errors.email && <p id="donor-email-error" className="text-sm text-destructive">{errors.email}</p>}
           </div>
           <div className="grid gap-1">
             <Label htmlFor="donor-phone">Phone</Label>
-            <Input id="donor-phone" type="tel" maxLength={200} value={phone} readOnly={readOnly} onChange={(e) => setPhone(e.target.value)} />
+            <Input id="donor-phone" type="tel" maxLength={200} value={phone} readOnly={readOnly} onChange={(e) => setPhone(e.target.value)}
+              aria-invalid={!!errors.phone} aria-describedby={errors.phone ? 'donor-phone-error' : undefined} />
+            {errors.phone && <p id="donor-phone-error" className="text-sm text-destructive">{errors.phone}</p>}
           </div>
           {readOnly
             ? <p className="text-xs text-muted-foreground">Sample data is view-only.</p>
