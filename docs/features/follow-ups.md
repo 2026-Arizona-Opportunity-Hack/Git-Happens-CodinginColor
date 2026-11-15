@@ -19,7 +19,7 @@ A board member's work queue:
 
 ## Drafts
 
-Thank-yous, quarterly updates and lapsed nudges are written by AI from the donor's gifts and the outcomes of the programs they funded (see [Program outcomes](program-outcomes.md)). They're marked **Drafted by AI: check before sending**. If the AI fails or takes over 12 seconds, the template is used instead.
+Thank-yous, quarterly updates and lapsed nudges are written by AI from the donor's gifts and the programs they funded. They're marked **Drafted by AI: check before sending**. If the AI fails or takes over 12 seconds, the template is used instead.
 
 ## Sending
 

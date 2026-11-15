@@ -22,7 +22,8 @@ Upload the spreadsheet, Zeffy and Benevity CSVs, then map their columns in a sta
 
 - Gifts without a usable date are still saved, with the date unknown. They count toward lifetime giving but not toward any year's totals (Raised YTD, retention), and the popup says how many there are.
 - Only gifts whose amount can't be read are skipped.
-- Dates like `2026-11-14`, `11/14/2026` and `Nov 14, 2026` are all read.
+- Dates like `2026-11-14`, `11/14/2026`, `11/14/2026, 3:04 PM`, `Nov 14, 2026`, `14-Nov-2026` and Excel date numbers are all read, and export headers such as Zeffy's *Payment Date (America/Phoenix)* or Benevity's *Total Donation to be Acknowledged* are mapped automatically.
+- Importing a file again once its dates are read gives saved undated gifts their dates instead of adding them twice.
 
 ## After saving
 

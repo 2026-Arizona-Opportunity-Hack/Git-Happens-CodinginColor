@@ -12,7 +12,7 @@ Who can see what, how secrets are kept, and the gaps we know about. The rest of 
 ## Who can see what
 
 - **Signed in or nothing.** Every `/api` route needs a WorkOS access token, except `/api/config`, `/api/docs` and `/api/openapi.json` (which hold no data) and `/api/v1` (which takes an API key instead). The Worker verifies it with `jose` (401 if missing or expired), then looks the user up in the "Coding in Color" organization in WorkOS. Someone who can sign in to WorkOS but isn't in the organization gets a 403. See [Operations](operations.md#sign-in-workos).
-- **Two roles, set in WorkOS.** *Admin* sees every donor and can import, assign, edit program outcomes and manage API keys. *Member* sees only the donors assigned to them.
+- **Two roles, set in WorkOS.** *Admin* sees every donor and can import, assign and manage API keys. *Member* sees only the donors assigned to them.
 - **Ownership is checked on the server, not just hidden in the UI.** Every donor route loads the donor through `loadDonor` or `loadDraft` in `worker/index.ts`, which add `owner_id = <caller>` for members. Admin-only routes call `requireAdmin`. The same filter applies to `/api/bootstrap`, so a member's browser never receives other members' donors.
 - **The assistant can't act on its own.** It only proposes buttons. `src/lib/actions.ts` checks each one against what the caller can see and writes the button label itself, and nothing happens until a person presses it. Replies never render raw HTML, images or outside links. Imported donor text reaches the model on one line with directive syntax and tags stripped. See [Assistant](features/assistant.md).
 - **Nothing is sent without a human.** Drafts open in the board member's own mail app; the app never sends email itself. See [Follow-ups](features/follow-ups.md).
@@ -51,7 +51,7 @@ Three automatic checks, so security doesn't rely on someone remembering.
 
 ### 95% coverage gate
 
-The **Tests** workflow runs the typecheck and unit tests on every PR and fails it if tests cover under 95% of lines or functions in `src/` (`scripts/check-coverage.ts`). Modules with no tests still count ([#83](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/pull/83)). Coverage is 100% today. See [Testing](testing.md).
+The **Tests** workflow runs the typecheck and unit tests on every PR and fails it if tests cover under 95% of lines or functions in `src/` (`scripts/check-coverage.ts`). Modules with no tests still count ([#83](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/pull/83)). Coverage is about 98% today. See [Testing](testing.md).
 
 ### Fuzz tests
 

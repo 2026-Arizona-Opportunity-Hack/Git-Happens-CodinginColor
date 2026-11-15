@@ -15,9 +15,9 @@ One donor's page:
 - **Log** a text, email or call.
 - **Draft** a thank-you or update.
 - **Debrief** opens the [assistant](assistant.md) to describe a conversation with the donor, typed or dictated.
-- **One-click funder packet:** a Markdown file with lifetime giving, totals by year and by program, every gift, and the outcomes of each program they funded (from [Program outcomes](program-outcomes.md)), ready to paste into a renewal.
+- **One-click funder packet:** a Markdown file with lifetime giving, totals by year and by program and every gift, ready to paste into a renewal.
 - **Custom fields** created on [Update Donors](update-donors.md).
 
-`src/lib/packet.ts` builds the packet and works out which program outcomes a donor's gifts funded.
+`src/lib/packet.ts` builds the packet and the per-program giving totals.
 
 Tests: `packet.test.ts`, `logic.test.ts`.

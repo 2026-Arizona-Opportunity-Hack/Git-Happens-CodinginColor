@@ -64,7 +64,6 @@ Each page has its own doc in [`docs/features/`](docs/features/): who uses it, wh
 - **[Donor detail](docs/features/donor-detail.md)**: timeline, next steps, one-click event invites, debriefs and the funder packet
 - **[Update Donors](docs/features/update-donors.md)**: (admin) import the spreadsheet, Zeffy and Benevity with column mapping and dedupe
 - **[Retention](docs/features/retention.md)**: (admin) year-over-year retention, churn and activation patterns
-- **[Program outcomes](docs/features/program-outcomes.md)**: (admin) the outcomes funder packets and updates quote
 - **[Assistant](docs/features/assistant.md)**: chat about your records, debriefs by voice, buttons you press to act
 - **[Search](docs/features/search.md)**: pages and donors, from any page (Ctrl+K)
 - **[Events calendar](docs/features/events-calendar.md)**: CIC's calendar, so invites have real dates
@@ -95,7 +94,7 @@ The password is public on purpose because the data is fake. Replace these accoun
 1. **Real exports**: get scrubbed Zeffy/Benevity samples from CIC and fix `COLUMN_MAP` in `dedupe.ts`.
 2. **Sending**: drafts open pre-filled in the board member's own mail or Messages app today. Saving drafts straight into their mailbox (Gmail API / Microsoft Graph) needs per-user OAuth and, for Gmail, Google's app verification; sending from the app (Resend, Twilio) would come from CIC rather than the board member.
 3. **Real calendar**: ask CIC for its Google Calendar's iCal address and set `CALENDAR_ICS_URL` (see [Events calendar](docs/operations.md#events-calendar)).
-4. **Outcomes from the classroom**: CIC enters program outcomes by hand today. Once the curriculum platform (Problem 1) has its read API, fill `program_outcomes` from its completion and learning-gain numbers instead.
+4. **Outcomes from the classroom**: once the curriculum platform (Problem 1) has its read API, add each program's students served and learning gains to funder packets and quarterly updates. (A hand-edited Program outcomes page was removed for now; its unused `program_outcomes` table is still in D1, from migration 0006.)
 5. **Brand**: swap the placeholder mark in `App.tsx` for the real CIC logo, and run Lighthouse (target a11y ≥ 95).
 
 ## Security and testing
@@ -106,7 +105,7 @@ Judges score Security, so here's what checks this repo. Details and every findin
 - **What they found, and what we fixed.** Four audits ran on Nov 15. Two PR audits and Claude's whole-repo audit found nothing. muse-wonder's whole-repo audit found two issues:
   - Donor text could steer the AI (prompt injection). Mostly fixed in [#95](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/pull/95); the last part is [#93](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/issues/93).
   - Dev tools are switched on. That's on purpose for the demo, and listed as a gap to close before launch.
-- **95% coverage gate.** Every PR runs the typecheck and unit tests, and the PR fails if tests cover under 95% of lines or functions in `src/`. Every module counts, tested or not. Coverage is 100% today, and each P0–P2 feature in CIC's brief maps to its tests ([Testing](docs/testing.md)).
+- **95% coverage gate.** Every PR runs the typecheck and unit tests, and the PR fails if tests cover under 95% of lines or functions in `src/`. Every module counts, tested or not. Coverage is about 98% today, and each P0–P2 feature in CIC's brief maps to its tests ([Testing](docs/testing.md)).
 - **Fuzz tests.** Each run throws 4,500 seeded random inputs at the import pipeline, dedupe, the Excel export, the API input checks, the calendar parser, AI drafts and the assistant's buttons. The fuzz tests found two real bugs, both fixed with regression tests:
   - impossible calendar dates got through ([#84](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/pull/84))
   - characters that broke the Excel export got through ([#128](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/pull/128))

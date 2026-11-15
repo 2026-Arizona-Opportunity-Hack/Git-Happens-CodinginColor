@@ -25,7 +25,7 @@ What tests each feature of [CIC's brief](https://docs.google.com/document/d/1sdl
 | P0 | Key-authenticated read API aggregated by period, program and board member; input checks | `api.test.ts` |
 | P1 | Debrief to action | `actions.test.ts` |
 | P1 | Events-aware next steps (CIC's calendar) | `ical.test.ts`, `logic.test.ts`, `reminders.test.ts`, `actions.test.ts` |
-| P1 | AI-drafted updates from gifts and program outcomes | `ai-draft.test.ts`, `drafts.test.ts` |
+| P1 | AI-drafted updates from gifts and giving history | `ai-draft.test.ts`, `drafts.test.ts` |
 | P1 | Lapsed-donor radar and nudge | `reminders.test.ts`, `drafts.test.ts` |
 | P2 | Natural-language donor questions (the assistant's buttons) | `actions.test.ts` |
 

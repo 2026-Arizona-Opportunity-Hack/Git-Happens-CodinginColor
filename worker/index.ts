@@ -1,5 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose'
-import type { BoardMember, Channel, CicEvent, Donor, Draft, DraftKind, Gift, ImportRecord, Interaction, NextStep, Program, ProgramOutcome, RawDonorRow, Source } from '../src/data/types'
+import type { BoardMember, Channel, CicEvent, Donor, Draft, DraftKind, Gift, ImportRecord, Interaction, NextStep, Program, RawDonorRow, Source } from '../src/data/types'
 import { dedupe, matchDonor, splitGifts } from '../src/lib/dedupe'
 import { AI_KINDS, cleanDraft, draftPrompt, inert } from '../src/lib/ai-draft'
 import { draftBody } from '../src/lib/drafts'
@@ -64,9 +64,6 @@ const toDonor = (r: Row): Donor => ({
   extra: r.extra && r.extra !== '{}' ? JSON.parse(r.extra as string) : undefined,
 })
 const toGift = (r: Row): Gift => ({ id: r.id as string, donorId: r.donor_id as string, amount: r.amount as number, date: (r.date as string) || null, source: r.source as Source, program: r.program as Program }) // date NOT NULL in D1: '' = unknown
-const toOutcome = (r: Row): ProgramOutcome => ({
-  program: r.program as Program, studentsServed: (r.students_served as number) ?? null, summary: r.summary as string, updatedAt: (r.updated_at as string) ?? undefined,
-})
 const toInteraction = (r: Row): Interaction => ({ id: r.id as string, donorId: r.donor_id as string, byId: r.by_id as string, channel: r.channel as Channel, date: r.date as string, summary: r.summary as string })
 const toImport = (r: Row): ImportRecord => ({
   id: r.id as string, source: r.source as Source, fileName: (r.file_name as string) ?? undefined,
@@ -171,17 +168,14 @@ async function newDraft(env: Env, s: Session, donor: Donor, kind: DraftKind, cha
   const db = env.DB
   const draft: Draft = { id: id('x'), donorId: donor.id, kind, channel, status: 'pending', createdAt: today(), body: body ?? '', ai: body !== undefined }
   if (body === undefined) {
-    const [gifts, outcomes] = await db.batch<Row>([
-      db.prepare('SELECT * FROM gifts WHERE donor_id = ?').bind(donor.id),
-      db.prepare('SELECT * FROM program_outcomes'),
-    ])
+    const gifts = await db.prepare('SELECT * FROM gifts WHERE donor_id = ?').bind(donor.id).all<Row>()
     // Updates and nudges mention the next event on the calendar.
     event ??= (await db.prepare('SELECT * FROM events WHERE date >= ? ORDER BY date, id LIMIT 1').bind(today()).first<CicEvent>()) ?? undefined
     const members = await listMembers(env)
     const owner = toMember(members.find((mb) => mb.id === donor.ownerId) ?? members.find((mb) => mb.id === s.memberId)!)
-    const gs = gifts.results.map(toGift), os = outcomes.results.map(toOutcome)
-    draft.body = draftBody(kind, donor, gs, owner, event, os)
-    const written = AI_KINDS.includes(kind) ? await aiDraft(env, draftPrompt(kind, channel, donor, gs, owner, draft.body, event, os), channel) : null
+    const gs = gifts.results.map(toGift)
+    draft.body = draftBody(kind, donor, gs, owner, event)
+    const written = AI_KINDS.includes(kind) ? await aiDraft(env, draftPrompt(kind, channel, donor, gs, owner, draft.body, event), channel) : null
     if (written) { draft.body = written; draft.ai = true }
   }
   const save = db.prepare('INSERT INTO drafts (id, donor_id, kind, channel, body, created_at, status, ai) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
@@ -255,14 +249,13 @@ async function loadScoped(env: Env, s: Session) {
   const [members] = await Promise.all([listMembers(env), syncCalendar(env)])
   // Import history is admin-only, like the import itself.
   const importsSql = s.role === 'admin' ? 'SELECT * FROM imports ORDER BY imported_at DESC, id LIMIT 50' : 'SELECT * FROM imports WHERE 0'
-  const [events, donors, gifts, interactions, drafts, imports, outcomes] = await db.batch<Row>([
+  const [events, donors, gifts, interactions, drafts, imports] = await db.batch<Row>([
     db.prepare('SELECT * FROM events ORDER BY date, id'),
     db.prepare(`SELECT d.* FROM donors d WHERE ${f.sql} ORDER BY d.id`).bind(...f.args),
     db.prepare(`SELECT g.* FROM gifts g JOIN donors d ON d.id = g.donor_id WHERE ${f.sql} ORDER BY g.date DESC, g.id`).bind(...f.args),
     db.prepare(`SELECT i.* FROM interactions i JOIN donors d ON d.id = i.donor_id WHERE ${f.sql} ORDER BY i.date DESC, i.id`).bind(...f.args),
     db.prepare(`SELECT x.* FROM drafts x JOIN donors d ON d.id = x.donor_id WHERE ${f.sql} ORDER BY x.created_at DESC, x.id`).bind(...f.args),
     db.prepare(importsSql),
-    db.prepare('SELECT * FROM program_outcomes ORDER BY program'),
   ])
   return {
     session: s,
@@ -274,7 +267,6 @@ async function loadScoped(env: Env, s: Session) {
     interactions: interactions.results.map(toInteraction),
     drafts: drafts.results.map(toDraft),
     imports: imports.results.map(toImport),
-    outcomes: outcomes.results.map(toOutcome),
   }
 }
 
@@ -575,22 +567,6 @@ async function route(req: Request, env: Env): Promise<Response> {
     return json({ donors: n(donors), gifts: n(gifts), interactions: n(interactions), drafts: n(drafts), imports: n(imports) })
   }
 
-  // PUT /api/outcomes/:program {studentsServed: int | null, summary} (admin):
-  // what a program achieved, for funder packets and quarterly updates.
-  if (m === 'PUT' && parts[0] === 'outcomes' && parts[1] && !parts[2]) {
-    requireAdmin(s)
-    const program = oneOf(decodeURIComponent(parts[1]), PROGRAMS, 'program')
-    const b = await body(req)
-    const n = b.studentsServed
-    if (n !== null && n !== undefined && !(Number.isInteger(n) && (n as number) >= 0 && (n as number) <= 1_000_000))
-      throw new HttpError(400, 'studentsServed must be a whole number from 0 to 1,000,000, or null')
-    const summary = typeof b.summary === 'string' && b.summary.trim() === '' ? '' : str(b.summary, 'summary', 2000)
-    await db.prepare(`INSERT INTO program_outcomes (program, students_served, summary, updated_at, updated_by) VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT (program) DO UPDATE SET students_served = excluded.students_served, summary = excluded.summary, updated_at = excluded.updated_at, updated_by = excluded.updated_by`)
-      .bind(program, n ?? null, summary, new Date().toISOString(), s.memberId).run()
-    return json({ ok: true })
-  }
-
   // POST /api/assign {assignments: [{donorId, ownerId | null}]}: set several
   // donors' board members in one transaction (admin). null unassigns.
   if (m === 'POST' && parts[0] === 'assign') {
@@ -638,17 +614,17 @@ async function route(req: Request, env: Env): Promise<Response> {
 
     const [existing, existingGifts] = await db.batch<Row>([
       db.prepare('SELECT * FROM donors'),
-      db.prepare('SELECT donor_id, amount, date FROM gifts'),
+      db.prepare('SELECT id, donor_id, amount, date FROM gifts'),
     ])
     const donors = existing.results.map(toDonor)
     // Gifts per donor: what D1 holds plus what this import has queued, so two
     // clusters landing on the same donor can't both add one gift.
-    const known = new Map<string, { amount: number; date?: string | null }[]>()
+    const known = new Map<string, { id?: string; amount: number; date?: string | null }[]>()
     for (const g of existingGifts.results)
-      known.set(g.donor_id as string, [...(known.get(g.donor_id as string) ?? []), { amount: g.amount as number, date: (g.date as string) || null }])
+      known.set(g.donor_id as string, [...(known.get(g.donor_id as string) ?? []), { id: g.id as string, amount: g.amount as number, date: (g.date as string) || null }])
     const writes: D1PreparedStatement[] = []
     const createdDonors: { id: string; name: string }[] = []
-    let created = 0, merged = 0, gifts = 0, skippedGifts = 0
+    let created = 0, merged = 0, gifts = 0, skippedGifts = 0, datedGifts = 0
     const clusters = dedupe(rows)
     for (const c of clusters) {
       const match = matchDonor(c, donors)
@@ -673,10 +649,14 @@ async function route(req: Request, env: Env): Promise<Response> {
       }
       // Skip gifts this donor already has (same amount, near-same date), so
       // re-imports and donations reported by two sources aren't double counted.
-      const { keep, skipped } = splitGifts(c.rows, known.get(donorId) ?? [])
-      known.set(donorId, [...(known.get(donorId) ?? []), ...keep])
+      // A saved gift with no date gets this file's date instead of a second copy.
+      const before = known.get(donorId) ?? []
+      const { keep, skipped, dated } = splitGifts(c.rows, before)
+      known.set(donorId, [...before.map((g) => ({ ...g, date: dated.find((x) => x.id === g.id)?.date ?? g.date })), ...keep])
       gifts += keep.length
       skippedGifts += skipped.length
+      datedGifts += dated.length
+      for (const x of dated) writes.push(db.prepare('UPDATE gifts SET date = ? WHERE id = ?').bind(x.date, x.id))
       for (const r of keep)
         writes.push(db.prepare('INSERT INTO gifts (id, donor_id, amount, date, source, program) VALUES (?, ?, ?, ?, ?, ?)')
           .bind(id('g'), donorId, r.amount, r.date ?? '', r.source, r.program ?? 'General')) // '' = date unknown
@@ -689,7 +669,7 @@ async function route(req: Request, env: Env): Promise<Response> {
       writes.push(db.prepare('INSERT INTO imports (id, source, file_name, row_count, imported_at, imported_by) VALUES (?, ?, ?, ?, ?, ?)')
         .bind(id('m'), src, optStr(files[src], `files.${src}`) ?? null, rows.filter((r) => r.source === src).length, now, s.memberId))
     if (writes.length) await db.batch(writes) // one transaction: all or nothing
-    return json({ created, merged, clusters: clusters.length, gifts, skippedGifts, createdDonors })
+    return json({ created, merged, clusters: clusters.length, gifts, skippedGifts, datedGifts, createdDonors })
   }
 
   throw new HttpError(404, 'Not found')

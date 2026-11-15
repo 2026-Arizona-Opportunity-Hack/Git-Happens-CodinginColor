@@ -99,7 +99,7 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
       },
       '/api/drafts': {
         post: {
-          tags: ['Drafts'], summary: 'Draft a message', description: 'The server writes the body from the donor\'s history and the outcomes of the programs they funded, signed by the donor\'s owner. Thank-yous, quarterly updates and lapsed nudges are written by the AI gateway (`ai: true`), falling back to a template if it fails or is slow. It starts as `pending`.',
+          tags: ['Drafts'], summary: 'Draft a message', description: 'The server writes the body from the donor\'s history and the programs they funded, signed by the donor\'s owner. Thank-yous, quarterly updates and lapsed nudges are written by the AI gateway (`ai: true`), falling back to a template if it fails or is slow. It starts as `pending`.',
           requestBody: jsonBody({
             type: 'object', required: ['donorId', 'kind'],
             properties: { donorId: { type: 'string' }, kind: { enum: enums.kinds.filter((k) => k !== 'event-invite'), description: 'Invitations come from POST /api/donors/{id}/invite' }, channel: { enum: ['email', 'text'], default: 'email' }, body: { type: 'string', maxLength: 4000, description: 'Use this body instead of writing one, e.g. a follow-up the assistant wrote from a debrief. Still starts as `pending`.' } },
@@ -177,18 +177,6 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
           responses: { 200: jsonResponse('Aggregates for the period', ref('Summary')), ...errors(400, 401) },
         },
       },
-      '/api/outcomes/{program}': {
-        put: {
-          tags: ['Admin'], summary: 'Set a program\'s outcomes (admin only)',
-          description: 'Funder packets and quarterly-update drafts quote these for the programs a donor funded. An empty summary clears it.',
-          parameters: [{ name: 'program', in: 'path', required: true, schema: { enum: enums.programs } }],
-          requestBody: jsonBody({
-            type: 'object', required: ['summary'],
-            properties: { studentsServed: { type: ['integer', 'null'], minimum: 0, maximum: 1000000 }, summary: { type: 'string', maxLength: 2000 } },
-          }),
-          responses: { 200: ok, ...errors(400, 401, 403) },
-        },
-      },
       '/api/keys': {
         get: {
           tags: ['Admin'], summary: 'List API keys (admin only)', description: 'Active keys first. Only the prefix of each key is kept.',
@@ -255,13 +243,6 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
           },
         },
         Event: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, date: isoDate } },
-        ProgramOutcome: {
-          type: 'object',
-          properties: {
-            program: { enum: enums.programs }, studentsServed: { type: ['integer', 'null'] }, summary: { type: 'string' },
-            updatedAt: { type: 'string', format: 'date-time' },
-          },
-        },
         ImportRecord: {
           type: 'object',
           properties: { id: { type: 'string' }, source: { enum: enums.sources }, fileName: { type: 'string' }, rowCount: { type: 'integer' }, importedAt: { type: 'string', format: 'date-time' }, importedBy: { type: 'string' } },
@@ -318,7 +299,6 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
             interactions: { type: 'array', items: ref('Interaction') },
             drafts: { type: 'array', items: ref('Draft') },
             imports: { type: 'array', items: ref('ImportRecord'), description: 'Admins only; empty for board members' },
-            outcomes: { type: 'array', items: ref('ProgramOutcome') },
           },
         },
       },

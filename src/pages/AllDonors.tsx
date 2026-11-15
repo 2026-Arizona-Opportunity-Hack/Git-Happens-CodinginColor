@@ -5,18 +5,19 @@ import { Download, FileSpreadsheet } from 'lucide-react'
 import { PageHeader, SectionTitle } from '@/components/common'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { DataTable, type ColumnDef } from '@/components/ui/data-table'
-import { Input } from '@/components/ui/input'
+import { DataTable, type ColumnDef, type Filters } from '@/components/ui/data-table'
+import { applyFilters } from '@/components/ui/filters'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { Donor } from '@/data/types'
 import { fmtDate, lastGiftDate, money, UNASSIGNED } from '@/lib/logic'
 import { donorsCsv, donorsXlsx, download } from '@/lib/export'
-import { Label } from '@/components/ui/label'
+import { donorTextFilter, giftDateFilter, sourceFilter } from '@/lib/donor-columns'
+import { cn } from '@/lib/utils'
 import { useStore } from '@/store'
 
 // Every donor and who looks after them. This is where an admin manages board
-// member responsibilities: pick a board member in a row, then Update (one row)
-// or Update all (every changed row). Nothing is saved until then.
+// member responsibilities: pick board members in the rows (changed rows turn
+// amber), then Save at the bottom. Nothing is saved until then.
 export default function AllDonors() {
   const { donors, gifts, boardMembers, assignOwners, ownerName, today } = useStore()
   const location = useLocation()
@@ -28,46 +29,36 @@ export default function AllDonors() {
   // Unsaved dropdown choices, by donor. A row is "changed" when its choice
   // differs from what D1 holds.
   const [choices, setChoices] = useState<Record<string, string>>(() => ({ ...suggested }))
-  const [saving, setSaving] = useState<Set<string>>(new Set())
-  // Filters: name/org/email text, a donation date range (donors with at least
-  // one gift in it), and board member ('' any, UNASSIGNED, or a member id).
-  const [q, setQ] = useState('')
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
-  const [owner, setOwner] = useState('')
-  const filtering = !!(q || from || to || owner)
-  const clearFilters = () => { setQ(''); setFrom(''); setTo(''); setOwner('') }
+  const [saving, setSaving] = useState(false)
+  // Column filters (header buttons, as in Excel), shared by both tables.
+  const [filters, setFilters] = useState<Filters>({})
+  const filtering = Object.keys(filters).length > 0
 
   const current = (d: Donor) => d.ownerId ?? UNASSIGNED
   const choice = (d: Donor) => choices[d.id] ?? current(d)
-  const changed = donors.filter((d) => choice(d) !== current(d))
+  const isChanged = (d: Donor) => choice(d) !== current(d)
+  const changed = donors.filter(isChanged)
   const load = new Map(boardMembers.map((m) => [m.id, donors.filter((d) => d.ownerId === m.id).length]))
   const name = (id: string) => boardMembers.find((m) => m.id === id)?.name ?? 'Unassigned'
 
-  const match = (d: Donor) =>
-    `${d.name} ${d.org ?? ''} ${d.email ?? ''}`.toLowerCase().includes(q.trim().toLowerCase()) &&
-    (!owner || current(d) === owner) &&
-    (!from && !to || gifts.some((g) => g.donorId === d.id && !!g.date && (!from || g.date >= from) && (!to || g.date <= to)))
   const rank = (d: Donor) => recent.indexOf(d.id)
   const inMain = (d: Donor) => !!d.ownerId || recent.includes(d.id)
   const assigned = donors
-    .filter((d) => inMain(d) && match(d))
+    .filter(inMain)
     .sort((a, b) => (rank(a) === -1 && rank(b) === -1 ? a.name.localeCompare(b.name) : rank(a) === -1 ? 1 : rank(b) === -1 ? -1 : rank(a) - rank(b)))
-  const unassigned = donors.filter((d) => !inMain(d) && match(d)).sort((a, b) => a.name.localeCompare(b.name))
-  const shown = [...assigned, ...unassigned]
+  const unassigned = donors.filter((d) => !inMain(d)).sort((a, b) => a.name.localeCompare(b.name))
 
   const save = async (list: Donor[]) => {
-    const ids = list.map((d) => d.id)
-    setSaving((s) => new Set([...s, ...ids]))
+    setSaving(true)
     const ok = await assignOwners(list.map((d) => ({ donorId: d.id, ownerId: choice(d) === UNASSIGNED ? null : choice(d) })))
-    setSaving((s) => new Set([...s].filter((id) => !ids.includes(id))))
+    setSaving(false)
     if (!ok) return
     // Donors that just got their first board member move up to the main list.
     const moved = list.filter((d) => !d.ownerId && choice(d) !== UNASSIGNED).map((d) => d.id)
     setRecent((r) => [...r, ...moved.filter((id) => !r.includes(id))])
     toast.success(list.length === 1
       ? `${list[0].name}: ${name(choice(list[0]))}`
-      : `Updated ${list.length} donors`)
+      : `Saved ${list.length} donors`)
   }
 
   const items = [{ value: UNASSIGNED, label: 'Unassigned' }, ...boardMembers.map((m) => ({ value: m.id, label: `${m.name} (${load.get(m.id) ?? 0})` }))]
@@ -80,12 +71,12 @@ export default function AllDonors() {
       id: 'donor',
       header: 'Donor',
       accessorFn: (r) => r.d.name,
+      meta: { filter: donorTextFilter() },
       cell: ({ row: { original: { d } } }) => (
         <>
           <Link to={`/donors/${d.id}`} className="font-medium text-cic-dark underline">{d.name}</Link>
           {recent.includes(d.id) && <Badge className="ml-2 bg-cic-dark text-white">New</Badge>}
           {d.org && d.org !== d.name && <div className="text-xs text-muted-foreground">{d.org}</div>}
-          {!d.ownerId && choice(d) !== UNASSIGNED && <div className="text-xs text-amber-900">Suggested, not saved yet</div>}
         </>
       ),
     },
@@ -94,6 +85,7 @@ export default function AllDonors() {
       header: 'Contact',
       accessorFn: (r) => r.d.email,
       sortUndefined: 'last',
+      meta: { filter: { kind: 'text', placeholder: 'Email or phone', text: (r) => `${r.d.email ?? ''} ${r.d.phone ?? ''}` } },
       cell: ({ row: { original: { d } } }) => (
         <>
           <div>{d.email ?? '—'}</div>
@@ -102,47 +94,64 @@ export default function AllDonors() {
       ),
     },
     { id: 'lifetime', header: 'Lifetime', accessorFn: (r) => r.lifetime, cell: ({ getValue }) => money(getValue<number>()) },
-    { id: 'last', header: 'Last gift', accessorFn: (r) => r.last, sortUndefined: 'last', cell: ({ getValue }) => (getValue<string>() ? fmtDate(getValue<string>()) : '—') },
+    { id: 'last', header: 'Last gift', accessorFn: (r) => r.last, sortUndefined: 'last', meta: { filter: giftDateFilter(gifts) }, cell: ({ getValue }) => (getValue<string>() ? fmtDate(getValue<string>()) : '—') },
     {
       id: 'sources',
       header: 'Sources',
       enableSorting: false,
-      meta: { className: 'space-x-1' },
+      meta: { className: 'space-x-1', filter: sourceFilter() },
       cell: ({ row: { original: { d } } }) => d.sources.map((s) => <Badge key={s} variant="outline">{s}</Badge>),
     },
     {
       id: 'owner',
       header: 'Board member',
       accessorFn: (r) => name(current(r.d)),
-      meta: { className: 'min-w-52' },
-      cell: ({ row: { original: { d } } }) => (
-        <Select items={items} value={choice(d)} onValueChange={(v) => setChoices((c) => ({ ...c, [d.id]: v as string }))}>
-          <SelectTrigger aria-label={`Board member for ${d.name}`} className="w-full"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {items.map((it) => <SelectItem key={it.value} value={it.value}>{it.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      ),
-    },
-    {
-      id: 'save',
-      header: () => <span className="sr-only">Save</span>,
-      enableSorting: false,
-      cell: ({ row: { original: { d } } }) => (
-        <Button size="sm" disabled={choice(d) === current(d) || saving.has(d.id)} onClick={() => save([d])} aria-label={`Update board member for ${d.name}`}>
-          {saving.has(d.id) ? 'Saving…' : 'Update'}
-        </Button>
-      ),
+      // Filters on the saved board member, not an unsaved choice.
+      meta: { className: 'min-w-52', filter: { kind: 'options', values: (r) => [current(r.d)], order: [UNASSIGNED, ...boardMembers.map((m) => m.id)], label: name } },
+      // A changed choice turns amber and says so in words, not only in color.
+      cell: ({ row: { original: { d } } }) => {
+        const dirty = isChanged(d)
+        return (
+          <>
+            <Select items={items} value={choice(d)} onValueChange={(v) => setChoices((c) => ({ ...c, [d.id]: v as string }))}>
+              <SelectTrigger
+                aria-label={`Board member for ${d.name}`}
+                aria-describedby={dirty ? `unsaved-${d.id}` : undefined}
+                className={cn('w-full', dirty && 'border-amber-600 bg-amber-100 font-medium text-amber-950 ring-1 ring-amber-600')}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {items.map((it) => <SelectItem key={it.value} value={it.value}>{it.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {dirty && (
+              <div id={`unsaved-${d.id}`} className="mt-1 text-xs font-medium text-amber-900">
+                {d.ownerId ? `Was ${name(current(d))}. Not saved yet` : 'Suggested, not saved yet'}
+              </div>
+            )}
+          </>
+        )
+      },
     },
   ]
 
-  const table = (rows: Donor[], caption: string, empty: string) => (
+  const allRows = donors.map(totals)
+  const filtered = (list: Donor[]) => applyFilters(list.map(totals), columns, filters)
+  const shownAssigned = filtered(assigned)
+  const shownUnassigned = filtered(unassigned)
+  const shown = [...shownAssigned, ...shownUnassigned].map((r) => r.d)
+  const table = (rows: ReturnType<typeof totals>[], caption: string, empty: string, first: boolean) => (
     <DataTable
       caption={caption}
+      filters={filters}
+      onFiltersChange={setFilters}
+      filterRows={allRows}
+      showActiveFilters={first}
       columns={columns}
-      data={rows.map(totals)}
+      data={rows}
       getRowId={(r) => r.d.id}
-      rowClassName={(r) => (recent.includes(r.original.d.id) ? 'bg-cic-tint!' : undefined)}
+      rowClassName={(r) => (isChanged(r.original.d) ? 'bg-amber-50! hover:bg-amber-100!' : recent.includes(r.original.d.id) ? 'bg-cic-tint!' : undefined)}
       empty={empty}
     />
   )
@@ -163,58 +172,24 @@ export default function AllDonors() {
           </>
         }
       />
-      <section aria-labelledby="filters-heading" className="mb-6 rounded-lg border bg-muted/40 p-4">
-        <h2 id="filters-heading" className="mb-3 text-sm font-semibold text-cic-dark">Filters</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <Label htmlFor="f-name" className="mb-1">Name</Label>
-            <Input id="f-name" placeholder="Name, org or email" value={q} onChange={(e) => setQ(e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="f-from" className="mb-1">Donated from</Label>
-            <Input id="f-from" type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="f-to" className="mb-1">Donated to</Label>
-            <Input id="f-to" type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="f-owner" className="mb-1">Board member</Label>
-            <select
-              id="f-owner"
-              value={owner}
-              onChange={(e) => setOwner(e.target.value)}
-              className="h-9 w-full rounded-md border bg-background px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-            >
-              <option value="">Any board member</option>
-              <option value={UNASSIGNED}>Unassigned</option>
-              {boardMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="mt-3 flex items-center gap-3 text-sm">
-          <span aria-live="polite" className="text-muted-foreground">Showing {shown.length} of {donors.length} donors</span>
-          {filtering && <Button size="sm" variant="ghost" onClick={clearFilters}>Clear filters</Button>}
-        </div>
-      </section>
-
       <section aria-labelledby="assigned-heading">
         <h2 id="assigned-heading" className="sr-only">Assigned donors</h2>
-        {table(assigned, 'Assigned donors', filtering ? 'No assigned donors match these filters.' : 'No donors are assigned yet.')}
+        {table(shownAssigned, 'Assigned donors', filtering ? 'No assigned donors match these filters.' : 'No donors are assigned yet.', true)}
       </section>
 
       <section className="mt-10">
-        <SectionTitle>Unassigned donors ({unassigned.length})</SectionTitle>
-        {table(unassigned, 'Unassigned donors', filtering ? 'No unassigned donors match these filters.' : 'Every donor has a board member.')}
+        <SectionTitle>Unassigned donors ({filtering ? `${shownUnassigned.length} of ${unassigned.length}` : unassigned.length})</SectionTitle>
+        {filtering && <p className="-mt-2 mb-3 text-sm text-muted-foreground">The filters above apply here too.</p>}
+        {table(shownUnassigned, 'Unassigned donors', filtering && unassigned.length ? 'No unassigned donors match these filters.' : 'There are no unassigned donors.', false)}
       </section>
 
       <div className="sticky bottom-0 mt-6 flex flex-wrap items-center justify-end gap-3 border-t bg-background py-3 pr-20">
         <span className="text-sm text-muted-foreground" aria-live="polite">
           {changed.length ? `${changed.length} unsaved change${changed.length === 1 ? '' : 's'}` : 'No unsaved changes'}
         </span>
-        <Button variant="ghost" disabled={!changed.length || saving.size > 0} onClick={() => setChoices({})}>Discard changes</Button>
-        <Button disabled={!changed.length || saving.size > 0} onClick={() => save(changed)}>
-          Update all{changed.length ? ` (${changed.length})` : ''}
+        <Button variant="ghost" disabled={!changed.length || saving} onClick={() => setChoices({})}>Discard changes</Button>
+        <Button disabled={!changed.length || saving} onClick={() => save(changed)}>
+          {saving ? 'Saving…' : `Save${changed.length ? ` (${changed.length})` : ''}`}
         </Button>
       </div>
     </>

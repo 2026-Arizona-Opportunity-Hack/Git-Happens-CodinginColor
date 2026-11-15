@@ -8,7 +8,7 @@ covers:
 
 # Retention (admin)
 
-Year over year or quarter over quarter: new, recovered, increased, same, decreased and lapsed donors, plus the retention rate.
+Year over year or quarter over quarter, with tabs back to the first period that has gifts, opening on the latest one that does: new, recovered, increased, same, decreased and lapsed donors, plus the retention rate.
 
 **Patterns** below show churn and activation:
 

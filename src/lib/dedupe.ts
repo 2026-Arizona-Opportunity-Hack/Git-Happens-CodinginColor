@@ -93,7 +93,8 @@ export function matchDonor<D extends Pick<Donor, 'name' | 'email' | 'phone'>>(c:
 // collapse into one, so skipped gifts are shown in the preview.
 export const SAME_GIFT_DAYS = 3
 
-interface GiftLike { amount: number; date?: string | null }
+// `id` is set on gifts already in D1, so an undated one can be given a date.
+interface GiftLike { id?: string; amount: number; date?: string | null }
 
 const dayNumber = (iso: string) => Math.round(new Date(iso.slice(0, 10) + 'T12:00:00Z').getTime() / 86_400_000)
 
@@ -105,18 +106,26 @@ export const sameGift = (a: GiftLike, b: GiftLike) =>
 
 // Splits one donor's incoming rows into gifts to record and duplicates to skip.
 // Rows without an amount are neither: they carry contact info only. A gift
-// without a date is still recorded (date unknown).
+// without a date is still recorded (date unknown). A dated gift that matches a
+// saved undated gift of the same amount gives it its date (`dated`) instead of
+// being added again, so re-importing a file whose dates weren't read before
+// fixes Retention and Raised YTD without doubling the money.
 export function splitGifts(rows: RawDonorRow[], existing: GiftLike[]) {
-  const seen: GiftLike[] = [...existing]
+  const seen: GiftLike[] = existing.map((g) => ({ ...g }))
   const keep: (RawDonorRow & GiftLike)[] = []
   const skipped: (RawDonorRow & GiftLike)[] = []
-  for (const r of rows) {
+  const dated: { id: string; date: string }[] = []
+  // Dated rows go first so they date saved gifts before an undated row of the
+  // same amount is skipped against them; otherwise a re-import adds it again.
+  for (const r of [...rows].sort((a, b) => Number(!a.date) - Number(!b.date))) {
     if (!r.amount) continue
     const g = r as RawDonorRow & GiftLike
-    if (seen.some((s) => sameGift(s, g))) skipped.push(g)
+    if (seen.some((s) => sameGift(s, g))) { skipped.push(g); continue }
+    const undated = g.date ? seen.find((s) => s.id && !s.date && Math.abs(s.amount - g.amount) < 0.005) : undefined
+    if (undated) { undated.date = g.date; dated.push({ id: undated.id!, date: g.date! }) }
     else { keep.push(g); seen.push(g) }
   }
-  return { keep, skipped }
+  return { keep, skipped, dated }
 }
 
 // Minimal CSV parser (quoted fields, commas inside quotes). Good enough for
@@ -170,7 +179,7 @@ export const DB_FIELDS = [
   { key: 'program', label: 'Gift program' },
 ] as const
 
-// Header spellings recognized automatically (lowercased).
+// Header spellings recognized automatically (normalized: see headerKey).
 const KNOWN_HEADERS: Record<string, string[]> = {
   name: ['name', 'full name', 'donor name', 'donor'],
   firstName: ['first name', 'firstname', 'first'],
@@ -179,9 +188,28 @@ const KNOWN_HEADERS: Record<string, string[]> = {
   phone: ['phone', 'phone number', 'mobile'],
   org: ['org', 'organization', 'company', 'employer'],
   amount: ['amount', 'total amount', 'donation amount', 'gift amount'],
-  date: ['date', 'payment date', 'donation date', 'gift date'],
+  date: ['date', 'payment date', 'donation date', 'gift date', 'transaction date'],
   program: ['program', 'designation', 'fund'],
 }
+
+// Lowercase, without a trailing "(America/Phoenix)" or "(USD)" and punctuation:
+// "Payment Date (America/Phoenix)" -> "payment date", "E-mail" -> "e mail".
+const headerKey = (h: string) => h.toLowerCase().replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim()
+
+// Looser matches for headers no list above spells exactly, as real exports
+// name them: Zeffy "Payment Date (America/Phoenix)", Benevity "Total Donation
+// to be Acknowledged", "Donor First Name". Checked in this order.
+const HEADER_RULES: [string, RegExp][] = [
+  ['email', /\be ?mail\b/],
+  ['phone', /\b(phone|mobile|cell)\b/],
+  ['firstName', /\bfirst( name)?\b|\bgiven name\b/],
+  ['lastName', /\blast( name)?\b|\bsurname\b|\bfamily name\b/],
+  ['org', /\b(company|organi[sz]ation|employer|business)\b/],
+  ['date', /^(?!.*\b(birth|refund|updated|modified)\b).*\b(date|paid at|donated at|created at)\b/],
+  ['amount', /^(?!.*\b(count|number|fee|fees|tip|tips)\b).*\b(amount|total donation|donation total|gross|total)\b/],
+  ['program', /\b(designation|fund|program|purpose)\b/],
+  ['name', /^(?!.*\b(campaign|event|form|page|team|fund|program)\b).*\bname\b|^(donor|supporter|contact)$/],
+]
 
 const PROGRAMS: Program[] = ['K12', 'AI Academy', 'Summer Camp', 'Day of Compute', 'General']
 
@@ -193,19 +221,23 @@ export function csvHeaders(text: string): string[] {
   return parseCsvHeader(firstLine)
 }
 
-// Best guess for each header. A target is used by at most one column; custom
-// fields that already exist match a header with the same name.
+// Best guess for each header. A target is used by at most one column: exact
+// spellings claim theirs first, then the looser rules fill what's left (first
+// column wins). Custom fields that already exist match a header of that name.
 export function autoMapping(headers: string[], customFields: string[] = []): ColumnMapping {
   const taken = new Set<string>()
-  const out: ColumnMapping = {}
-  for (const h of headers) {
-    const key = h.trim().toLowerCase()
-    const custom = customFields.find((f) => f.toLowerCase() === key)
-    const field = Object.entries(KNOWN_HEADERS).find(([, names]) => names.includes(key))?.[0]
-    const target = field ?? (custom ? CUSTOM + custom : SKIP)
-    out[h] = target !== SKIP && taken.has(target) ? SKIP : target
-    taken.add(out[h])
+  const out: ColumnMapping = Object.fromEntries(headers.map((h) => [h, SKIP]))
+  const claim = (h: string, target?: string) => {
+    if (!target || taken.has(target)) return
+    out[h] = target
+    taken.add(target)
   }
+  for (const h of headers) {
+    const key = headerKey(h)
+    const custom = customFields.find((f) => f.trim().toLowerCase() === h.trim().toLowerCase())
+    claim(h, Object.entries(KNOWN_HEADERS).find(([, names]) => names.includes(key))?.[0] ?? (custom && CUSTOM + custom))
+  }
+  for (const h of headers) if (out[h] === SKIP) claim(h, HEADER_RULES.find(([, re]) => re.test(headerKey(h)))?.[0])
   return out
 }
 
@@ -245,8 +277,10 @@ export function parseAmount(v?: string): number | undefined {
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
 
 // Dates as exports write them -> YYYY-MM-DD, or undefined when unreadable.
-// Accepts 2026-11-14 (with any time after it), 11/14/2026, 11-14-26,
-// 2026/11/14, Nov 14, 2026 and 14 Nov 2026. Slashed dates are US order.
+// Accepts 2026-11-14 (with any time after it), 11/14/2026, "11/14/2026, 3:04 PM",
+// 11-14-26, 2026/11/14, Nov 14, 2026, 14 Nov 2026, 14-Nov-2026 and Excel date
+// serials (46340). Slashed dates are US order unless the first part can't be
+// a month (14/11/2026).
 export function parseDate(v?: string): string | undefined {
   const s = v?.trim().toLowerCase()
   if (!s) return undefined
@@ -255,14 +289,17 @@ export function parseDate(v?: string): string | undefined {
     const t = new Date(Date.UTC(y, m - 1, d))
     return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d ? t.toISOString().slice(0, 10) : undefined
   }
-  let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:$|[t\s])/)
+  let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:$|[t\s,])/)
   if (m) return out(+m[1], +m[2], +m[3])
-  m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2}|\d{4})(?:$|\s)/)
-  if (m) return out(+m[3], +m[1], +m[2])
-  m = s.match(/^([a-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})/)
+  m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2}|\d{4})(?:$|[\s,t])/)
+  if (m) return +m[1] > 12 ? out(+m[3], +m[2], +m[1]) : out(+m[3], +m[1], +m[2])
+  m = s.match(/^([a-z]{3})[a-z]*\.?[\s-]+(\d{1,2}),?[\s-]+(\d{4})/)
   if (m && MONTHS.includes(m[1])) return out(+m[3], MONTHS.indexOf(m[1]) + 1, +m[2])
-  m = s.match(/^(\d{1,2})\s+([a-z]{3})[a-z]*\.?,?\s+(\d{4})/)
+  m = s.match(/^(\d{1,2})[\s-]+([a-z]{3})[a-z]*\.?,?[\s-]+(\d{2}|\d{4})(?:$|[\s,t])/)
   if (m && MONTHS.includes(m[2])) return out(+m[3], MONTHS.indexOf(m[2]) + 1, +m[1])
+  // Excel stores dates as days since 1899-12-30; a CSV saved from it can too.
+  m = s.match(/^(\d{5})(?:\.\d+)?$/)
+  if (m && +m[1] >= 30000 && +m[1] <= 70000) return new Date(Date.UTC(1899, 11, 30) + +m[1] * 86_400_000).toISOString().slice(0, 10)
   return undefined
 }
 

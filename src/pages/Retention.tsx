@@ -9,7 +9,7 @@ import { useStore } from '@/store'
 import type { Gift, Source } from '@/data/types'
 import { cohorts, lapseBy, money, periodLabel, periodOf, retentionStatus, totalsByPeriod, type Period, type RetentionStatus } from '@/lib/logic'
 
-const SHOWN = { year: 3, quarter: 4 } // how many periods get a tab
+const SHOWN = { year: 6, quarter: 8 } // at most this many periods get a tab
 
 // The six statuses, grouped by what the board does next.
 const GROUPS: { title: string; statuses: RetentionStatus[]; empty: string }[] = [
@@ -22,9 +22,18 @@ export default function Retention() {
   const { donors, gifts, today, setSample } = useStore()
   const [unit, setUnit] = useState<Period>('year')
   const current = periodOf(today, unit)
-  const periods = Array.from({ length: SHOWN[unit] }, (_, i) => current - SHOWN[unit] + 1 + i)
+  // Tabs run from the first period with a gift (or the one before now) up to
+  // now, so older imports show up. Gifts with no date can't be placed.
+  const dated = gifts.filter((g) => g.date)
+  const undated = gifts.filter((g) => !g.date)
+  const has = new Set(dated.map((g) => periodOf(g.date!, unit)))
+  const first = Math.max(current - SHOWN[unit] + 1, Math.min(current - 1, ...[...has].map((n) => n + 1)))
+  const periods = Array.from({ length: current - first + 1 }, (_, i) => first + i)
   const [picked, setPicked] = useState<number | null>(null)
-  const period = picked !== null && periods.includes(picked) ? picked : current
+  // Until someone picks a tab: now, unless now and the period before it have
+  // no gifts, then the latest period that does.
+  const latest = [...periods].reverse().find((n) => has.has(n) || has.has(n - 1)) ?? current
+  const period = picked !== null && periods.includes(picked) ? picked : latest
   const label = (n: number) => periodLabel(n, unit)
   const noun = unit === 'year' ? 'year' : 'quarter'
 
@@ -62,8 +71,15 @@ export default function Retention() {
         </Card>
       ) : (
         <>
+          {undated.length > 0 && (
+            <p role="note" className="mb-4 rounded-md border border-amber-600 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+              {undated.length} gift{undated.length === 1 ? '' : 's'} ({money(undated.reduce((t, g) => t + g.amount, 0))}) {undated.length === 1 ? 'has' : 'have'} no date, so {undated.length === 1 ? 'it isn’t' : 'they aren’t'} counted here.
+              {' '}Import the file again with its date column mapped to <em>Gift date</em> and they’ll get their dates without being counted twice.
+              {' '}<Link to="/import" className="font-medium underline">Update Donors</Link>
+            </p>
+          )}
           <div className="mb-6 flex flex-wrap gap-3">
-            <Tabs value={unit} onValueChange={(v) => setUnit(v as Period)}>
+            <Tabs value={unit} onValueChange={(v) => { setUnit(v as Period); setPicked(null) }}>
               <TabsList aria-label="Compare by">
                 <TabsTrigger value="year">Yearly</TabsTrigger>
                 <TabsTrigger value="quarter">Quarterly</TabsTrigger>
