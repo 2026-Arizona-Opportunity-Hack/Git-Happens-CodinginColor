@@ -12,6 +12,11 @@ export default function Dashboard() {
   const ids = new Set(donors.map((d) => d.id))
   const myGifts = gifts.filter((g) => ids.has(g.donorId))
   const ytd = myGifts.filter((g) => inYear(g, year)).reduce((s, g) => s + g.amount, 0)
+  // Lifetime counts every gift, dated or not, so an import always moves it.
+  const lifetime = myGifts.reduce((s, g) => s + g.amount, 0)
+  const undated = myGifts.filter((g) => !g.date)
+  const unassigned = donors.filter((d) => !d.ownerId).length
+  const admin = session.role === 'admin'
   const overdue = donors.filter((d) => d.nextStep && d.nextStep.due < today)
   const touchDue = donors.filter((d) => quarterlyTouchDue(d, today))
   const lapsed = donors.filter((d) => retentionStatus(myGifts.filter((g) => g.donorId === d.id), year) === 'lapsed')
@@ -19,14 +24,26 @@ export default function Dashboard() {
   return (
     <>
       <PageHeader
-        title={session.role === 'admin' ? 'Organization overview' : `Welcome, ${member(session.memberId).name.split(' ')[0]}`}
+        title={admin ? 'Organization overview' : `Welcome, ${member(session.memberId).name.split(' ')[0]}`}
       />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat label={`Raised ${year} YTD`} value={money(ytd)} />
-        <Stat label="Donors" value={donors.length} />
+        <Stat label={`Raised ${year} YTD`} value={money(ytd)} hint={`${money(lifetime)} lifetime from ${myGifts.length} gift${myGifts.length === 1 ? '' : 's'}`} />
+        <Stat
+          label="Donors"
+          value={donors.length}
+          hint={admin && unassigned ? `${unassigned} without a board member` : undefined}
+          to={admin ? '/all-donors' : '/donors'}
+        />
         <Stat label="Overdue next steps" value={overdue.length} to="/follow-ups#next-steps" alert={overdue.length > 0} />
         <Stat label="Lapsed this year" value={lapsed.length} hint={`Gave in ${year - 1}, not ${year}`} to="/follow-ups#lapsed" alert={lapsed.length > 0} />
       </div>
+
+      {admin && undated.length > 0 && (
+        <p role="note" className="mt-4 rounded-md border border-amber-600 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          {undated.length} gift{undated.length === 1 ? '' : 's'} ({money(undated.reduce((t, g) => t + g.amount, 0))}) {undated.length === 1 ? 'has' : 'have'} no date: counted in lifetime giving, but not in Raised YTD or Retention.
+          {' '}<Link to="/import" className="font-medium underline">Import the file again with its date column mapped</Link> to give them dates.
+        </p>
+      )}
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[2fr_1fr]">
         {session.role === 'admin' && (
