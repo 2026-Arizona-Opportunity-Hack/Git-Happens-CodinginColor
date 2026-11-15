@@ -109,7 +109,16 @@ export function ChatPanel({ chat: { turns, busy, error, send }, variant }: { cha
             {t.role === 'user' ? t.content : <ChatMarkdown>{t.content}</ChatMarkdown>}
           </div>
         ))}
-        {busy && <p className="text-muted-foreground" role="status">Thinking…</p>}
+        {busy && (
+          <p role="status" className="flex w-fit items-center gap-2 rounded-lg bg-cic-tint px-3 py-2 text-muted-foreground">
+            <span aria-hidden className="flex items-center gap-1">
+              {['-0.3s', '-0.15s', '0s'].map((delay) => (
+                <span key={delay} style={{ animationDelay: delay }} className="size-1.5 animate-bounce rounded-full bg-cic-dark motion-reduce:animate-none" />
+              ))}
+            </span>
+            Thinking…
+          </p>
+        )}
         {error && <p className="text-destructive" role="alert">{error}</p>}
       </div>
       <form
