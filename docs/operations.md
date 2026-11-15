@@ -20,6 +20,7 @@ How to run this in production: settings, secrets, deploys, the calendar, the boa
 | Name | Where | What it is |
 |---|---|---|
 | `WORKOS_API_KEY` | Worker secret; `.env` locally | WorkOS Staging secret key. The Worker uses it to read the board; `db:seed` uses it too. Without it every API call fails |
+| `WORKOS_COOKIE_PASSWORD` | Worker secret; `.env` locally | Encrypts the sign-in cookie. Any random 32+ characters. Without it nobody can sign in; changing it signs everyone out |
 | `AI_API_KEY` | Worker secret; `.env` locally | OHack AI gateway key. Without it the assistant says it's unavailable and drafts use templates |
 | `WORKOS_CLIENT_ID` | `vars` in `wrangler.jsonc` | WorkOS public client ID; the browser fetches it from `/api/config` |
 | `WORKOS_ORG_ID` | `vars` in `wrangler.jsonc` | The "Coding in Color" organization in WorkOS. Its members are the board |
@@ -30,9 +31,9 @@ Set a Worker secret with `bunx wrangler secret put <NAME>`. Every name the Worke
 
 ## Sign-in (WorkOS)
 
-The app uses the **Staging** environment of the "Coding in Color" WorkOS workspace. Its public client ID is `WORKOS_CLIENT_ID` in `wrangler.jsonc`, and the browser fetches it from `/api/config`. The secret key (`WORKOS_API_KEY`) stays on the Worker, which uses it to list the board. That environment is configured with:
+The app uses the **Staging** environment of the "Coding in Color" WorkOS workspace. Its public client ID is `WORKOS_CLIENT_ID` in `wrangler.jsonc`. The secret key (`WORKOS_API_KEY`) stays on the Worker, which uses it to sign people in and to list the board. That environment is configured with:
 
-- **Redirect URIs and allowed origins:** `https://githappens.jurenka.software`, `http://localhost:5173` and `http://localhost:5321`. Add any new host in both places.
+- **Redirect URIs:** `https://githappens.jurenka.software/auth/callback` and `http://localhost:5173/auth/callback`, where the Worker finishes sign-in (the bare origins are left over from browser sign-in and can go). Add `<origin>/auth/callback` for any new host.
 - **Sign-out redirects:** the same three URLs, with `https://githappens.jurenka.software` as the default. Sign-out returns to the app's origin, and WorkOS shows an error page for any return URL not on this list.
 - **Password sign-in.** Users are created in WorkOS.
 
@@ -40,7 +41,7 @@ The app uses the **Staging** environment of the "Coding in Color" WorkOS workspa
 
 WorkOS is the source of truth for board members; D1 only stores donor data, keyed by WorkOS user ID. Admins manage the board on the app's **Board members** page: invite someone by email, set their role to **Admin** (sees every donor, can import) or **Member** (only their own donors), or remove them. The page is WorkOS's [Users Management widget](https://workos.com/docs/widgets/user-management). The Worker mints its token at `POST /api/widget-token`, and the widget only works for roles with the `widgets:users-table:manage` permission, which the Staging Admin role has. The WorkOS dashboard still works too: add a user to the "Coding in Color" organization with the same roles. The Worker caches the member list for 60 seconds, so changes show up within a minute. Someone who can sign in to WorkOS but isn't in the organization gets a 403.
 
-AuthKit runs in `devMode`, which keeps the session in localStorage. That's required without a WorkOS custom domain, which costs $99/month.
+The Worker runs sign-in (`/auth/*`, `worker/auth.ts`) and keeps the session in an encrypted HttpOnly cookie, so nothing about it is in localStorage ([decision 006](decisions/006-session-cookie.md)).
 
 ## Deploying
 
@@ -60,6 +61,8 @@ The repo needs two Actions secrets:
 | `CLOUDFLARE_ACCOUNT_ID` | `57cdeda067b33ff3b8def5d2b65aee9d` |
 
 The Worker also needs the WorkOS secret key. Set it once (or whenever the key is rotated) with `bunx wrangler secret put WORKOS_API_KEY` and paste the Staging `sk_test_…` key. Without it every API call fails.
+
+It also needs the cookie key: run `openssl rand -base64 32 | bunx wrangler secret put WORKOS_COOKIE_PASSWORD` once. Without it nobody can sign in; changing it signs everyone out.
 
 ## Events calendar
 

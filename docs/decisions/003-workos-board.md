@@ -23,5 +23,5 @@ We sign people in with WorkOS AuthKit, and WorkOS's "Coding in Color" organizati
 ## Consequences
 - Every request depends on WorkOS. The Worker caches the member list for 60 seconds, so a change takes up to a minute to show up.
 - Someone who signs in but isn't in the organization gets a 403.
-- Without a custom domain, AuthKit has to run in devMode (see [005](005-authkit-devmode.md)).
+- Without a custom domain, the Worker runs sign-in so the session can live in a cookie on our own domain (see [006](006-session-cookie.md)).
 - We'd revisit this if WorkOS's pricing for this use changed, or if CIC standardized on another identity provider.

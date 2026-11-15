@@ -1,12 +1,12 @@
 ---
 title: AuthKit runs in devMode, with the session in localStorage
-status: accepted
+status: superseded by 006
 date: 2026-11-14
-covers:
-  - src/App.tsx
 ---
 
 # 005: AuthKit runs in devMode, with the session in localStorage
+
+Superseded by [006](006-session-cookie.md): the Worker now runs sign-in and keeps the session in an HttpOnly cookie.
 
 ## Context
 AuthKit keeps its session in an HttpOnly cookie only when it's served from a WorkOS custom domain on the app's own domain. A custom domain costs $99/month, which is more than the rest of CIC's bill put together (see [001](001-ai-model.md)).
