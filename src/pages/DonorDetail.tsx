@@ -10,32 +10,19 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import type { Channel, Donor, Gift } from '@/data/types'
+import type { Channel, Donor, Gift, ProgramOutcome } from '@/data/types'
+import { funderPacket } from '@/lib/packet'
 import { useStore } from '@/store'
 import { byDateDesc, calendarLink, fmtDate, money, retentionStatus, totalsByYear, UNASSIGNED, yearOf } from '@/lib/logic'
 
 const CHANNEL_ICON = { email: Mail, text: MessageSquare, call: Phone, 'in-person': Users, note: StickyNote }
 
-// Funder packet: gift history + funded outcomes. Outcomes are a placeholder
-// until Problem 1's read API is wired in.
-function funderPacket(d: Donor, gifts: Gift[]) {
-  const lines = [
-    `# Funder packet: ${d.name}`,
-    '',
-    '## Gift history',
-    '| Date | Amount | Program | Source |',
-    '|---|---|---|---|',
-    ...gifts.map((g) => `| ${g.date ?? 'Date unknown'} | ${money(g.amount)} | ${g.program} | ${g.source} |`),
-    '',
-    `Lifetime: ${money(gifts.reduce((s, g) => s + g.amount, 0))}`,
-    '',
-    '## Funded outcomes',
-    ...[...new Set(gifts.map((g) => g.program))].map((p) => `- ${p}: [students served, learning gain — from curriculum platform API]`),
-  ]
-  const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
+// Funder packet: gift history + the outcomes admins enter on Program outcomes.
+function downloadPacket(d: Donor, gifts: Gift[], outcomes: ProgramOutcome[], today: string) {
+  const blob = new Blob([funderPacket(d, gifts, outcomes, today)], { type: 'text/markdown' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
-  a.download = `CIC_FunderPacket_${d.name.replace(/\W+/g, '')}_${new Date().getFullYear()}.md`
+  a.download = `CIC_FunderPacket_${d.name.replace(/\W+/g, '')}_${today.slice(0, 4)}.md`
   a.click()
 }
 
@@ -82,7 +69,7 @@ export default function DonorDetail() {
         title={donor.name}
         description={[donor.org, donor.email, donor.phone].filter(Boolean).join(' · ')}
         actions={
-          <Button variant="outline" onClick={() => funderPacket(donor, gifts)}>
+          <Button variant="outline" onClick={() => downloadPacket(donor, gifts, s.outcomes, s.today)}>
             <Download aria-hidden /> Funder packet
           </Button>
         }

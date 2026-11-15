@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthKitProvider, useAuth } from '@workos-inc/authkit-react'
-import { BarChart3, Bell, Code2, Contact, Home, ListTodo, LogOut, ShieldAlert, Upload, UserCog, UserRound, Users, Wrench, type LucideIcon } from 'lucide-react'
+import { BarChart3, Bell, Code2, Contact, GraduationCap, Home, ListTodo, LogOut, ShieldAlert, Upload, UserCog, UserRound, Users, Wrench, type LucideIcon } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
 import { StoreProvider, useReminders, useStore } from '@/store'
@@ -15,6 +15,7 @@ import AllDonors from '@/pages/AllDonors'
 import DonorDetail from '@/pages/DonorDetail'
 import FollowUps from '@/pages/FollowUps'
 import Retention from '@/pages/Retention'
+import Outcomes from '@/pages/Outcomes'
 import Import from '@/pages/Import'
 import Notifications from '@/pages/Notifications'
 import DevTools from '@/pages/DevTools'
@@ -41,6 +42,7 @@ const NAV: { heading: string; items: NavItem[] }[] = [
       { to: '/donors', label: 'My Donors', icon: Contact, keywords: 'my assigned donors list' },
       { to: '/all-donors', label: 'All Donors', icon: Users, keywords: 'every donor assign reassign unassigned board member export csv excel download filter', adminOnly: true },
       { to: '/retention', label: 'Retention', icon: BarChart3, keywords: 'lapsed lost renewed upgraded downgraded churn report quarter year compare', adminOnly: true },
+      { to: '/outcomes', label: 'Program outcomes', icon: GraduationCap, keywords: 'outcomes impact students served learning gain funder packet grant report programs', adminOnly: true },
       { to: '/import', label: 'Update Donors', icon: Upload, keywords: 'import upload csv file zeffy benevity spreadsheet import history map columns', adminOnly: true },
     ],
   },
@@ -169,6 +171,7 @@ function Shell() {
           <Route path="/donors/:id" element={<DonorDetail />} />
           <Route path="/all-donors" element={admin(<AllDonors />)} />
           <Route path="/retention" element={admin(<Retention />)} />
+          <Route path="/outcomes" element={admin(<Outcomes />)} />
           <Route path="/import" element={admin(<Import />)} />
           <Route path="/members" element={session.role === 'admin' && <Suspense fallback={<p role="status">Loading…</p>}><Members /></Suspense>} />
           <Route path="/api" element={session.role === 'admin' && <Suspense fallback={<p role="status">Loading…</p>}><Api /></Suspense>} />

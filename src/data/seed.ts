@@ -1,4 +1,4 @@
-import type { BoardMember, CicEvent, Donor, Gift, Interaction } from './types'
+import type { BoardMember, CicEvent, Donor, Gift, Interaction, ProgramOutcome } from './types'
 
 // Fake data only. Never commit real donor PII to this repo.
 
@@ -72,4 +72,13 @@ export const interactions: Interaction[] = [
   { id: 'i3', donorId: 'd5', byId: 'bm1', channel: 'text', date: '2026-08-01', summary: 'Thanked for AZ Gives gift.' },
   { id: 'i4', donorId: 'd7', byId: 'bm3', channel: 'in-person', date: '2026-11-08', summary: 'Met at ASU event. Not ready to give more, still learning the mission.' },
   { id: 'i5', donorId: 'd9', byId: 'bm1', channel: 'email', date: '2026-11-02', summary: 'Thank-you for first gift.' },
+]
+
+// Made-up outcomes in the shape CIC would report them. The numbers are fake.
+export const outcomes: ProgramOutcome[] = [
+  { program: 'K12', studentsServed: 210, summary: 'Year-long CS classes at 6 partner high schools, 4 of them for credit. Students gained 24 points on average from pretest to post-test.' },
+  { program: 'AI Academy', studentsServed: 96, summary: 'Cohorts at Desert Edge, Maryvale and Salt River finished 88% of modules and gained 32 points on loops.' },
+  { program: 'Summer Camp', studentsServed: 64, summary: 'Two weeks of Python on lab machines with no student accounts; 51 students shipped a final project.' },
+  { program: 'Day of Compute', studentsServed: 140, summary: 'Phoenix Union students spent a day building with code and AI; 1 in 3 asked about AI Academy afterwards.' },
+  { program: 'General', studentsServed: null, summary: "Computer science and AI education for Arizona high schoolers whose schools don't offer it." },
 ]

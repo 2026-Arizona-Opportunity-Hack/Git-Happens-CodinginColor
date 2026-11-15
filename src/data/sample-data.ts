@@ -16,5 +16,5 @@ export function sampleData(boardMembers: BoardMember[], session: { role: string;
   const gifts: Gift[] = [...seed.gifts, ...sampleGifts].filter((g) => ids.has(g.donorId))
   const interactions: Interaction[] = seed.interactions.filter((i) => ids.has(i.donorId)).map((i) => ({ ...i, byId: owner.get(i.donorId)! }))
   const events: CicEvent[] = seed.events
-  return { donors, gifts, interactions, events, drafts: [] as Draft[], imports: [] as ImportRecord[] }
+  return { donors, gifts, interactions, events, outcomes: seed.outcomes, drafts: [] as Draft[], imports: [] as ImportRecord[] }
 }
