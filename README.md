@@ -104,17 +104,20 @@ The password is public on purpose because the data is fake. Replace these accoun
 
 ## Run it locally
 
-Needs [Bun](https://bun.sh).
+Needs [Nix](https://nixos.org/download) with flakes enabled. `flake.nix` pins Bun and Node, so everyone builds with the same toolchain.
 
 ```bash
 git clone https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor.git
 cd Git-Happens-CodinginColor
+nix develop          # shell with bun + node; run everything below inside it
 bun install
 bun run db:migrate   # create the local D1 database
 bun run db:seed      # load the fake demo data (re-run any time to reset)
 bun dev              # http://localhost:5173, app + API
-bun run build        # typecheck + production build
+nix build            # typecheck + production build, output in ./result
 ```
+
+`nix build` installs dependencies from `bun.lock` in a sandbox, checked against a hash in `flake.nix`. After changing dependencies, set that hash (`x86_64-linux = "…"`) to `""`, run `nix build`, and paste the `got:` hash it prints. Other platforms need their own hash added the same way.
 
 `bun dev` runs the Worker and a local D1 database inside Vite, through `@cloudflare/vite-plugin`. Both the Worker and `bun run db:seed` need the WorkOS Staging secret key, so copy `.env.example` to `.env` and set `WORKOS_API_KEY` before running them. `.env` is gitignored.
 
@@ -139,7 +142,7 @@ AuthKit runs in `devMode`, which keeps the session in localStorage. That's requi
 git push origin origin/main:develop
 ```
 
-Every push to `develop` deploys to **https://githappens.jurenka.software** through `.github/workflows/deploy.yml` (a Cloudflare Worker with static assets and a D1 database, configured in `wrangler.jsonc`). Each deploy applies any new `migrations/` to the production database first. You can also run it by hand from the Actions tab.
+Every push to `develop` deploys to **https://githappens.jurenka.software** through `.github/workflows/deploy.yml`, which builds with `nix build` and runs wrangler inside `nix develop` (a Cloudflare Worker with static assets and a D1 database, configured in `wrangler.jsonc`). Each deploy applies any new `migrations/` to the production database first. You can also run it by hand from the Actions tab.
 
 The repo needs two Actions secrets:
 
@@ -150,7 +153,7 @@ The repo needs two Actions secrets:
 
 The Worker also needs the WorkOS secret key. Set it once (or whenever the key is rotated) with `bunx wrangler secret put WORKOS_API_KEY` and paste the Staging `sk_test_…` key. Without it every API call fails.
 
-To deploy by hand, run `bun run deploy` (it uses wrangler, so log in with `wrangler login` first). To reset the live demo to the fake seed data, run `bun run db:seed:remote` (with `WORKOS_API_KEY` in `.env`; it maps the seed's donor owners to WorkOS users by email).
+To deploy by hand, run `bun run deploy` inside `nix develop` (it builds with `nix build` and uses wrangler, so log in with `wrangler login` first). To reset the live demo to the fake seed data, run `bun run db:seed:remote` (with `WORKOS_API_KEY` in `.env`; it maps the seed's donor owners to WorkOS users by email).
 
 ### Brand
 
