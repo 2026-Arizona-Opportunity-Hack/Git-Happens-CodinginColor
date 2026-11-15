@@ -13,8 +13,8 @@ One inbox of reminders. The nav badge counts only the ones that need action now 
 - Overdue and upcoming next steps
 - Quarterly updates due
 - Lapsed donors
-- Drafts waiting for approval (admins also get drafts on unassigned donors, so the count matches Follow-ups). A draft whose donor has no email or phone for its channel asks for that detail, or for a discard, instead of an approval it can't get.
-- Events in the next 3 weeks
+- Drafts waiting for approval (admins also get drafts on unassigned donors, so the count matches Follow-ups). A draft whose donor has no email or phone for its channel asks for that detail, or for a discard, instead of an approval it can't get. A thank-you with no gift in the last 60 days (the same window the donor page uses) asks to be discarded.
+- Events in the next 3 weeks, with how many donors have a next step tied to each (admins count every donor, unassigned included; board members count their own)
 - (admins) exports not re-imported in 30 days, and unassigned donors
 
 Donor reminders cover only the donors assigned to you, admins included. Admins also get the org-wide ones (stale exports, unassigned donors).
