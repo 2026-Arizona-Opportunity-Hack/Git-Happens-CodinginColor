@@ -15,5 +15,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["worker", "scripts"]
+  "include": ["worker", "scripts"],
+  "exclude": ["scripts/check-coverage.ts"]
 }

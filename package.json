@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "bun test ./src/lib/",
+    "test": "bun test ./src/lib/ && bun scripts/check-coverage.ts",
     "preview": "vite preview",
     "deploy": "nix build && rm -rf dist && cp -r --no-preserve=mode result/dist result/.wrangler . && wrangler d1 migrations apply DB --remote && wrangler deploy",
     "db:migrate": "wrangler d1 migrations apply DB --local",

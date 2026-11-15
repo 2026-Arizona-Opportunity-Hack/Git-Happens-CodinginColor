@@ -1,0 +1,7 @@
+# `bun test` always measures coverage: a table in the terminal, and
+# coverage/lcov.info, which scripts/check-coverage.ts reads to fail the run
+# below 95%. CI runs both on every pull request (.github/workflows/test.yml).
+[test]
+coverage = true
+coverageSkipTestFiles = true
+coverageReporter = ["text", "lcov"]
