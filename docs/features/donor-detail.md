@@ -11,6 +11,7 @@ covers:
 One donor's page. The header shows their organization, email and phone (US numbers as (555) 555-1234).
 
 - **Notes:** free text about the donor, under Giving by year. It saves as you type (a second after you stop, or when you leave the box), and the AI reads it when it writes their [drafts](follow-ups.md). Notes can also be imported from a Notes column on [Update Donors](update-donors.md).
+- **Contact:** edit the donor's email and phone, under Notes; a blank field clears it. Anyone who can open the donor can edit them, like notes. The "No contact info" message links here.
 - **Timeline** of gifts and communications.
 - **Next step:** set one, add it to Google Calendar, or invite the donor to one of the next three events in **one click**. That sets the next step "Invite to <event>", due a week before it, plus a draft invitation to approve in [Follow-ups](follow-ups.md). The box follows the saved step, so it updates when an assistant button changes it.
 - **Log** a text, email or call.

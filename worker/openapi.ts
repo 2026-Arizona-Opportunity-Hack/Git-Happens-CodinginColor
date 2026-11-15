@@ -87,6 +87,14 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
           responses: { 200: ok, ...errors(400, 401, 403, 404) },
         },
       },
+      '/api/donors/{id}/contact': {
+        put: {
+          tags: ['Donors'], summary: "Set a donor's email and phone", description: 'Only the fields sent change; `""` clears one. Phones keep their formatting but need 7 to 15 digits.',
+          parameters: [idParam('id', 'Donor ID')],
+          requestBody: jsonBody({ type: 'object', properties: { email: { type: 'string', format: 'email', maxLength: 200 }, phone: { type: 'string', maxLength: 200 } } }),
+          responses: { 200: ok, ...errors(400, 401, 403, 404) },
+        },
+      },
       '/api/donors/{id}/owner': {
         put: {
           tags: ['Donors'], summary: 'Reassign a donor (admin only)',
