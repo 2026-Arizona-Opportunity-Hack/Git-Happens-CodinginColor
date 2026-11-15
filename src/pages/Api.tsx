@@ -5,7 +5,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { DataTable, type ColumnDef } from '@/components/ui/data-table'
 import { fmtDate } from '@/lib/logic'
 import { useStore, type ApiKey } from '@/store'
 
@@ -104,40 +104,38 @@ export default function Api() {
         ) : keys.length === 0 ? (
           <p className="text-muted-foreground">No keys yet.</p>
         ) : (
-          <Card className="py-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Key</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Last used</TableHead>
-                  <TableHead><span className="sr-only">Status</span></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {keys.map((k) => (
-                  <TableRow key={k.id} className={k.revokedAt ? 'text-muted-foreground' : undefined}>
-                    <TableCell className="font-medium">{k.name}</TableCell>
-                    <TableCell><code>{k.prefix}…</code></TableCell>
-                    <TableCell>{fmtDate(k.createdAt.slice(0, 10))}</TableCell>
-                    <TableCell>{k.lastUsedAt ? fmtDate(k.lastUsedAt.slice(0, 10)) : 'Never'}</TableCell>
-                    <TableCell className="text-right">
-                      {k.revokedAt ? (
-                        `Revoked ${fmtDate(k.revokedAt.slice(0, 10))}`
-                      ) : (
-                        <Button size="sm" variant="outline" onClick={() => revoke(k)}>
-                          Revoke<span className="sr-only"> {k.name}</span>
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
+          <DataTable
+            caption="API keys"
+            columns={keyColumns(revoke)}
+            data={keys}
+            getRowId={(k) => k.id}
+            rowClassName={(r) => (r.original.revokedAt ? 'text-muted-foreground' : undefined)}
+          />
         )}
       </section>
     </>
   )
 }
+
+const day = (iso: string) => fmtDate(iso.slice(0, 10))
+
+const keyColumns = (revoke: (k: ApiKey) => void): ColumnDef<ApiKey>[] => [
+  { accessorKey: 'name', header: 'Name', meta: { className: 'font-medium' } },
+  { id: 'key', header: 'Key', enableSorting: false, cell: ({ row }) => <code>{row.original.prefix}…</code> },
+  { accessorKey: 'createdAt', header: 'Created', cell: ({ row }) => day(row.original.createdAt) },
+  { accessorKey: 'lastUsedAt', header: 'Last used', sortUndefined: 'last', cell: ({ row }) => (row.original.lastUsedAt ? day(row.original.lastUsedAt) : 'Never') },
+  {
+    id: 'status',
+    header: () => <span className="sr-only">Status</span>,
+    enableSorting: false,
+    meta: { className: 'text-right' },
+    cell: ({ row: { original: k } }) =>
+      k.revokedAt ? (
+        `Revoked ${day(k.revokedAt)}`
+      ) : (
+        <Button size="sm" variant="outline" onClick={() => revoke(k)}>
+          Revoke<span className="sr-only"> {k.name}</span>
+        </Button>
+      ),
+  },
+]
