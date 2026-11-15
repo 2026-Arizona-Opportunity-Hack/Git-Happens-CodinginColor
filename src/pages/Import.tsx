@@ -129,7 +129,7 @@ export default function Import() {
     if (!r) return
     setStaging(false)
     clear()
-    toast.success(`${r.created} new donors, ${r.merged} merged into existing records. ${r.gifts} gifts recorded, ${r.skippedGifts} duplicates skipped`)
+    toast.success(`${r.created} new donors, ${r.merged} merged into existing records. ${r.gifts} gifts recorded, ${r.skippedGifts} duplicates skipped${r.datedGifts ? `, ${r.datedGifts} saved gifts given their date` : ''}`)
     if (r.createdDonors.length) {
       setCreated(r.createdDonors)
       setPicked(new Set(r.createdDonors.map((d) => d.id)))

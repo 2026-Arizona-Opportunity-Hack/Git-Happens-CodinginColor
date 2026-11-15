@@ -79,7 +79,9 @@ test('dates in common export formats become YYYY-MM-DD; impossible ones are reje
     ['2026-11-14', '2026-11-14'], ['2026-11-14T15:04:05Z', '2026-11-14'], ['2026-11-14 15:04', '2026-11-14'],
     ['11/14/2026', '2026-11-14'], ['1/5/26', '2026-01-05'], ['11-14-2026', '2026-11-14'], ['2026/11/14', '2026-11-14'],
     ['Nov 14, 2026', '2026-11-14'], ['November 14 2026', '2026-11-14'], ['14 Nov 2026', '2026-11-14'],
-    ['2/30/2026', undefined], ['soon', undefined], ['', undefined],
+    ['11/14/2026, 3:04:05 PM', '2026-11-14'], ['2026-11-14, 15:04', '2026-11-14'], ['14/11/2026', '2026-11-14'],
+    ['14-Nov-2026', '2026-11-14'], ['Nov-14-2026', '2026-11-14'], ['46340', '2026-11-14'],
+    ['2/30/2026', undefined], ['soon', undefined], ['', undefined], ['12345', undefined],
   ]
   for (const [input, want] of cases) assert.equal(parseDate(input), want, input)
 })
@@ -119,4 +121,24 @@ test('re-importing undated gifts adds nothing; an undated and a dated gift of th
   assert.equal(splitGifts([row({ amount: 75 })], [{ amount: 75, date: null }]).keep.length, 0)
   assert.equal(splitGifts([row({ amount: 75 })], [{ amount: 75, date: '2026-01-01' }]).keep.length, 1)
   assert.equal(splitGifts([row({ amount: 75, date: '2026-01-01' })], [{ amount: 75, date: null }]).keep.length, 1)
+})
+
+test('a dated re-import gives a saved undated gift its date instead of adding a second gift', () => {
+  const saved = [{ id: 'g1', amount: 75, date: null }, { id: 'g2', amount: 75, date: null }]
+  const r = splitGifts([row({ amount: 75, date: '2026-01-01' }), row({ amount: 75, date: '2026-03-01' }), row({ amount: 75, date: '2026-05-01' })], saved)
+  assert.deepEqual(r.dated, [{ id: 'g1', date: '2026-01-01' }, { id: 'g2', date: '2026-03-01' }])
+  assert.equal(r.keep.length, 1) // a third $75 gift is new
+  assert.equal(saved[0].date, null) // the caller's list isn't changed
+})
+
+test('real export headers map without renaming: Zeffy, Benevity and friends', () => {
+  const zeffy = autoMapping(['First Name', 'Last Name', 'Email', 'Payment Date (America/Phoenix)', 'Total Amount', 'Refund Date', 'Company Name'])
+  assert.equal(zeffy['Payment Date (America/Phoenix)'], 'date')
+  assert.equal(zeffy['Refund Date'], SKIP)
+  assert.equal(zeffy['Total Amount'], 'amount')
+  assert.equal(zeffy['Company Name'], 'org')
+  const benevity = autoMapping(['Company', 'Donor First Name', 'Donor Last Name', 'Email', 'Donation Date', 'Total Donation to be Acknowledged', 'Match Amount'])
+  assert.deepEqual([benevity['Donor First Name'], benevity['Donor Last Name'], benevity['Donation Date'], benevity['Total Donation to be Acknowledged']], ['firstName', 'lastName', 'date', 'amount'])
+  assert.equal(benevity['Match Amount'], SKIP) // amount already taken by the first match
+  assert.deepEqual(autoMapping(['Campaign Name', 'Donor Name', 'Gift Amount (USD)', 'E-mail', 'Created At']), { 'Campaign Name': SKIP, 'Donor Name': 'name', 'Gift Amount (USD)': 'amount', 'E-mail': 'email', 'Created At': 'date' })
 })

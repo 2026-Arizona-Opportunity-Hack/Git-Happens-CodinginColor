@@ -690,17 +690,17 @@ async function route(req: Request, env: Env): Promise<Response> {
 
     const [existing, existingGifts] = await db.batch<Row>([
       db.prepare('SELECT * FROM donors'),
-      db.prepare('SELECT donor_id, amount, date FROM gifts'),
+      db.prepare('SELECT id, donor_id, amount, date FROM gifts'),
     ])
     const donors = existing.results.map(toDonor)
     // Gifts per donor: what D1 holds plus what this import has queued, so two
     // clusters landing on the same donor can't both add one gift.
-    const known = new Map<string, { amount: number; date?: string | null }[]>()
+    const known = new Map<string, { id?: string; amount: number; date?: string | null }[]>()
     for (const g of existingGifts.results)
-      known.set(g.donor_id as string, [...(known.get(g.donor_id as string) ?? []), { amount: g.amount as number, date: (g.date as string) || null }])
+      known.set(g.donor_id as string, [...(known.get(g.donor_id as string) ?? []), { id: g.id as string, amount: g.amount as number, date: (g.date as string) || null }])
     const writes: D1PreparedStatement[] = []
     const createdDonors: { id: string; name: string }[] = []
-    let created = 0, merged = 0, gifts = 0, skippedGifts = 0
+    let created = 0, merged = 0, gifts = 0, skippedGifts = 0, datedGifts = 0
     const clusters = dedupe(rows)
     for (const c of clusters) {
       const match = matchDonor(c, donors)
@@ -725,10 +725,14 @@ async function route(req: Request, env: Env): Promise<Response> {
       }
       // Skip gifts this donor already has (same amount, near-same date), so
       // re-imports and donations reported by two sources aren't double counted.
-      const { keep, skipped } = splitGifts(c.rows, known.get(donorId) ?? [])
-      known.set(donorId, [...(known.get(donorId) ?? []), ...keep])
+      // A saved gift with no date gets this file's date instead of a second copy.
+      const before = known.get(donorId) ?? []
+      const { keep, skipped, dated } = splitGifts(c.rows, before)
+      known.set(donorId, [...before.map((g) => ({ ...g, date: dated.find((x) => x.id === g.id)?.date ?? g.date })), ...keep])
       gifts += keep.length
       skippedGifts += skipped.length
+      datedGifts += dated.length
+      for (const x of dated) writes.push(db.prepare('UPDATE gifts SET date = ? WHERE id = ?').bind(x.date, x.id))
       for (const r of keep)
         writes.push(db.prepare('INSERT INTO gifts (id, donor_id, amount, date, source, program) VALUES (?, ?, ?, ?, ?, ?)')
           .bind(id('g'), donorId, r.amount, r.date ?? '', r.source, r.program ?? 'General')) // '' = date unknown
@@ -741,7 +745,7 @@ async function route(req: Request, env: Env): Promise<Response> {
       writes.push(db.prepare('INSERT INTO imports (id, source, file_name, row_count, imported_at, imported_by) VALUES (?, ?, ?, ?, ?, ?)')
         .bind(id('m'), src, optStr(files[src], `files.${src}`) ?? null, rows.filter((r) => r.source === src).length, now, s.memberId))
     if (writes.length) await db.batch(writes) // one transaction: all or nothing
-    return json({ created, merged, clusters: clusters.length, gifts, skippedGifts, createdDonors })
+    return json({ created, merged, clusters: clusters.length, gifts, skippedGifts, datedGifts, createdDonors })
   }
 
   throw new HttpError(404, 'Not found')

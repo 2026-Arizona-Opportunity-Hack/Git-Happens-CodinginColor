@@ -173,7 +173,7 @@ function useStoreState(real: Bootstrap, token: GetToken, reload: () => Promise<v
     change(() => api<{ updated: number }>(token, 'assign', 'POST', { assignments }))
 
   const importRows = (rows: RawDonorRow[], files: Partial<Record<Source, string>> = {}) =>
-    change(() => api<{ created: number; merged: number; clusters: number; gifts: number; skippedGifts: number; createdDonors: { id: string; name: string }[] }>(token, 'import', 'POST', { rows, files }))
+    change(() => api<{ created: number; merged: number; clusters: number; gifts: number; skippedGifts: number; datedGifts: number; createdDonors: { id: string; name: string }[] }>(token, 'import', 'POST', { rows, files }))
 
   // What a program achieved, quoted in funder packets and quarterly updates.
   const saveOutcome = (o: Pick<ProgramOutcome, 'program' | 'studentsServed' | 'summary'>) =>
