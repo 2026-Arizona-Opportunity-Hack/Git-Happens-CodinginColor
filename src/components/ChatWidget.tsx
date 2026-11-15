@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
-import { ChevronLeft, MessageCircle, Send, X } from 'lucide-react'
+import { ChevronLeft, MessageCircle, Mic, Send, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useStore, type ChatTurn } from '@/store'
@@ -52,6 +52,62 @@ function useDocked() {
     setDocked(open)
   }
   return [docked, set] as const
+}
+
+// The slice of the Web Speech API we use. Chrome, Edge and Safari ship it
+// (prefixed); Firefox doesn't, so there the mic button never appears.
+type Recognizer = {
+  lang: string
+  interimResults: boolean
+  continuous: boolean
+  start(): void
+  stop(): void
+  abort(): void
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
+  onerror: ((e: { error: string }) => void) | null
+  onend: (() => void) | null
+}
+const Recognition = (window as unknown as Record<string, (new () => Recognizer) | undefined>).SpeechRecognition
+  ?? (window as unknown as Record<string, (new () => Recognizer) | undefined>).webkitSpeechRecognition
+
+// Dictation into the message box: what's heard is appended to the draft as it
+// was when listening began, so the person can read and fix it before sending.
+function useDictation(draft: string, setDraft: (text: string) => void) {
+  // Brave exposes the API but its recognizer can't reach a server; once that
+  // happens the button goes away for the rest of the visit.
+  const [available, setAvailable] = useState(!!Recognition)
+  const [listening, setListening] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const rec = useRef<Recognizer | null>(null)
+
+  useEffect(() => () => rec.current?.abort(), [])
+
+  const stop = () => rec.current?.stop()
+  const start = () => {
+    if (!Recognition) return
+    const before = draft.trim() ? `${draft.trimEnd()} ` : ''
+    const r = new Recognition()
+    r.lang = navigator.language || 'en-US'
+    r.interimResults = true
+    r.continuous = true
+    r.onresult = (e) => setDraft(before + Array.from(e.results, (res) => res[0].transcript).join('').trimStart())
+    r.onerror = (e) => {
+      if (e.error === 'not-allowed') setError('Allow microphone access to use voice input.')
+      else if (e.error === 'network' || e.error === 'service-not-allowed') {
+        setAvailable(false)
+        setError("Voice input isn't available in this browser.")
+      } else if (e.error !== 'no-speech' && e.error !== 'aborted') setError("Didn't catch that. Try again.")
+    }
+    r.onend = () => {
+      setListening(false)
+      rec.current = null
+    }
+    rec.current = r
+    setError(null)
+    r.start()
+    setListening(true)
+  }
+  return { available, listening, error, start, stop }
 }
 
 // On wide screens the assistant is a column docked to the right of every
@@ -131,6 +187,7 @@ function ChatPanel({ chat: { turns, busy, error, send }, onClose, dialog, input:
   const ownInput = useRef<HTMLTextAreaElement>(null)
   const input = inputRef ?? ownInput
   const inputId = useId()
+  const dictation = useDictation(draft, setDraft)
 
   useEffect(() => {
     log.current?.scrollTo({ top: log.current.scrollHeight })
@@ -149,6 +206,7 @@ function ChatPanel({ chat: { turns, busy, error, send }, onClose, dialog, input:
     e?.preventDefault()
     const text = draft.trim()
     if (!text || busy) return
+    dictation.stop()
     setDraft('')
     send(text)
   }
@@ -210,9 +268,14 @@ function ChatPanel({ chat: { turns, busy, error, send }, onClose, dialog, input:
         )}
         {error && <p className="text-destructive" role="alert">{error}</p>}
       </div>
+      {(dictation.listening || dictation.error) && (
+        <p role="status" className={cn('border-t px-3 pt-2 text-xs', dictation.error ? 'text-destructive' : 'text-muted-foreground')}>
+          {dictation.error ?? 'Listening… press the microphone again to stop.'}
+        </p>
+      )}
       <form
         onSubmit={submit}
-        className="flex items-end gap-2 border-t bg-background p-3"
+        className={cn('flex items-end gap-2 bg-background p-3', !(dictation.listening || dictation.error) && 'border-t')}
       >
         <label htmlFor={inputId} className="sr-only">Message the assistant</label>
         <Textarea
@@ -226,6 +289,18 @@ function ChatPanel({ chat: { turns, busy, error, send }, onClose, dialog, input:
           placeholder="Ask a question"
           className="max-h-32 min-h-9 resize-none"
         />
+        {dictation.available && (
+          <Button
+            type="button"
+            size="icon"
+            variant={dictation.listening ? 'destructive' : 'outline'}
+            onClick={dictation.listening ? dictation.stop : dictation.start}
+            aria-label="Voice input"
+            aria-pressed={dictation.listening}
+          >
+            <Mic aria-hidden className={cn(dictation.listening && 'animate-pulse motion-reduce:animate-none')} />
+          </Button>
+        )}
         <Button type="submit" size="icon" disabled={busy || !draft.trim()} aria-label="Send">
           <Send aria-hidden />
         </Button>
