@@ -13,7 +13,7 @@ import { DataTable, type ColumnDef } from '@/components/ui/data-table'
 import { SAMPLE_CSV } from '@/data/samples'
 import { IMPORT_SOURCES as SOURCES, STALE_IMPORT_DAYS } from '@/data/sources'
 import type { Source } from '@/data/types'
-import { autoMapping, CUSTOM, csvHeaders, DB_FIELDS, dedupe, matchDonor, NEW_COLUMN, rowsFromCsv, SKIP, splitGifts, targetLabel, type ColumnMapping } from '@/lib/dedupe'
+import { autoMapping, CUSTOM, csvHeaders, DB_FIELDS, dedupe, detectSource, matchDonor, NEW_COLUMN, rowsFromCsv, SKIP, splitGifts, targetLabel, type ColumnMapping } from '@/lib/dedupe'
 import { daysBetween, fmtDate, money, suggestOwners } from '@/lib/logic'
 import { latestImport } from '@/lib/reminders'
 import { useStore } from '@/store'
@@ -40,7 +40,9 @@ export default function Import() {
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [newPage, setNewPage] = useState(0)
   const who = (id: string) => boardMembers.find((m) => m.id === id)?.name ?? 'a former board member'
-  const clear = () => { setCsv({}); setFiles({}); setMappings({}) }
+  // Slots whose file the admin confirmed is right despite looking like another platform's.
+  const [confirmed, setConfirmed] = useState<Set<Source>>(new Set())
+  const clear = () => { setCsv({}); setFiles({}); setMappings({}); setConfirmed(new Set()) }
   // Custom fields earlier imports created; offered as targets and auto-matched by name.
   const customFields = [...new Set(donors.flatMap((d) => Object.keys(d.extra ?? {})))].sort()
   const autoFor = (src: Source) => autoMapping(csvHeaders(csv[src]!), customFields)
@@ -124,6 +126,16 @@ export default function Import() {
   }
   // A file with no name column yields no donors at all; say so instead of saving nothing.
   const nameless = loaded.filter(([src]) => !Object.values(mappingFor(src)).some((t) => ['name', 'firstName', 'lastName'].includes(t))).map(([src]) => src)
+  // A file that looks like another platform's export would tag every donor
+  // with the wrong source, so saving waits until it's moved or confirmed.
+  const misplaced = new Map(loaded.flatMap(([src, text]) => {
+    const looks = detectSource(csvHeaders(text))
+    return looks && looks !== src && !confirmed.has(src) ? [[src, looks] as const] : []
+  }))
+  const move = (from: Source, to: Source) => {
+    const shift = <T,>(r: Partial<Record<Source, T>>) => { const next = { ...r, [to]: r[from] }; delete next[from]; return next }
+    setCsv(shift); setFiles(shift); setMappings(shift)
+  }
 
   const save = async () => {
     setSaving(true)
@@ -187,6 +199,7 @@ export default function Import() {
                     setCsv((c) => ({ ...c, [s.key]: text }))
                     setFiles((f) => ({ ...f, [s.key]: file.name }))
                     setMappings((m) => { const next = { ...m }; delete next[s.key]; return next }) // new file: re-detect its columns
+                    setConfirmed((c) => { const next = new Set(c); next.delete(s.key); return next })
                     setStaging(true) // straight to Review and map columns
                     e.target.value = '' // so choosing the same file again opens it again
                   }}
@@ -243,6 +256,20 @@ export default function Import() {
             return (
               <section key={src} aria-label={`${label(src)} columns`} className="space-y-4">
                 <h3 className="font-semibold text-cic-dark">{label(src)} <span className="font-normal text-muted-foreground">· {files[src]}</span></h3>
+                {misplaced.has(src) && (
+                  <div role="alert" className="space-y-2 rounded-md bg-red-100 p-3 text-red-900">
+                    <p>
+                      <strong>This looks like a {label(misplaced.get(src)!)} file</strong>, but it was chosen as the {label(src)}.
+                      Saved here, every donor in it would be tagged {src}. Move it to the {label(misplaced.get(src)!)} slot.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {csv[misplaced.get(src)!] === undefined && (
+                        <Button size="sm" onClick={() => move(src, misplaced.get(src)!)}>Move to {label(misplaced.get(src)!)}</Button>
+                      )}
+                      <Button size="sm" variant="outline" onClick={() => setConfirmed((c) => new Set(c).add(src))}>It's the {label(src)}, keep it here</Button>
+                    </div>
+                  </div>
+                )}
                 {nameless.includes(src) && (
                   <p role="alert" className="rounded-md bg-red-100 p-3 text-red-900">Map a column to Name (or First name / Last name). Without one, no donors can be read from this file.</p>
                 )}
@@ -277,7 +304,7 @@ export default function Import() {
 
           <DialogFooter>
             <Button variant="ghost" disabled={saving} onClick={() => setStaging(false)}>Back</Button>
-            <Button disabled={saving || rows.length === 0} onClick={save}>{saving ? 'Saving…' : 'Save to database'}</Button>
+            <Button disabled={saving || rows.length === 0 || misplaced.size > 0} onClick={save}>{saving ? 'Saving…' : 'Save to database'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

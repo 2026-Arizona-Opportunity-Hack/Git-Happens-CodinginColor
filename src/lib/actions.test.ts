@@ -36,10 +36,15 @@ const unavailable = (a: Attrs, over?: Partial<ActionStore>) =>
   assert.deepEqual(chatAction(a, store(over).s), { error: "(The assistant suggested an action that isn't available.)" })
 
 // A debrief ("not ready to give, still learning the mission") becomes these three buttons.
-test('a debrief logs the conversation, sets an event invite and saves the follow-up as a draft to approve', async () => {
+test('a debrief logs the conversation, sets an event invite and saves the follow-up as the only draft', async () => {
   const log = await press({ type: 'log', donor: 'd1', channel: 'in-person', summary: ' Not ready to give, still learning the mission ' })
   assert.equal(log.label, 'Log in-person with Ana Ruiz: "Not ready to give, still learning the mission"')
   assert.deepEqual(log.calls, [['log', 'd1', 'in-person', 'Not ready to give, still learning the mission']])
+
+  // A next step tied to the event drafts nothing, unlike `invite`.
+  const step = await press({ type: 'next-step', donor: 'd1', event: 'e1' })
+  assert.equal(step.label, 'Set Ana Ruiz\'s next step: "Invite to Day of Compute" by Nov 28, 2026')
+  assert.deepEqual(step.calls, [['next-step', 'd1', { text: 'Invite to Day of Compute', due: '2026-11-28', eventId: 'e1' }]])
 
   const invite = await press({ type: 'invite', donor: 'd1', event: 'e1' })
   assert.equal(invite.label, 'Invite Ana Ruiz to Day of Compute (Dec 5, 2026): next step due Nov 28, 2026, plus a draft invitation')
@@ -95,5 +100,13 @@ test('buttons for donors this person cannot see, past events, unknown channels o
   unavailable({ type: 'log', donor: 'someone-else', channel: 'email', summary: 'Hi' })
   unavailable({ type: 'log', donor: 'd1', channel: 'fax', summary: 'Hi' })
   unavailable({ type: 'invite', donor: 'd1', event: 'e0' })
+  unavailable({ type: 'next-step', donor: 'd1', event: 'e0' })
   unavailable({ type: 'delete-everything', donor: 'd1' })
+})
+
+test('only the events the donor page offers (the next three) can be picked', () => {
+  const events = ['e1', 'e2', 'e3', 'e4'].map((id, i) => ({ id, name: `Event ${i + 1}`, date: `2026-12-0${i + 1}` })).reverse()
+  unavailable({ type: 'invite', donor: 'd1', event: 'e4' }, { events })
+  unavailable({ type: 'next-step', donor: 'd1', event: 'e4' }, { events })
+  assert.ok('label' in chatAction({ type: 'invite', donor: 'd1', event: 'e3' }, store({ events }).s))
 })
