@@ -76,14 +76,18 @@ export function inviteDue(eventDate: string, today: string) {
 // A Google Calendar "new event" link for a next step: an all-day event on its
 // due date, so the board member can put it on their own calendar.
 export function calendarLink(step: NextStep, donor: Pick<Donor, 'id' | 'name'>, origin: string) {
-  const day = step.due.replaceAll('-', '')
-  const next = new Date(step.due + 'T12:00:00Z')
+  return allDayEventLink(`${step.text} (${donor.name})`, step.due, `Coding in Color next step for ${donor.name}: ${origin}/donors/${donor.id}`)
+}
+
+// Google Calendar "add event" link for an all-day event on `date` (YYYY-MM-DD).
+export function allDayEventLink(text: string, date: string, details: string) {
+  const next = new Date(date + 'T12:00:00Z')
   next.setUTCDate(next.getUTCDate() + 1)
   const q = new URLSearchParams({
     action: 'TEMPLATE',
-    text: `${step.text} (${donor.name})`,
-    dates: `${day}/${next.toISOString().slice(0, 10).replaceAll('-', '')}`,
-    details: `Coding in Color next step for ${donor.name}: ${origin}/donors/${donor.id}`,
+    text,
+    dates: `${date.replaceAll('-', '')}/${next.toISOString().slice(0, 10).replaceAll('-', '')}`,
+    details,
   })
   return `https://calendar.google.com/calendar/render?${q}`
 }

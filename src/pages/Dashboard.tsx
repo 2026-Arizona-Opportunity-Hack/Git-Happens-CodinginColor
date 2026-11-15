@@ -1,9 +1,10 @@
+import { CalendarPlus } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { PageHeader, SectionTitle, Stat } from '@/components/common'
 import { Card, CardContent } from '@/components/ui/card'
 import { DataTable, type ColumnDef } from '@/components/ui/data-table'
 import { useStore } from '@/store'
-import { fmtDate, inYear, money, quarterlyTouchDue, retentionStatus, yearOf } from '@/lib/logic'
+import { allDayEventLink, fmtDate, inYear, money, quarterlyTouchDue, retentionStatus, yearOf } from '@/lib/logic'
 
 export default function Dashboard() {
   const { donors, gifts, interactions, boardMembers, events, today, member, session } = useStore()
@@ -68,7 +69,14 @@ export default function Dashboard() {
               <ul className="space-y-2">
                 {events.filter((e) => e.date >= today).map((e) => (
                   <li key={e.id} className="flex justify-between gap-2 text-sm">
-                    <span className="font-medium">{e.name}</span>
+                    <a
+                      className="inline-flex items-center gap-1.5 font-medium text-cic-dark underline"
+                      href={allDayEventLink(e.name, e.date, 'Coding in Color event')}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <CalendarPlus className="size-4 shrink-0" aria-hidden /> {e.name}<span className="sr-only"> (add to Google Calendar, opens in a new tab)</span>
+                    </a>
                     <span className="text-muted-foreground">{fmtDate(e.date)}</span>
                   </li>
                 ))}
