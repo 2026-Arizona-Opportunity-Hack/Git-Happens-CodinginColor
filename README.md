@@ -147,18 +147,43 @@ bun run db:migrate   # create the local D1 database
 bun run db:seed      # load the fake demo data (re-run any time to reset)
 bun dev              # http://localhost:5173, app + API
 nix build            # typecheck + production build, output in ./result
-bun run test         # unit tests for src/lib (bun's test runner)
+bun run test         # unit tests for src/lib, failing under 95% coverage
 ```
 
 `nix build` installs dependencies from `bun.lock` in a sandbox, checked against a hash in `flake.nix`. After changing dependencies, set that hash (`x86_64-linux = "…"`) to `""`, run `nix build`, and paste the `got:` hash it prints. Other platforms need their own hash added the same way.
 
 `bun dev` runs the Worker and a local D1 database inside Vite, through `@cloudflare/vite-plugin`. Both the Worker and `bun run db:seed` need the WorkOS Staging secret key, so copy `.env.example` to `.env` and set `WORKOS_API_KEY` before running them. The assistant also needs `AI_API_KEY`, the OHack AI gateway key from your team card; without it everything else works and the chat says it's unavailable. In production it's a Worker secret (`bunx wrangler secret put AI_API_KEY`). `.env` is gitignored.
 
+### Tests
+
+`bun run test` runs the unit tests in `src/lib/*.test.ts` and prints a coverage table. It then fails with `error: lines coverage is …%, under the 95% minimum` if the tests cover under 95% of the lines or functions in `src/` (`scripts/check-coverage.ts`). The **Tests** workflow runs it on every pull request and marks the PR red with that error. Every module in `src/lib` counts, tested or not (`all-modules.test.ts` loads them all), so new logic needs tests from the start. The Worker's checks and read API totals are in `src/lib/api.ts` for the same reason.
+
+What tests each feature of [CIC's brief](https://docs.google.com/document/d/1sdlQDji23jA0LFoYbzNVHCkeG0ICE9XRQSr3xh3ntMU/edit) (Problem 2):
+
+| Priority | Feature | Tests |
+|---|---|---|
+| P0 | Import spreadsheet, Zeffy and Benevity; dedupe across sources | `dedupe.test.ts` |
+| P0 | Donor timeline of gifts and contacts | `logic.test.ts` |
+| P0 | Board-member owner, new donors to the member with the fewest | `logic.test.ts` |
+| P0 | Next steps with due dates; quarterly touch to every donor | `reminders.test.ts`, `logic.test.ts` |
+| P0 | Retention year over year, churn and activation patterns | `logic.test.ts` |
+| P0 | Templated thank-you, human approves every send | `drafts.test.ts`, `reminders.test.ts`, `actions.test.ts` |
+| P0 | One-click funder export | `packet.test.ts`, `export.test.ts` |
+| P0 | Key-authenticated read API aggregated by period, program and board member; input checks | `api.test.ts` |
+| P1 | Debrief to action | `actions.test.ts` |
+| P1 | Events-aware next steps (CIC's calendar) | `ical.test.ts`, `logic.test.ts`, `reminders.test.ts`, `actions.test.ts` |
+| P1 | AI-drafted updates from gifts and giving history | `ai-draft.test.ts`, `drafts.test.ts` |
+| P1 | Lapsed-donor radar and nudge | `reminders.test.ts`, `drafts.test.ts` |
+| P2 | Natural-language donor questions (the assistant's buttons) | `actions.test.ts` |
+
+Not built yet, so not tested: meeting notes in (P1, #29), the grant deadline tracker (P1, #30), the donor impact feed (P2, #31) and likelihood-to-give scoring (P2, #32). The tests cover logic, not pages: the React components and the Worker's D1 and WorkOS calls have no tests yet.
+
 ### Sign-in (WorkOS)
 
 The app uses the **Staging** environment of the "Coding in Color" WorkOS workspace. Its public client ID is `WORKOS_CLIENT_ID` in `wrangler.jsonc`, and the browser fetches it from `/api/config`. The secret key (`WORKOS_API_KEY`) stays on the Worker, which uses it to list the board. That environment is configured with:
 
 - **Redirect URIs and allowed origins:** `https://githappens.jurenka.software`, `http://localhost:5173` and `http://localhost:5321`. Add any new host in both places.
+- **Sign-out redirects:** the same three URLs, with `https://githappens.jurenka.software` as the default. Sign-out returns to the app's origin, and WorkOS shows an error page for any return URL not on this list.
 - **Password sign-in.** Users are created in WorkOS.
 
 - **An organization, "Coding in Color"** (`WORKOS_ORG_ID` in `wrangler.jsonc`). Its members are the board.
@@ -185,6 +210,23 @@ The repo needs two Actions secrets:
 | `CLOUDFLARE_ACCOUNT_ID` | `57cdeda067b33ff3b8def5d2b65aee9d` |
 
 The Worker also needs the WorkOS secret key. Set it once (or whenever the key is rotated) with `bunx wrangler secret put WORKOS_API_KEY` and paste the Staging `sk_test_…` key. Without it every API call fails.
+
+### AI security review
+
+`.github/workflows/security-review.yml` asks a model to review a PR's diff for security problems. It runs two ways:
+
+- **Check**: every PR gets one `muse-wonder` review, posted as a comment, when it's opened, reopened or marked ready for review. Pushing more commits doesn't re-run it, which keeps the gateway credits for real use. Drafts are skipped until they're ready. **Off for now**: turn it on with `gh variable set AI_CHECK_ALL_PRS --body true` and off again with `gh variable delete AI_CHECK_ALL_PRS`.
+- **Audit**: when you ask, the review is saved as a report in [`audits/`](audits/) and opened as its own PR, with a comment on the reviewed PR linking to it. Add a label to the PR (it comes off afterwards, so add it again to re-run), or run it from the Actions tab with a PR number and model. Leave the PR number empty to audit the **whole repo** as it is on the branch you pick (`gh workflow run security-review.yml -f model=claude`); that uses the prompt in `.github/prompts/security-audit-repo.md` and gets up to 100 turns.
+
+The OHack org doesn't let GitHub Actions open PRs (the repo setting is greyed out), so audit PRs are opened with a token in the `AUDIT_PR_TOKEN` secret: a [classic personal access token](https://github.com/settings/tokens/new?scopes=public_repo&description=Git%20Happens%20audit%20PRs) with only the **`public_repo`** scope, made by any collaborator with write access. (Fine-grained tokens need the org to approve them, and outside collaborators can't get that; classic tokens use the collaborator's own repo access.) The PRs show as opened by whoever made the token. Without it, the report is still pushed to an `audit/…` branch and the comment links to a page to open the PR in one click.
+
+| Label | Model | Secret it needs |
+|---|---|---|
+| `ai-review` | Claude, on a Claude Pro/Max subscription | `CLAUDE_CODE_OAUTH_TOKEN`, from `claude setup-token` |
+| `ai-review:kimi-k3` | `kimi-k3` on the OHack gateway | `OHACK_REVIEW_KEY`, a gateway key |
+| `ai-review:muse-wonder` | `muse-wonder` on the OHack gateway ($4/$20 per 1M tokens, so sparingly) | `OHACK_REVIEW_KEY` |
+
+The model can only read the checkout and run `git diff/log/show`; it gets no GitHub token, and a separate step posts its reply. The comment is advice, not a gate. The prompt is in `.github/prompts/security-review.md`.
 
 To deploy by hand, run `bun run deploy` inside `nix develop` (it builds with `nix build` and uses wrangler, so log in with `wrangler login` first). To reset the live demo to the fake seed data, run `bun run db:seed:remote` (with `WORKOS_API_KEY` in `.env`; it maps the seed's donor owners to WorkOS users by email).
 

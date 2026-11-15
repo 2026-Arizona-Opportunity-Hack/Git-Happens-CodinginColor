@@ -1,0 +1,23 @@
+name: Tests
+
+# Unit tests and the coverage gate: the run fails, with an error on the PR,
+# when tests fail or cover under 95% of lines or functions in src/.
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4 # the version flake.nix pins
+      - run: bun install --frozen-lockfile
+      - run: bun run test

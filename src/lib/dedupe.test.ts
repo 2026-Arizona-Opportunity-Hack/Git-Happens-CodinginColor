@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { RawDonorRow } from '../data/types'
 import { SAMPLE_CSV } from '../data/samples'
-import { autoMapping, csvHeaders, dedupe, matchDonor, NEW_COLUMN, parseAmount, parseDate, rowsFromCsv, sameGift, SKIP, splitGifts } from './dedupe'
+import { autoMapping, csvHeaders, CUSTOM, DB_FIELDS, dedupe, matchDonor, NEW_COLUMN, parseAmount, parseDate, rowsFromCsv, sameGift, SKIP, splitGifts, targetLabel } from './dedupe'
 
 const row = (r: Partial<RawDonorRow>): RawDonorRow => ({ source: 'spreadsheet', name: 'Kevin Tran', ...r })
 
@@ -141,4 +141,12 @@ test('real export headers map without renaming: Zeffy, Benevity and friends', ()
   assert.deepEqual([benevity['Donor First Name'], benevity['Donor Last Name'], benevity['Donation Date'], benevity['Total Donation to be Acknowledged']], ['firstName', 'lastName', 'date', 'amount'])
   assert.equal(benevity['Match Amount'], SKIP) // amount already taken by the first match
   assert.deepEqual(autoMapping(['Campaign Name', 'Donor Name', 'Gift Amount (USD)', 'E-mail', 'Created At']), { 'Campaign Name': SKIP, 'Donor Name': 'name', 'Gift Amount (USD)': 'amount', 'E-mail': 'email', 'Created At': 'date' })
+})
+
+test('mapping targets are labelled the way the staging popup shows them', () => {
+  assert.equal(targetLabel(SKIP, 'Notes'), 'Do not save')
+  assert.equal(targetLabel(`${NEW_COLUMN}Shirt size`, 'Size'), 'New column: Shirt size')
+  assert.equal(targetLabel(NEW_COLUMN, 'Size'), 'New column: Size')
+  assert.equal(targetLabel(`${CUSTOM}Campaign`, 'Campaign'), 'Campaign (custom)')
+  assert.equal(targetLabel('email', 'E-mail'), DB_FIELDS.find((f) => f.key === 'email')!.label)
 })

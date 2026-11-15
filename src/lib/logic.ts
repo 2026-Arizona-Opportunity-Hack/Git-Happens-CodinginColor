@@ -1,4 +1,4 @@
-import type { BoardMember, Donor, Gift, NextStep } from '../data/types'
+import type { BoardMember, Donor, Gift, Interaction, NextStep } from '../data/types'
 
 // Select value standing for "no board member" (Select values can't be null).
 export const UNASSIGNED = '__unassigned__'
@@ -151,3 +151,7 @@ export const inYear = (g: { date: string | null }, year: number) => !!g.date && 
 
 // Latest known gift date, if any.
 export const lastGiftDate = (gifts: { date: string | null }[]) => gifts.map((g) => g.date).filter((d): d is string => !!d).sort().at(-1)
+
+// A donor's gifts and contacts in one list, newest first.
+export const donorTimeline = (gifts: Gift[], touches: Interaction[]) =>
+  [...gifts.map((g) => ({ date: g.date, kind: 'gift' as const, g })), ...touches.map((i) => ({ date: i.date, kind: 'touch' as const, i }))].sort(byDateDesc)
