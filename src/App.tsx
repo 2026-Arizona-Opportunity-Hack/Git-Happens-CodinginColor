@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom'
 import { AuthKitProvider, useAuth } from '@workos-inc/authkit-react'
-import { BarChart3, Bell, Code2, Home, ListTodo, LogOut, MessageCircle, Upload, UserCog, UserRound, Users } from 'lucide-react'
+import { BarChart3, Bell, Code2, Home, ListTodo, LogOut, MessageCircle, ShieldAlert, Upload, UserCog, UserRound, Users } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
 import { StoreProvider, useReminders, useStore } from '@/store'
@@ -122,6 +122,26 @@ function Centered({ children }: { children: React.ReactNode }) {
   return <main className="flex min-h-screen items-center justify-center p-4">{children}</main>
 }
 
+// Signed in with WorkOS, but not in the CIC organization the Worker checks.
+function NotAMember() {
+  const { user, signOut } = useAuth()
+  return (
+    <Centered>
+      <div className="max-w-sm space-y-4 text-center">
+        <ShieldAlert className="mx-auto size-10 text-cic-dark" aria-hidden />
+        <h1 className="text-2xl font-bold text-cic-dark">You don't have access</h1>
+        <p className="text-muted-foreground">
+          You're signed in as <strong className="text-foreground">{user?.email}</strong>, but this account isn't a Coding in Color board member.
+          Contact your system admin to be added, then sign in again.
+        </p>
+        <Button variant="outline" onClick={() => signOut({ returnTo: location.origin })}>
+          <LogOut aria-hidden /> Sign out
+        </Button>
+      </div>
+    </Centered>
+  )
+}
+
 // Only signed-in users get past here; the Worker re-checks every request.
 function SignedInApp() {
   const { user, isLoading, signIn, signOut, getAccessToken } = useAuth()
@@ -137,7 +157,7 @@ function SignedInApp() {
       </Centered>
     )
   return (
-    <StoreProvider token={getAccessToken} onSignOut={() => signOut({ returnTo: location.origin })}>
+    <StoreProvider token={getAccessToken} onSignOut={() => signOut({ returnTo: location.origin })} denied={<NotAMember />}>
       <BrowserRouter>
         <Shell />
       </BrowserRouter>
