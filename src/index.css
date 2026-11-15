@@ -107,3 +107,7 @@
   body { line-height: 1.5; }
   h1, h2, h3 { color: var(--cic-dark); font-weight: 700; }
 }
+/* Loading shimmer: a light band sweeps across each skeleton block. */
+@keyframes shimmer {
+  to { transform: translateX(100%); }
+}
