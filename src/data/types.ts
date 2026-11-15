@@ -50,7 +50,7 @@ export interface Interaction {
   summary: string
 }
 
-export type DraftKind = 'thank-you' | 'quarterly-update' | 'lapsed-nudge' | 'follow-up'
+export type DraftKind = 'thank-you' | 'quarterly-update' | 'lapsed-nudge' | 'follow-up' | 'event-invite'
 
 export interface Draft {
   id: string

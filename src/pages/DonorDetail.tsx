@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Download, Gift as GiftIcon, Mail, MessageSquare, Phone, StickyNote, Users } from 'lucide-react'
+import { CalendarPlus, Download, Gift as GiftIcon, Mail, MessageSquare, Phone, StickyNote, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader, SectionTitle, StatusBadge } from '@/components/common'
 import { Badge } from '@/components/ui/badge'
@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import type { Channel, Donor, Gift } from '@/data/types'
 import { useStore } from '@/store'
-import { fmtDate, money, retentionStatus, totalsByYear, UNASSIGNED, yearOf } from '@/lib/logic'
+import { calendarLink, fmtDate, money, retentionStatus, totalsByYear, UNASSIGNED, yearOf } from '@/lib/logic'
 
 const CHANNEL_ICON = { email: Mail, text: MessageSquare, call: Phone, 'in-person': Users, note: StickyNote }
 
@@ -62,6 +62,14 @@ export default function DonorDetail() {
   const byYear = [...totalsByYear(gifts).entries()].sort((a, b) => a[0] - b[0])
   const max = Math.max(1, ...byYear.map(([, v]) => v))
   const upcoming = s.events.filter((e) => e.date >= s.today)
+
+  // One click: the next step and a draft invitation, both saved.
+  const invite = async (eventId: string) => {
+    const r = await s.invite(donor.id, eventId)
+    if (!r) return
+    setStepText(r.nextStep.text); setStepDue(r.nextStep.due); setStepEvent(r.nextStep.eventId)
+    toast.success(`Next step set for ${fmtDate(r.nextStep.due)}, and an invitation drafted.`, { action: { label: 'Review draft', onClick: () => nav('/follow-ups') } })
+  }
 
   const draft = async (kind: Parameters<typeof s.createDraft>[1]) => {
     if (!(await s.createDraft(donor.id, kind, donor.email ? 'email' : 'text'))) return
@@ -167,15 +175,28 @@ export default function DonorDetail() {
                   <Label htmlFor="due" className="mb-1">Due</Label>
                   <Input id="due" type="date" value={stepDue} onChange={(e) => setStepDue(e.target.value)} />
                 </div>
-                <div className="flex flex-wrap gap-1">
-                  {upcoming.slice(0, 3).map((ev) => (
-                    <Button key={ev.id} type="button" size="xs" variant="secondary" onClick={() => { setStepText(`Invite to ${ev.name}`); setStepDue(ev.date); setStepEvent(ev.id) }}>
-                      Invite to {ev.name}
-                    </Button>
-                  ))}
-                </div>
                 <Button type="submit" className="w-full">Save next step</Button>
               </form>
+              {donor.nextStep && (
+                <a className="mt-3 inline-flex items-center gap-1 text-sm text-cic-dark underline" href={calendarLink(donor.nextStep, donor, location.origin)} target="_blank" rel="noreferrer">
+                  <CalendarPlus className="size-4" aria-hidden /> Add to Google Calendar<span className="sr-only"> (opens in a new tab)</span>
+                </a>
+              )}
+              {upcoming.length > 0 && (
+                <div className="mt-4 border-t pt-3">
+                  <p className="mb-2 text-sm font-medium">Invite to an event</p>
+                  <ul className="space-y-1">
+                    {upcoming.slice(0, 3).map((ev) => (
+                      <li key={ev.id}>
+                        <Button type="button" size="sm" variant="secondary" className="h-auto w-full justify-start whitespace-normal py-1.5 text-left" aria-label={`Invite to ${ev.name}, ${fmtDate(ev.date)}`} onClick={() => invite(ev.id)}>
+                          {ev.name}, {fmtDate(ev.date)}
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-xs text-muted-foreground">One click sets the next step for a week before the event and drafts the invitation. Nothing is sent until you approve it.</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 

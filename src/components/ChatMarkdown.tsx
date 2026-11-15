@@ -7,7 +7,7 @@ import { visit } from 'unist-util-visit'
 import { Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { Channel, DraftKind } from '@/data/types'
-import { fmtDate, money } from '@/lib/logic'
+import { fmtDate, inviteDue, money } from '@/lib/logic'
 import { useStore } from '@/store'
 
 // Renders assistant replies. The model writes Markdown plus two block
@@ -93,6 +93,14 @@ function useAction(a: Attrs): { label: string; run: () => Promise<unknown> } | {
         label: `Set ${donor.name}'s next step: "${text(a.text)}" by ${fmtDate(a.due!)}`,
         run: () => store.setNextStep(donor.id, { text: text(a.text), due: a.due! }),
       }
+    case 'invite': {
+      const event = store.events.find((e) => e.id === a.event && e.date >= store.today)
+      if (!donor || !event) break
+      return {
+        label: `Invite ${donor.name} to ${event.name} (${fmtDate(event.date)}): next step due ${fmtDate(inviteDue(event.date, store.today))}, plus a draft invitation`,
+        run: () => store.invite(donor.id, event.id),
+      }
+    }
     case 'draft': {
       const kind = a.kind as DraftKind
       const channel = a.channel === 'text' ? 'text' : 'email'
