@@ -24,8 +24,8 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat label={`Raised ${year} YTD`} value={money(ytd)} />
         <Stat label="Donors" value={donors.length} />
-        <Stat label="Overdue next steps" value={overdue.length} />
-        <Stat label="Lapsed this year" value={lapsed.length} hint={`Gave in ${year - 1}, not ${year}`} />
+        <Stat label="Overdue next steps" value={overdue.length} to="/follow-ups#next-steps" alert={overdue.length > 0} />
+        <Stat label="Lapsed this year" value={lapsed.length} hint={`Gave in ${year - 1}, not ${year}`} to="/follow-ups#lapsed" alert={lapsed.length > 0} />
       </div>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[2fr_1fr]">
