@@ -3,6 +3,7 @@ import type { BoardMember, Channel, Donor, Draft, DraftKind, Gift, ImportRecord,
 import { dedupe, matchDonor, splitGifts } from '../src/lib/dedupe'
 import { draftBody } from '../src/lib/drafts'
 import { nextOwner } from '../src/lib/logic'
+import { docsPage, openapi } from './openapi'
 
 // JSON API over D1. Every route resolves the caller's session first, and
 // board members can only read or write donors they own.
@@ -251,6 +252,9 @@ async function route(req: Request, env: Env): Promise<Response> {
 
   // Public: the browser needs the client ID before anyone has signed in.
   if (m === 'GET' && parts[0] === 'config') return json({ workosClientId: env.WORKOS_CLIENT_ID })
+  // Public: the API reference describes routes, not data.
+  if (m === 'GET' && parts[0] === 'openapi.json') return json(openapi({ channels: CHANNELS, kinds: KINDS, sources: SOURCES, programs: PROGRAMS }))
+  if (m === 'GET' && parts[0] === 'docs') return new Response(docsPage, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
 
   const s = await getSession(req, env)
   const db = env.DB
