@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { PageHeader, SectionTitle } from '@/components/common'
 import { SendDraft } from '@/components/SendDraft'
 import { Badge } from '@/components/ui/badge'
@@ -7,6 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Textarea } from '@/components/ui/textarea'
 import { useStore } from '@/store'
 import { calendarLink, daysBetween, fmtDate, quarterlyTouchDue, retentionStatus, yearOf } from '@/lib/logic'
+import { cn } from '@/lib/utils'
 
 // The board member's work queue. The system drafts and reminds; a human sends.
 export default function FollowUps() {
@@ -19,6 +21,17 @@ export default function FollowUps() {
   const lapsed = donors.filter((d) => retentionStatus(gifts.filter((g) => g.donorId === d.id), yearOf(today)) === 'lapsed')
   const pending = drafts.filter((d) => d.status === 'pending' && ids.has(d.donorId))
   const hasPending = (donorId: string) => pending.some((p) => p.donorId === donorId)
+  const overdue = steps.filter((d) => d.nextStep!.due < today).length
+
+  // The dashboard's numbers link to #next-steps and #lapsed; the router doesn't
+  // scroll to a hash itself, so move there and put focus on the section.
+  const { hash } = useLocation()
+  useEffect(() => {
+    const el = hash && document.getElementById(hash.slice(1))
+    if (!el) return
+    el.scrollIntoView({ block: 'start' })
+    el.focus({ preventScroll: true })
+  }, [hash])
 
   return (
     <>
@@ -47,15 +60,15 @@ export default function FollowUps() {
       )}
 
       <div className="grid gap-8 lg:grid-cols-2">
-        <section>
-          <SectionTitle>Next steps</SectionTitle>
+        <section id="next-steps" tabIndex={-1} className="scroll-mt-4 outline-none">
+          <SectionTitle>Next steps{overdue > 0 && <span className="text-red-700"> ({overdue} overdue)</span>}</SectionTitle>
           <Card>
             <CardContent>
               <ul className="divide-y">
                 {steps.map((d) => {
                   const late = daysBetween(d.nextStep!.due, today)
                   return (
-                    <li key={d.id} className="flex items-center justify-between gap-3 py-3">
+                    <li key={d.id} className={cn('flex items-center justify-between gap-3 py-3', late > 0 && '-mx-(--card-spacing) bg-red-50 px-(--card-spacing)')}>
                       <div>
                         <Link to={`/donors/${d.id}`} className="font-medium text-cic-dark underline">{d.name}</Link>
                         <div className="text-sm">{d.nextStep!.text}</div>
@@ -99,7 +112,7 @@ export default function FollowUps() {
 
           {lapsed.length > 0 && (
             <>
-              <h2 className="mt-8 mb-3 text-lg">Lapsed donors — call before year end</h2>
+              <h2 id="lapsed" tabIndex={-1} className="mt-8 mb-3 scroll-mt-4 text-lg text-red-700 outline-none">Lapsed donors ({lapsed.length}) — call before year end</h2>
               <Card>
                 <CardContent>
                   <ul className="divide-y">
