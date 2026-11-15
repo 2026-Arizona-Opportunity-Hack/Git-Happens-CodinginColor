@@ -6,7 +6,8 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useStore } from '@/store'
-import { money, periodLabel, periodOf, retentionStatus, totalsByPeriod, type Period, type RetentionStatus } from '@/lib/logic'
+import type { Gift, Source } from '@/data/types'
+import { cohorts, lapseBy, money, periodLabel, periodOf, retentionStatus, totalsByPeriod, type Period, type RetentionStatus } from '@/lib/logic'
 
 const SHOWN = { year: 3, quarter: 4 } // how many periods get a tab
 
@@ -134,8 +135,97 @@ export default function Retention() {
               </div>
             </>
           )}
+
+          <Patterns gifts={gifts} unit={unit} current={current} period={period} />
         </>
       )}
     </>
+  )
+}
+
+// Patterns of churn and activation under the per-donor lists: do first-time
+// donors come back, and which sources and programs lose donors.
+const COHORTS = { year: 4, quarter: 6 }
+const SOURCE_LABEL: Record<Source, string> = { spreadsheet: 'Spreadsheet', zeffy: 'Zeffy', benevity: 'Benevity', azgives: 'AZ Gives', unitedway: 'United Way' }
+const pct = (n: number, of: number) => (of ? `${Math.round((n / of) * 100)}%` : '—')
+
+function Patterns({ gifts, unit, current, period }: { gifts: Gift[]; unit: Period; current: number; period: number }) {
+  const label = (n: number) => periodLabel(n, unit)
+  const noun = unit === 'year' ? 'year' : 'quarter'
+  const rows = cohorts(gifts, unit, current, COHORTS[unit])
+  const later = COHORTS[unit] - 1
+  return (
+    <section aria-labelledby="patterns" className="mt-10">
+      <h2 id="patterns" className="mb-1 text-lg font-semibold text-cic-dark">Patterns</h2>
+      <p className="mb-4 text-sm text-muted-foreground">Whether first-time donors give again, and where donors stop.</p>
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <Card className="lg:col-span-2">
+          <CardContent>
+            <h3 id="cohorts" className="font-semibold">Do first-time donors give again?</h3>
+            <p className="mb-3 text-sm text-muted-foreground">Donors grouped by the {noun} of their first gift, and the share who gave again each {noun} after.</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm tabular-nums" aria-labelledby="cohorts">
+                <thead>
+                  <tr className="border-b text-left">
+                    <th scope="col" className="py-2 pr-4 font-medium">First gift</th>
+                    <th scope="col" className="py-2 pr-4 font-medium">Donors</th>
+                    {Array.from({ length: later }, (_, i) => <th key={i} scope="col" className="py-2 pr-4 font-medium">{i + 1} {noun}{i ? 's' : ''} later</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((c) => (
+                    <tr key={c.period} className="border-b last:border-0">
+                      <th scope="row" className="py-2 pr-4 text-left font-medium">{label(c.period)}</th>
+                      <td className="py-2 pr-4">{c.size}</td>
+                      {Array.from({ length: later }, (_, i) => (
+                        <td key={i} className="py-2 pr-4">
+                          {i < c.gaveAgain.length && c.size ? <>{pct(c.gaveAgain[i], c.size)} <span className="text-muted-foreground">({c.gaveAgain[i]})</span></> : <span className="text-muted-foreground" aria-label="Not yet">—</span>}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+        {(['source', 'program'] as const).map((by) => {
+          const list = lapseBy(gifts, unit, period, by)
+          const id = `lapse-${by}`
+          return (
+            <Card key={by}>
+              <CardContent>
+                <h3 id={id} className="font-semibold">Who stopped, by {by}</h3>
+                <p className="mb-3 text-sm text-muted-foreground">Of {label(period - 1)} donors, the share who gave nothing in {label(period)}.</p>
+                {list.length ? (
+                  <table className="w-full text-sm tabular-nums" aria-labelledby={id}>
+                    <thead>
+                      <tr className="border-b text-left">
+                        <th scope="col" className="py-2 pr-4 font-medium">{by === 'source' ? 'Source' : 'Program'}</th>
+                        <th scope="col" className="py-2 pr-4 font-medium">Gave in {label(period - 1)}</th>
+                        <th scope="col" className="py-2 pr-4 font-medium">Stopped</th>
+                        <th scope="col" className="py-2 font-medium">Lapse rate</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {list.map((r) => (
+                        <tr key={r.key} className="border-b last:border-0">
+                          <th scope="row" className="py-2 pr-4 text-left font-medium">{by === 'source' ? SOURCE_LABEL[r.key as Source] ?? r.key : r.key}</th>
+                          <td className="py-2 pr-4">{r.gave}</td>
+                          <td className="py-2 pr-4">{r.lapsed}</td>
+                          <td className="py-2">{pct(r.lapsed, r.gave)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No one gave in {label(period - 1)}.</p>
+                )}
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+    </section>
   )
 }

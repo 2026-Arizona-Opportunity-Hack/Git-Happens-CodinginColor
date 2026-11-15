@@ -37,3 +37,4 @@ ns-docs/
 dist-ssr/
 *.local
 .wrangler/
+.claude/worktrees/
