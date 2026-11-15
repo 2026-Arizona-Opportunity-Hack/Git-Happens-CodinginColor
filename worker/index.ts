@@ -6,6 +6,7 @@ import { draftBody, draftChannel } from '../src/lib/drafts'
 import { parseIcs } from '../src/lib/ical'
 import { daysBetween, inviteDue, offeredEvents, quarterlyTouchDue, retentionStatus, totalsByYear, yearOf } from '../src/lib/logic'
 import { contactFields, date, extraFields, HttpError, oneOf, optStr, periodRange, str, summarize, type SummaryContact, type SummaryGift } from '../src/lib/api'
+import { handleAuth } from './auth'
 import { docsPage, openapi } from './openapi'
 
 // JSON API over D1. Every route resolves the caller's session first, and
@@ -16,6 +17,7 @@ export interface Env {
   WORKOS_CLIENT_ID: string
   WORKOS_ORG_ID: string
   WORKOS_API_KEY: string
+  WORKOS_COOKIE_PASSWORD: string
   AI_API_KEY: string
   CALENDAR_ICS_URL?: string
 }
@@ -721,6 +723,7 @@ async function route(req: Request, env: Env): Promise<Response> {
 export default {
   async fetch(req, env): Promise<Response> {
     try {
+      if (new URL(req.url).pathname.startsWith('/auth/')) return await handleAuth(req, env)
       return await route(req, env)
     } catch (e) {
       if (e instanceof HttpError) return json({ error: e.message }, e.status)

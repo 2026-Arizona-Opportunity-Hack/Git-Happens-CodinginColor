@@ -1,10 +1,10 @@
-import { useAuth } from '@workos-inc/authkit-react'
+import { useAuth } from '@/auth'
 import { UserProfile, UserSecurity, UserSessions } from '@workos-inc/widgets'
 import { PageHeader, SectionTitle } from '@/components/common'
 import { Widgets } from '@/components/widgets'
 
 // The signed-in user's own account, as WorkOS widgets. These are user-scoped,
-// so they take the AuthKit access token as-is; UserSessions also reads the
+// so they take the user's access token as-is; UserSessions also reads the
 // current session from it to mark "this device".
 export default function Account() {
   const { getAccessToken } = useAuth()

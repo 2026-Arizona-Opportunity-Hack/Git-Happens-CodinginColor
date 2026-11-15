@@ -5,10 +5,10 @@ import { PageHeader, Paged, SectionTitle } from '@/components/common'
 import { SendDraft } from '@/components/SendDraft'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import type { DraftKind } from '@/data/types'
+import type { Draft, DraftKind } from '@/data/types'
 import { DRAFT_SUBJECT, draftBody, draftChannel, THANK_YOU_DAYS, thankableGift } from '@/lib/drafts'
 import { useStore } from '@/store'
 import { calendarLink, daysBetween, fmtDate, quarterlyTouchDue, retentionStatus, yearOf } from '@/lib/logic'
@@ -17,7 +17,7 @@ import { cn, fmtPhone } from '@/lib/utils'
 // The board member's work queue. The AI drafts and the system reminds; a
 // human sends. Template emails offers the plain templates instead.
 export default function FollowUps() {
-  const { donors, gifts, drafts, today, createDraft, updateDraft } = useStore()
+  const { donors, gifts, drafts, today, createDraft } = useStore()
   // The AI writes the draft, which takes a few seconds.
   const draft = async (donorId: string, kind: DraftKind) => {
     const t = toast.loading('Writing the draft…')
@@ -25,7 +25,6 @@ export default function FollowUps() {
     else toast.dismiss(t)
   }
   const ids = new Set(donors.map((d) => d.id))
-  const name = (id: string) => donors.find((d) => d.id === id)?.name
 
   const steps = donors.filter((d) => d.nextStep).sort((a, b) => a.nextStep!.due.localeCompare(b.nextStep!.due))
   const touchDue = donors.filter((d) => quarterlyTouchDue(d, today))
@@ -51,27 +50,7 @@ export default function FollowUps() {
       {pending.length > 0 && (
         <section className="mb-8">
           <SectionTitle>Drafts awaiting approval ({pending.length})</SectionTitle>
-          <Paged items={pending} size={6} label="Drafts" className="mt-4 border-t-0 pt-0">{(page) => (
-          <div className="grid items-start gap-4 lg:grid-cols-2">
-            {page.map((d) => (
-              <Card key={d.id}>
-                <CardHeader>
-                  <CardTitle>{name(d.donorId)}</CardTitle>
-                  <CardDescription className="flex flex-wrap items-center gap-2">
-                    {d.kind.replace('-', ' ')} · {d.channel}
-                    {d.ai && <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-900">Drafted by AI: check before sending</Badge>}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Textarea aria-label={`Draft to ${name(d.donorId)}`} rows={7} value={d.body} onChange={(e) => updateDraft(d.id, e.target.value)} />
-                </CardContent>
-                <CardFooter>
-                  <SendDraft draft={d} donor={donors.find((x) => x.id === d.donorId)!} />
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
-          )}</Paged>
+          <PendingDrafts pending={pending} />
         </section>
       )}
 
@@ -156,6 +135,57 @@ export default function FollowUps() {
 
       <TemplateEmails />
     </>
+  )
+}
+
+// Who each draft is to on the left; the chosen one, to edit and send, on the
+// right. Sending or discarding it moves on to the next.
+function PendingDrafts({ pending }: { pending: Draft[] }) {
+  const { donors, updateDraft } = useStore()
+  const [selected, setSelected] = useState(pending[0].id)
+  const d = pending.find((p) => p.id === selected) ?? pending[0]
+  const donorOf = (p: Draft) => donors.find((x) => x.id === p.donorId)!
+  const subject = (p: Draft) => (p.channel === 'email' ? DRAFT_SUBJECT[p.kind] : 'Text message')
+  const donor = donorOf(d)
+
+  return (
+    <Card className="py-0">
+      <CardContent className="grid px-0 md:grid-cols-[minmax(0,18rem)_1fr]">
+        <ul aria-label="Drafts" className="max-h-64 divide-y overflow-y-auto border-b md:max-h-[32rem] md:border-r md:border-b-0">
+          {pending.map((p) => (
+            <li key={p.id}>
+              <button
+                type="button"
+                aria-current={p.id === d.id ? 'true' : undefined}
+                onClick={() => setSelected(p.id)}
+                className={cn(
+                  'w-full border-l-4 border-transparent px-4 py-3 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cic-dark',
+                  p.id === d.id && 'border-cic-dark bg-cic-tint',
+                )}
+              >
+                <div className="truncate font-medium">{donorOf(p).name}</div>
+                <div className="truncate text-sm text-muted-foreground">{subject(p)}</div>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="min-w-0 space-y-4 p-4 md:p-6">
+          <div>
+            <h3 className="text-lg font-semibold">
+              <Link to={`/donors/${donor.id}`} className="text-cic-dark underline">{donor.name}</Link>
+            </h3>
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              {d.channel === 'email'
+                ? <span>Subject: <span className="text-foreground">{subject(d)}</span> · to {donor.email}</span>
+                : <span>Text message to {donor.phone && fmtPhone(donor.phone)}</span>}
+              {d.ai && <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-900">Drafted by AI: check before sending</Badge>}
+            </p>
+          </div>
+          <Textarea aria-label={`Draft to ${donor.name}`} rows={10} value={d.body} onChange={(e) => updateDraft(d.id, e.target.value)} />
+          <SendDraft key={d.id} draft={d} donor={donor} />
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
