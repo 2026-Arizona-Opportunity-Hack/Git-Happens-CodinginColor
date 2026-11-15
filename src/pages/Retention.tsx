@@ -74,8 +74,8 @@ export default function Retention() {
               </TabsList>
             </Tabs>
             <Tabs value={period} onValueChange={(v) => setPicked(v as number)}>
-              <TabsList aria-label="Period">
-                {periods.map((n) => <TabsTrigger key={n} value={n}>{label(n)} vs {label(n - 1)}</TabsTrigger>)}
+              <TabsList aria-label="Period" className="flex-wrap justify-start group-data-horizontal/tabs:h-auto">
+                {periods.map((n) => <TabsTrigger key={n} value={n} className="h-7 flex-none">{label(n)} vs {label(n - 1)}</TabsTrigger>)}
               </TabsList>
             </Tabs>
           </div>
