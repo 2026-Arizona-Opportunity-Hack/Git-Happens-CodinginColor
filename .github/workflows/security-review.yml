@@ -81,8 +81,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Write the diff
+      # The prompt comes from the workflow's own commit, not the reviewed PR's
+      # head, so an older PR still has one and a PR can't rewrite its own review
+      - name: Write the diff and prompt
         run: |
+          git fetch --no-tags "https://github.com/$GITHUB_REPOSITORY" "$GITHUB_SHA"
+          git show FETCH_HEAD:.github/prompts/security-review.md > "$RUNNER_TEMP/prompt.md"
           base=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json baseRefName -q .baseRefName)
           git fetch --no-tags "https://github.com/$GITHUB_REPOSITORY" "$base"
           git diff FETCH_HEAD...HEAD > pr.diff
@@ -108,7 +112,7 @@ jobs:
           for v in CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_MODEL ANTHROPIC_SMALL_FAST_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL; do
             [ -n "${!v}" ] || unset "$v"
           done
-          claude -p "$(cat .github/prompts/security-review.md)" \
+          claude -p "$(cat "$RUNNER_TEMP/prompt.md")" \
             --allowedTools "Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*)" \
             --disallowedTools "Edit,Write,NotebookEdit,WebFetch,WebSearch" \
             --max-turns "$MAX_TURNS" \
