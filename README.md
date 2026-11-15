@@ -98,6 +98,20 @@ The password is public on purpose because the data is fake. Replace these accoun
 4. **Outcomes from the classroom**: CIC enters program outcomes by hand today. Once the curriculum platform (Problem 1) has its read API, fill `program_outcomes` from its completion and learning-gain numbers instead.
 5. **Brand**: swap the placeholder mark in `App.tsx` for the real CIC logo, and run Lighthouse (target a11y ≥ 95).
 
+## Security and testing
+
+Judges score Security, so here's what checks this repo. Details and every finding are in [Security](docs/security.md#how-its-checked).
+
+- **AI security audits in CI.** Adding a label to a PR (`ai-review`, `ai-review:kimi-k3` or `ai-review:muse-wonder`) has Claude, kimi-k3 or muse-wonder review it, and leaving the PR number empty audits the whole repo. Each report is saved in [`audits/`](audits/) through its own PR. The model gets read-only tools and no GitHub token.
+- **What they found, and what we fixed.** Four audits ran on Nov 15. Two PR audits and Claude's whole-repo audit found nothing. muse-wonder's whole-repo audit found two issues:
+  - Donor text could steer the AI (prompt injection). Mostly fixed in [#95](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/pull/95); the last part is [#93](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/issues/93).
+  - Dev tools are switched on. That's on purpose for the demo, and listed as a gap to close before launch.
+- **95% coverage gate.** Every PR runs the typecheck and unit tests, and the PR fails if tests cover under 95% of lines or functions in `src/`. Every module counts, tested or not. Coverage is 100% today, and each P0–P2 feature in CIC's brief maps to its tests ([Testing](docs/testing.md)).
+- **Fuzz tests.** Each run throws 4,500 seeded random inputs at the import pipeline, dedupe, the Excel export, the API input checks, the calendar parser, AI drafts and the assistant's buttons. The fuzz tests found two real bugs, both fixed with regression tests:
+  - impossible calendar dates got through ([#84](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/pull/84))
+  - characters that broke the Excel export got through ([#128](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/pull/128))
+- **Access and secrets.** Ownership is checked on the server for every donor route, every query uses bound parameters, nothing is sent without a human, and a hook blocks commits that contain keys or `.env` files.
+
 ## Docs
 
 | Doc | For |
@@ -105,7 +119,7 @@ The password is public on purpose because the data is fake. Replace these accoun
 | [docs/features/](docs/features/) | What each page does and where its code is |
 | [Architecture](docs/architecture.md) | How the Worker, D1, WorkOS and the AI gateway fit together; the stack |
 | [Operations](docs/operations.md) | Settings and secrets, deploying, sign-in setup, the calendar, resetting the demo |
-| [Security](docs/security.md) | Who can see what, how keys and secrets are kept, known gaps |
+| [Security](docs/security.md) | Who can see what, how keys and secrets are kept, every audit finding and its fix, known gaps |
 | [Testing](docs/testing.md) | Running the tests, the coverage gate, what tests which feature |
 | [Decisions](docs/decisions/) | Why it's built this way |
 | [How these docs work](docs/README.md) | Where to write what, and the check that keeps docs in step with code |
