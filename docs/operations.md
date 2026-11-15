@@ -8,6 +8,7 @@ covers:
   - .github/prompts
   - scripts/seed-sql.ts
   - src/data/seed.ts
+  - public/robots.txt
 ---
 
 # Operations
@@ -89,3 +90,7 @@ The OHack org doesn't let GitHub Actions open PRs (the repo setting is greyed ou
 The model can only read the checkout and run `git diff/log/show`; it gets no GitHub token, and a separate step posts its reply. The comment is advice, not a gate. The prompt is in `.github/prompts/security-review.md`.
 
 To deploy by hand, run `bun run deploy` inside `nix develop` (it builds with `nix build` and uses wrangler, so log in with `wrangler login` first). To reset the live demo data, run `bun run db:seed:remote`; it replaces every donor, gift, contact, draft and import record (with `WORKOS_API_KEY` in `.env`; it maps the seed's donor owners to WorkOS users by email).
+
+## robots.txt
+
+`public/robots.txt` allows all crawlers. Every page is behind sign-in, so a crawler only ever reaches the WorkOS sign-in page; the file exists so `/robots.txt` doesn't fall through to the app's `index.html`, which Lighthouse flags as an invalid robots.txt.
