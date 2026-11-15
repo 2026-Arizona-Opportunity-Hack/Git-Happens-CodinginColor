@@ -30,17 +30,25 @@ export type RetentionStatus = 'new' | 'increased' | 'same' | 'decreased' | 'laps
 
 export const yearOf = (iso: string) => Number(iso.slice(0, 4))
 
-export function totalsByYear(gifts: Gift[]) {
+// Years and quarters as consecutive integers, so the previous period is always n - 1.
+export type Period = 'year' | 'quarter'
+export const periodOf = (iso: string, p: Period) =>
+  p === 'year' ? yearOf(iso) : yearOf(iso) * 4 + Math.floor((Number(iso.slice(5, 7)) - 1) / 3)
+export const periodLabel = (n: number, p: Period) => (p === 'year' ? String(n) : `Q${(n % 4) + 1} ${Math.floor(n / 4)}`)
+
+export function totalsByPeriod(gifts: Gift[], p: Period) {
   const t = new Map<number, number>()
-  for (const g of gifts) if (g.date) t.set(yearOf(g.date), (t.get(yearOf(g.date)) ?? 0) + g.amount)
+  for (const g of gifts) if (g.date) t.set(periodOf(g.date, p), (t.get(periodOf(g.date, p)) ?? 0) + g.amount)
   return t
 }
 
-export function retentionStatus(gifts: Gift[], year: number): RetentionStatus {
-  const t = totalsByYear(gifts)
-  const cur = t.get(year) ?? 0
-  const prev = t.get(year - 1) ?? 0
-  const earlier = [...t.keys()].some((y) => y < year - 1)
+export const totalsByYear = (gifts: Gift[]) => totalsByPeriod(gifts, 'year')
+
+export function retentionStatus(gifts: Gift[], period: number, p: Period = 'year'): RetentionStatus {
+  const t = totalsByPeriod(gifts, p)
+  const cur = t.get(period) ?? 0
+  const prev = t.get(period - 1) ?? 0
+  const earlier = [...t.keys()].some((n) => n < period - 1)
   if (cur && !prev) return earlier ? 'recovered' : 'new'
   if (!cur && prev) return 'lapsed'
   if (!cur) return 'inactive'
