@@ -17,3 +17,4 @@ AuthKit runs in `devMode`, which keeps the session in localStorage and needs no 
 ## Consequences
 - Any script that runs on the page can read the session, so a cross-site scripting bug would leak it. This is known gap 4 in [security](../security.md).
 - We'd revisit this once CIC can pay for a custom domain. Then we'd turn off devMode and the session would move into an HttpOnly cookie.
+- A free alternative is planned: the Worker runs the sign-in and sets the cookie on our own domain, so no custom domain is needed ([#179](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/issues/179)). When that lands, a new decision supersedes this one.

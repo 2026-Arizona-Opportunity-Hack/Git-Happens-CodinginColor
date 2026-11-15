@@ -67,7 +67,7 @@ To fix before CIC loads real donors:
 1. **Demo accounts.** The demo password is public in the README because the data is fake. Replace those accounts first.
 2. **Assistant buttons for your own donors.** Text planted in a donor record could still talk the assistant into offering a believable button for one of your own donors or drafts. Fix: only offer a button for a donor the latest message names ([#93](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/issues/93)).
 3. **The AI gateway sees donor data.** Prompts include donor names, emails and gifts, and the OHack gateway is a third-party proxy. Check with CIC first, or move to Workers AI as [decision 001](decisions/001-ai-model.md) recommends.
-4. **Sessions in localStorage.** AuthKit runs in `devMode` because a WorkOS custom domain costs $99/month, so the session is readable by any script on the page. Moving to a custom domain puts it in an HttpOnly cookie.
+4. **Sessions in localStorage.** AuthKit runs in `devMode` because a WorkOS custom domain costs $99/month, so the session is readable by any script on the page. Planned fix, at no cost: the Worker handles sign-in and keeps the session in an HttpOnly cookie on our own domain, so no custom domain is needed ([#179](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/issues/179)).
 5. **No rate limit** on `/api/chat` or `/api/drafts`. Add a per-user daily limit before moving to a model without a hard spend cap.
 6. **Dictation in Chrome** sends audio to Google. The browser does this, not the app; board members should know before dictating donor details.
 7. **Secret scanning is local only.** The guard hook runs only in Claude Code; CI doesn't scan for secrets yet.
