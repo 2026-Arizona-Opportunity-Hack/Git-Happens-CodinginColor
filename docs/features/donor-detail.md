@@ -16,7 +16,7 @@ One donor's page:
 - **Log** a text, email or call.
 - **Draft** a thank-you or update.
 - **Debrief** opens the [assistant](assistant.md) to describe a conversation with the donor, typed or dictated.
-- **One-click funder packet:** a Markdown file with lifetime giving, totals by year and by program and every gift, ready to paste into a renewal.
+- **One-click funder packet:** a Markdown file with lifetime giving, totals by year and by program and every gift, ready to paste into a renewal. A toast names the downloaded file (e.g. `CIC_FunderPacket_AaliyahColeman_2026.md`), or says it couldn't be made.
 - **Custom fields** created on [Update Donors](update-donors.md).
 
 `src/lib/packet.ts` builds the packet and the per-program giving totals.
