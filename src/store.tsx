@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { AppSkeleton } from '@/components/Loading'
 import { reminders } from '@/lib/reminders'
 import { sampleData } from '@/data/sample-data'
 import type { BoardMember, Channel, Donor, CicEvent, Draft, DraftKind, Gift, ImportRecord, Interaction, ProgramOutcome, RawDonorRow, Role, Source } from '@/data/types'
@@ -229,13 +231,20 @@ export function StoreProvider({ token, onSignOut, denied, children }: {
   }, [reload])
 
   if (!data && forbidden) return denied
-  if (!data)
+  if (!data && error)
     return (
-      <div role="status" className="space-y-3 p-8 text-muted-foreground">
-        <p>{error ? `Could not load donor data: ${error}` : 'Loading donor data…'}</p>
-        {error && <button className="underline" onClick={onSignOut}>Sign out</button>}
-      </div>
+      <main className="flex min-h-screen items-center justify-center p-4">
+        <div role="alert" className="max-w-sm space-y-4 text-center">
+          <h1 className="text-2xl">Could not load donor data</h1>
+          <p className="text-muted-foreground">{error}</p>
+          <div className="flex justify-center gap-2">
+            <Button onClick={reload}>Try again</Button>
+            <Button variant="outline" onClick={onSignOut}>Sign out</Button>
+          </div>
+        </div>
+      </main>
     )
+  if (!data) return <AppSkeleton label="Loading donor data…" />
   return <Loaded data={data} token={token} reload={reload}>{children}</Loaded>
 }
 
