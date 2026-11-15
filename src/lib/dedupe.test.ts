@@ -108,3 +108,15 @@ test('a new column uses the name the admin typed', () => {
   const rows = rowsFromCsv('Name,Camp\nAda,Giving Tuesday', 'zeffy', { Name: 'name', Camp: NEW_COLUMN + 'Campaign 2026' })
   assert.deepEqual(rows[0].extra, { 'Campaign 2026': 'Giving Tuesday' })
 })
+
+test('a gift with no date is still recorded', () => {
+  const { keep } = splitGifts([row({ amount: 75 })], [])
+  assert.equal(keep.length, 1)
+  assert.equal(keep[0].amount, 75)
+})
+
+test('re-importing undated gifts adds nothing; an undated and a dated gift of the same amount are both kept', () => {
+  assert.equal(splitGifts([row({ amount: 75 })], [{ amount: 75, date: null }]).keep.length, 0)
+  assert.equal(splitGifts([row({ amount: 75 })], [{ amount: 75, date: '2026-01-01' }]).keep.length, 1)
+  assert.equal(splitGifts([row({ amount: 75, date: '2026-01-01' })], [{ amount: 75, date: null }]).keep.length, 1)
+})

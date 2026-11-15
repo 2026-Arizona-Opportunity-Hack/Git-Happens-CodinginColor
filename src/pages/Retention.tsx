@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { sampleDonors, sampleGifts } from '@/data/retention-sample'
 import type { Donor } from '@/data/types'
 import { useStore } from '@/store'
-import { fmtDate, money, periodLabel, periodOf, retentionStatus, totalsByPeriod, type Period, type RetentionStatus } from '@/lib/logic'
+import { byDateDesc, fmtDate, money, periodLabel, periodOf, retentionStatus, totalsByPeriod, type Period, type RetentionStatus } from '@/lib/logic'
 
 const SHOWN = { year: 3, quarter: 4 } // how many periods get a tab
 
@@ -167,7 +167,7 @@ export default function Retention() {
           </DialogHeader>
           <p className="text-muted-foreground">A sample donor, so there's no donor page. Their gifts:</p>
           <ul className="divide-y">
-            {gifts.filter((g) => g.donorId === opened?.id).sort((a, b) => b.date.localeCompare(a.date)).map((g) => (
+            {gifts.filter((g) => g.donorId === opened?.id).sort(byDateDesc).map((g) => (
               <li key={g.id} className="flex justify-between py-1.5"><span>{fmtDate(g.date)}</span><span className="tabular-nums">{money(g.amount)}</span></li>
             ))}
           </ul>

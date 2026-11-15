@@ -28,6 +28,16 @@ test('the calendar link is an all-day event on the due date', () => {
   assert.match(url.searchParams.get('details')!, /https:\/\/app\.test\/donors\/d4$/)
 })
 
+test('undated gifts count toward lifetime giving but no year, and sort after dated ones', async () => {
+  const { totalsByYear, inYear, byDateDesc, lastGiftDate, fmtDate } = await import('./logic')
+  const gifts = [{ amount: 10, date: null }, { amount: 20, date: '2026-03-01' }, { amount: 5, date: '2025-01-01' }]
+  assert.deepEqual([...totalsByYear(gifts as never).entries()].sort(), [[2025, 5], [2026, 20]])
+  assert.equal(gifts.filter((g) => inYear(g, 2026)).length, 1)
+  assert.deepEqual([...gifts].sort(byDateDesc).map((g) => g.date), ['2026-03-01', '2025-01-01', null])
+  assert.equal(lastGiftDate(gifts), '2026-03-01')
+  assert.equal(fmtDate(null), 'Date unknown')
+})
+
 test('quarters count across a year end, so Q1 is compared with the Q4 before it', () => {
   const gift = (amount: number, date: string) => ({ id: date, donorId: 'd', amount, date, source: 'zeffy' as const, program: 'General' as const })
   const q1 = periodOf('2027-02-10', 'quarter')

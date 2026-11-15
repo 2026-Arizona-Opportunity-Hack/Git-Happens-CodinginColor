@@ -228,7 +228,7 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
         },
         Gift: {
           type: 'object',
-          properties: { id: { type: 'string' }, donorId: { type: 'string' }, amount: { type: 'number' }, date: isoDate, source: { enum: enums.sources }, program: { enum: enums.programs } },
+          properties: { id: { type: 'string' }, donorId: { type: 'string' }, amount: { type: 'number' }, date: { ...isoDate, type: ['string', 'null'], description: 'null when the import had no usable date' }, source: { enum: enums.sources }, program: { enum: enums.programs } },
         },
         Interaction: {
           type: 'object',

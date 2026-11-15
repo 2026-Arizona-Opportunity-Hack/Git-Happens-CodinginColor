@@ -1,5 +1,5 @@
 import type { Donor, Gift } from '../data/types'
-import { retentionStatus, yearOf } from './logic'
+import { inYear, retentionStatus, yearOf } from './logic'
 import { xlsx, type Cell } from './xlsx'
 
 // Exports for My Donors and All Donors: every donor field, giving totals, and
@@ -18,11 +18,11 @@ export function donorTable(donors: Donor[], gifts: Gift[], ownerName: (d: Donor)
   ]
   const rows: Cell[][] = donors.map((d) => {
     const gs = gifts.filter((g) => g.donorId === d.id)
-    const dates = gs.map((g) => g.date).sort()
+    const dates = gs.map((g) => g.date).filter((x): x is string => !!x).sort() // undated gifts have no first/last
     return [
       d.name, d.email, d.phone, d.org, ownerName(d), d.sources.join('; '),
       round2(gs.reduce((s, g) => s + g.amount, 0)), gs.length, dates[0], dates.at(-1),
-      round2(gs.filter((g) => yearOf(g.date) === year).reduce((s, g) => s + g.amount, 0)), retentionStatus(gs, year),
+      round2(gs.filter((g) => inYear(g, year)).reduce((s, g) => s + g.amount, 0)), retentionStatus(gs, year),
       d.nextStep?.text, d.nextStep?.due, d.lastTouchAt, ...custom.map((k) => d.extra?.[k]),
     ]
   })
