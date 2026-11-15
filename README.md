@@ -187,6 +187,18 @@ The repo needs two Actions secrets:
 
 The Worker also needs the WorkOS secret key. Set it once (or whenever the key is rotated) with `bunx wrangler secret put WORKOS_API_KEY` and paste the Staging `sk_test_…` key. Without it every API call fails.
 
+### AI security review
+
+`.github/workflows/security-review.yml` asks a model to review a PR's diff for security problems and posts the result as a PR comment. It never runs on its own, so it doesn't use up credits: add a label to the PR to run it once (the label comes off when the comment is posted, so add it again to re-run), or run it from the Actions tab with a PR number.
+
+| Label | Model | Secret it needs |
+|---|---|---|
+| `ai-review` | Claude, on a Claude Pro/Max subscription | `CLAUDE_CODE_OAUTH_TOKEN`, from `claude setup-token` |
+| `ai-review:kimi-k3` | `kimi-k3` on the OHack gateway | `OHACK_REVIEW_KEY`, a gateway key |
+| `ai-review:muse-wonder` | `muse-wonder` on the OHack gateway ($4/$20 per 1M tokens, so sparingly) | `OHACK_REVIEW_KEY` |
+
+The model can only read the checkout and run `git diff/log/show`; it gets no GitHub token, and a separate step posts its reply. The comment is advice, not a gate. The prompt is in `.github/prompts/security-review.md`.
+
 To deploy by hand, run `bun run deploy` inside `nix develop` (it builds with `nix build` and uses wrangler, so log in with `wrangler login` first). To reset the live demo to the fake seed data, run `bun run db:seed:remote` (with `WORKOS_API_KEY` in `.env`; it maps the seed's donor owners to WorkOS users by email).
 
 ### Events calendar

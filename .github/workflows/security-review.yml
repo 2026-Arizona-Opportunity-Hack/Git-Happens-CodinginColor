@@ -1,0 +1,124 @@
+name: AI security review
+
+# Runs only when asked, so it doesn't spend the subscription or the gateway
+# credits on every push. Add a label to a PR to run it once:
+#
+#   ai-review              Claude, on the CLAUDE_CODE_OAUTH_TOKEN subscription
+#   ai-review:kimi-k3      kimi-k3 on the OHack gateway (OHACK_REVIEW_KEY)
+#   ai-review:muse-wonder  muse-wonder on the OHack gateway; pricey, use sparingly
+#
+# The label is removed when the review is posted, so adding it again re-runs
+# it. You can also run it from the Actions tab with a PR number and a model.
+
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: PR number
+        required: true
+      model:
+        description: Model to review with
+        type: choice
+        options: [claude, kimi-k3, muse-wonder]
+        default: claude
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    # Only our labels, and only PRs from this repo (forks don't get secrets)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (startsWith(github.event.label.name, 'ai-review') &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: security-review-${{ github.event.pull_request.number || inputs.pr }}-${{ github.event.label.name || inputs.model }}
+      cancel-in-progress: true
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number || inputs.pr }}
+    steps:
+      - name: Pick the model
+        id: model
+        env:
+          LABEL: ${{ github.event.label.name }}
+          INPUT: ${{ inputs.model }}
+        run: |
+          case "${LABEL:-ai-review:$INPUT}" in
+            ai-review|ai-review:claude) model=claude ;;
+            ai-review:kimi-k3) model=kimi-k3 ;;
+            ai-review:muse-wonder) model=muse-wonder ;;
+            *) echo "Unknown label '$LABEL'"; exit 1 ;;
+          esac
+          echo "name=$model" >> "$GITHUB_OUTPUT"
+
+      # No saved credentials, so the model can't read a GitHub token from .git
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ env.PR }}/head
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Write the diff
+        run: |
+          base=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json baseRefName -q .baseRefName)
+          git fetch --no-tags "https://github.com/$GITHUB_REPOSITORY" "$base"
+          git diff FETCH_HEAD...HEAD > pr.diff
+          wc -l pr.diff
+
+      - run: npm install -g @anthropic-ai/claude-code@2.1.305
+
+      # Read-only tools and a turn cap; the model gets the AI credentials and
+      # nothing else, and the comment is posted by the next step
+      - name: Review
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ steps.model.outputs.name == 'claude' && secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}
+          ANTHROPIC_BASE_URL: ${{ steps.model.outputs.name != 'claude' && 'https://ai.ohack.dev' || '' }}
+          ANTHROPIC_AUTH_TOKEN: ${{ steps.model.outputs.name != 'claude' && secrets.OHACK_REVIEW_KEY || '' }}
+          ANTHROPIC_MODEL: ${{ steps.model.outputs.name != 'claude' && steps.model.outputs.name || '' }}
+          ANTHROPIC_SMALL_FAST_MODEL: ${{ steps.model.outputs.name != 'claude' && steps.model.outputs.name || '' }}
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: ${{ steps.model.outputs.name != 'claude' && steps.model.outputs.name || '' }}
+          GH_TOKEN: ''
+        run: |
+          for v in CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_MODEL ANTHROPIC_SMALL_FAST_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL; do
+            [ -n "${!v}" ] || unset "$v"
+          done
+          claude -p "$(cat .github/prompts/security-review.md)" \
+            --allowedTools "Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*)" \
+            --disallowedTools "Edit,Write,NotebookEdit,WebFetch,WebSearch" \
+            --max-turns 40 \
+            > review.md
+          test -s review.md
+
+      - name: Post the review
+        if: always()
+        env:
+          MODEL: ${{ steps.model.outputs.name }}
+          LABEL: ${{ github.event.label.name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          marker="<!-- ai-security-review:$MODEL -->"
+          {
+            echo "$marker"
+            echo "## 🔒 AI security review ($MODEL)"
+            echo
+            if [ -s review.md ]; then cat review.md; else echo "The review didn't finish; see the [run log]($RUN_URL)."; fi
+            echo
+            echo "<sub>Commit $(git rev-parse --short HEAD) · [run]($RUN_URL) · advisory only; a human still reviews the PR</sub>"
+          } > comment.md
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            -q ".[] | select(.body | contains(\"$marker\")) | .id" | head -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F body=@comment.md > /dev/null
+          else
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file comment.md
+          fi
+          if [ -n "$LABEL" ]; then
+            gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --remove-label "$LABEL"
+          fi
