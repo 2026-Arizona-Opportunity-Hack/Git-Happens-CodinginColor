@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { MessageCircle, Send, X } from 'lucide-react'
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
+import { ChevronLeft, MessageCircle, Send, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useStore, type ChatTurn } from '@/store'
@@ -32,30 +32,88 @@ export function useChat() {
 }
 export type Chat = ReturnType<typeof useChat>
 
-// A chat bubble in the bottom-right corner of every page. Clicking it opens
-// the assistant as a side panel (full screen on phones) that closes with its
-// X button or Escape, returning focus to the bubble.
+// Whether the docked assistant is open, kept per browser; it starts open.
+const OPEN_KEY = 'cic-assistant-closed'
+function useDocked() {
+  const [docked, setDocked] = useState(() => {
+    try {
+      return localStorage.getItem(OPEN_KEY) !== '1'
+    } catch {
+      return true
+    }
+  })
+  const set = (open: boolean) => {
+    try {
+      if (open) localStorage.removeItem(OPEN_KEY)
+      else localStorage.setItem(OPEN_KEY, '1')
+    } catch {
+      // private mode: it resets on reload
+    }
+    setDocked(open)
+  }
+  return [docked, set] as const
+}
+
+// On wide screens the assistant is a column docked to the right of every
+// page; its X slides it shut and a tab on the right edge slides it back. On
+// smaller screens a chat bubble opens it full screen, closing with X or Escape.
 export function Assistant({ chat }: { chat: Chat }) {
-  const [open, setOpen] = useState(false)
+  const [docked, setDocked] = useDocked()
+  const [overlay, setOverlay] = useState(false)
   const bubble = useRef<HTMLButtonElement>(null)
-  const close = useCallback(() => {
-    setOpen(false)
+  const tab = useRef<HTMLButtonElement>(null)
+  const dockedInput = useRef<HTMLTextAreaElement>(null)
+  const closeOverlay = useCallback(() => {
+    setOverlay(false)
     requestAnimationFrame(() => bubble.current?.focus())
   }, [])
-  return open ? (
-    <ChatPanel chat={chat} onClose={close} />
-  ) : (
-    <button
-      ref={bubble}
-      type="button"
-      onClick={() => setOpen(true)}
-      aria-label="Open the assistant"
-      aria-haspopup="dialog"
-      className="fixed right-4 bottom-4 z-40 flex size-14 items-center justify-center rounded-full bg-cic-dark text-white shadow-lg transition hover:scale-105 focus-visible:ring-4 focus-visible:ring-cic-green focus-visible:outline-none motion-reduce:transition-none md:right-6 md:bottom-6"
-    >
-      <MessageCircle aria-hidden className="size-6" />
-      {chat.turns.length > 0 && <span aria-hidden className="absolute top-1 right-1 size-3 rounded-full border-2 border-white bg-cic-green" />}
-    </button>
+  const closeDocked = () => {
+    setDocked(false)
+    requestAnimationFrame(() => tab.current?.focus())
+  }
+  const openDocked = () => {
+    setDocked(true)
+    requestAnimationFrame(() => dockedInput.current?.focus())
+  }
+  return (
+    <>
+      <div className="sticky top-0 hidden h-screen lg:block">
+        {/* The panel keeps its width while the column slides, so it doesn't reflow. */}
+        <div
+          inert={!docked}
+          className={cn('h-full overflow-hidden transition-[width] duration-200 motion-reduce:transition-none', docked ? 'w-[24rem]' : 'w-0')}
+        >
+          <ChatPanel chat={chat} onClose={closeDocked} input={dockedInput} className="h-full w-[24rem] border-l border-sidebar-border" />
+        </div>
+        {!docked && (
+          <button
+            ref={tab}
+            type="button"
+            onClick={openDocked}
+            aria-label="Open the assistant"
+            className="fixed top-1/2 right-0 z-40 flex -translate-y-1/2 flex-col items-center gap-1 rounded-l-md bg-cic-dark px-1.5 py-3 text-white shadow-lg hover:bg-cic-dark/90 focus-visible:ring-4 focus-visible:ring-cic-green focus-visible:outline-none"
+          >
+            <ChevronLeft aria-hidden className="size-4" />
+            <MessageCircle aria-hidden className="size-5" />
+          </button>
+        )}
+      </div>
+      {overlay ? (
+        <ChatPanel chat={chat} onClose={closeOverlay} dialog className="fixed inset-0 z-50 shadow-2xl sm:inset-y-0 sm:right-0 sm:left-auto sm:w-[26rem] sm:border-l sm:border-sidebar-border lg:hidden" />
+      ) : (
+        <button
+          ref={bubble}
+          type="button"
+          onClick={() => setOverlay(true)}
+          aria-label="Open the assistant"
+          aria-haspopup="dialog"
+          className="fixed right-4 bottom-4 z-40 flex size-14 items-center justify-center rounded-full bg-cic-dark text-white shadow-lg transition hover:scale-105 focus-visible:ring-4 focus-visible:ring-cic-green focus-visible:outline-none motion-reduce:transition-none md:right-6 md:bottom-6 lg:hidden"
+        >
+          <MessageCircle aria-hidden className="size-6" />
+          {chat.turns.length > 0 && <span aria-hidden className="absolute top-1 right-1 size-3 rounded-full border-2 border-white bg-cic-green" />}
+        </button>
+      )}
+    </>
   )
 }
 
@@ -63,10 +121,16 @@ export function Assistant({ chat }: { chat: Chat }) {
 // Worker builds its context from their scoped records). It can't change
 // anything itself; replies can offer buttons (see ChatMarkdown) that the
 // person presses.
-function ChatPanel({ chat: { turns, busy, error, send }, onClose }: { chat: Chat; onClose: () => void }) {
+// As a dialog (phones) it takes focus and closes on Escape; docked, it's a
+// landmark beside the page and leaves focus alone.
+function ChatPanel({ chat: { turns, busy, error, send }, onClose, dialog, input: inputRef, className }: {
+  chat: Chat; onClose: () => void; dialog?: boolean; input?: RefObject<HTMLTextAreaElement | null>; className?: string
+}) {
   const [draft, setDraft] = useState('')
   const log = useRef<HTMLDivElement>(null)
-  const input = useRef<HTMLTextAreaElement>(null)
+  const ownInput = useRef<HTMLTextAreaElement>(null)
+  const input = inputRef ?? ownInput
+  const inputId = useId()
 
   useEffect(() => {
     log.current?.scrollTo({ top: log.current.scrollHeight })
@@ -74,11 +138,12 @@ function ChatPanel({ chat: { turns, busy, error, send }, onClose }: { chat: Chat
 
   // Focus the message box on open; Escape closes from anywhere in the panel.
   useEffect(() => {
+    if (!dialog) return
     input.current?.focus()
     const onKey = (e: globalThis.KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [dialog, input, onClose])
 
   const submit = (e?: FormEvent) => {
     e?.preventDefault()
@@ -93,11 +158,12 @@ function ChatPanel({ chat: { turns, busy, error, send }, onClose }: { chat: Chat
     if (e.key === 'Enter' && !e.shiftKey) submit(e)
   }
 
+  const Root = dialog ? 'section' : 'aside'
   return (
-    <section
-      role="dialog"
+    <Root
+      role={dialog ? 'dialog' : undefined}
       aria-label="Assistant"
-      className="fixed inset-0 z-50 flex flex-col bg-background shadow-2xl sm:inset-y-0 sm:right-0 sm:left-auto sm:w-[26rem] sm:border-l sm:border-sidebar-border"
+      className={cn('flex flex-col bg-background', className)}
     >
       <header className="flex items-center justify-between border-b border-sidebar-border bg-sidebar px-4 py-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-cic-dark"><MessageCircle aria-hidden className="size-4" /> Assistant</h2>
@@ -148,10 +214,10 @@ function ChatPanel({ chat: { turns, busy, error, send }, onClose }: { chat: Chat
         onSubmit={submit}
         className="flex items-end gap-2 border-t bg-background p-3"
       >
-        <label htmlFor="assistant-input" className="sr-only">Message the assistant</label>
+        <label htmlFor={inputId} className="sr-only">Message the assistant</label>
         <Textarea
           ref={input}
-          id="assistant-input"
+          id={inputId}
           rows={1}
           value={draft}
           maxLength={4000}
@@ -164,6 +230,6 @@ function ChatPanel({ chat: { turns, busy, error, send }, onClose }: { chat: Chat
           <Send aria-hidden />
         </Button>
       </form>
-    </section>
+    </Root>
   )
 }
