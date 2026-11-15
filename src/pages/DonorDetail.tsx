@@ -59,8 +59,10 @@ export default function DonorDetail() {
   }
 
   const draft = async (kind: Parameters<typeof s.createDraft>[1]) => {
-    if (!(await s.createDraft(donor.id, kind, donor.email ? 'email' : 'text'))) return
-    toast('Draft created. Review it in Follow-ups.', { action: { label: 'Open', onClick: () => nav('/follow-ups') } })
+    // AI-written drafts can take several seconds.
+    const t = toast.loading('Writing the draft…')
+    if (!(await s.createDraft(donor.id, kind, donor.email ? 'email' : 'text'))) return void toast.dismiss(t)
+    toast.success('Draft created. Review it in Follow-ups.', { id: t, action: { label: 'Open', onClick: () => nav('/follow-ups') } })
   }
 
   return (

@@ -45,7 +45,10 @@ export default function FollowUps() {
               <Card key={d.id}>
                 <CardHeader>
                   <CardTitle>{name(d.donorId)}</CardTitle>
-                  <CardDescription>{d.kind.replace('-', ' ')} · {d.channel}</CardDescription>
+                  <CardDescription className="flex flex-wrap items-center gap-2">
+                    {d.kind.replace('-', ' ')} · {d.channel}
+                    {d.ai && <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-900">Drafted by AI: check before sending</Badge>}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Textarea aria-label={`Draft to ${name(d.donorId)}`} rows={7} value={d.body} onChange={(e) => updateDraft(d.id, e.target.value)} />
