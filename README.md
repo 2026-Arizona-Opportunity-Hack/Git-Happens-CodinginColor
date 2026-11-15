@@ -148,12 +148,36 @@ bun run db:migrate   # create the local D1 database
 bun run db:seed      # load the fake demo data (re-run any time to reset)
 bun dev              # http://localhost:5173, app + API
 nix build            # typecheck + production build, output in ./result
-bun run test         # unit tests for src/lib (bun's test runner)
+bun run test         # unit tests for src/lib, failing under 95% coverage
 ```
 
 `nix build` installs dependencies from `bun.lock` in a sandbox, checked against a hash in `flake.nix`. After changing dependencies, set that hash (`x86_64-linux = "…"`) to `""`, run `nix build`, and paste the `got:` hash it prints. Other platforms need their own hash added the same way.
 
 `bun dev` runs the Worker and a local D1 database inside Vite, through `@cloudflare/vite-plugin`. Both the Worker and `bun run db:seed` need the WorkOS Staging secret key, so copy `.env.example` to `.env` and set `WORKOS_API_KEY` before running them. The assistant also needs `AI_API_KEY`, the OHack AI gateway key from your team card; without it everything else works and the chat says it's unavailable. In production it's a Worker secret (`bunx wrangler secret put AI_API_KEY`). `.env` is gitignored.
+
+### Tests
+
+`bun run test` runs the unit tests in `src/lib/*.test.ts` and prints a coverage table. It then fails with `error: lines coverage is …%, under the 95% minimum` if the tests cover under 95% of the lines or functions in `src/` (`scripts/check-coverage.ts`). The **Tests** workflow runs it on every pull request and marks the PR red with that error. Every module in `src/lib` counts, tested or not (`all-modules.test.ts` loads them all), so new logic needs tests from the start. The Worker's checks and read API totals are in `src/lib/api.ts` for the same reason.
+
+What tests each feature of [CIC's brief](https://docs.google.com/document/d/1sdlQDji23jA0LFoYbzNVHCkeG0ICE9XRQSr3xh3ntMU/edit) (Problem 2):
+
+| Priority | Feature | Tests |
+|---|---|---|
+| P0 | Import spreadsheet, Zeffy and Benevity; dedupe across sources | `dedupe.test.ts` |
+| P0 | Donor timeline of gifts and contacts | `logic.test.ts` |
+| P0 | Board-member owner, new donors to the member with the fewest | `logic.test.ts` |
+| P0 | Next steps with due dates; quarterly touch to every donor | `reminders.test.ts`, `logic.test.ts` |
+| P0 | Retention year over year, churn and activation patterns | `logic.test.ts` |
+| P0 | Templated thank-you, human approves every send | `drafts.test.ts`, `reminders.test.ts`, `actions.test.ts` |
+| P0 | One-click funder export | `packet.test.ts`, `export.test.ts` |
+| P0 | Key-authenticated read API aggregated by period, program and board member; input checks | `api.test.ts` |
+| P1 | Debrief to action | `actions.test.ts` |
+| P1 | Events-aware next steps (CIC's calendar) | `ical.test.ts`, `logic.test.ts`, `reminders.test.ts`, `actions.test.ts` |
+| P1 | AI-drafted updates from gifts and program outcomes | `ai-draft.test.ts`, `drafts.test.ts` |
+| P1 | Lapsed-donor radar and nudge | `reminders.test.ts`, `drafts.test.ts` |
+| P2 | Natural-language donor questions (the assistant's buttons) | `actions.test.ts` |
+
+Not built yet, so not tested: meeting notes in (P1, #29), the grant deadline tracker (P1, #30), the donor impact feed (P2, #31) and likelihood-to-give scoring (P2, #32). The tests cover logic, not pages: the React components and the Worker's D1 and WorkOS calls have no tests yet.
 
 ### Sign-in (WorkOS)
 
