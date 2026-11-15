@@ -8,10 +8,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useStore } from '@/store'
 import { fmtDate, money, retentionStatus, yearOf } from '@/lib/logic'
 
+// The signed-in person's own donors. Admins see everyone's on All Donors.
 export default function Donors() {
-  const { donors, gifts, member, today } = useStore()
+  const { donors, gifts, session, today } = useStore()
   const [q, setQ] = useState('')
-  const rows = donors
+  const mine = donors.filter((d) => d.ownerId === session.memberId)
+  const rows = mine
     .filter((d) => `${d.name} ${d.org ?? ''} ${d.email ?? ''}`.toLowerCase().includes(q.toLowerCase()))
     .map((d) => {
       const gs = gifts.filter((g) => g.donorId === d.id)
@@ -26,13 +28,16 @@ export default function Donors() {
 
   return (
     <>
-      <PageHeader title="Donors" description="One deduped list across the spreadsheet, Zeffy, Benevity, AZ Gives and United Way." />
+      <PageHeader
+        title="My donors"
+        description={`The ${mine.length} donor${mine.length === 1 ? '' : 's'} assigned to you, deduped across the spreadsheet, Zeffy, Benevity, AZ Gives and United Way.`}
+      />
       <Input className="mb-4 max-w-sm" placeholder="Search name, org or email" aria-label="Search donors" value={q} onChange={(e) => setQ(e.target.value)} />
       <Card className="py-0">
         <Table>
           <TableHeader>
             <TableRow className="bg-cic-dark hover:bg-cic-dark">
-              {['Donor', 'Owner', 'Lifetime', 'Last gift', 'Status', 'Next step', 'Sources'].map((h) => (
+              {['Donor', 'Lifetime', 'Last gift', 'Status', 'Next step', 'Sources'].map((h) => (
                 <TableHead key={h} className="text-white">{h}</TableHead>
               ))}
             </TableRow>
@@ -44,7 +49,6 @@ export default function Donors() {
                   <Link to={`/donors/${d.id}`} className="font-medium text-cic-dark underline">{d.name}</Link>
                   {d.org && d.org !== d.name && <div className="text-xs text-muted-foreground">{d.org}</div>}
                 </TableCell>
-                <TableCell>{member(d.ownerId).name}</TableCell>
                 <TableCell>{money(lifetime)}</TableCell>
                 <TableCell>{last ? fmtDate(last) : '—'}</TableCell>
                 <TableCell><StatusBadge status={status} /></TableCell>
@@ -60,6 +64,13 @@ export default function Donors() {
                 </TableCell>
               </TableRow>
             ))}
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
+                  {mine.length === 0 ? 'No donors are assigned to you yet.' : 'No donors match that search.'}
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </Card>

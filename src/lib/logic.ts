@@ -1,12 +1,28 @@
 import type { BoardMember, Donor, Gift } from '../data/types'
 
-// --- Round-robin owner assignment -----------------------------------------
-// New donors go to the board member with the fewest donors; ties break by
-// board order, so repeated imports spread evenly.
-export function nextOwner(members: BoardMember[], donors: Donor[]): string {
+// Select value standing for "no board member" (Select values can't be null).
+export const UNASSIGNED = '__unassigned__'
+
+// --- Suggested owner -------------------------------------------------------
+// The suggestion for a new donor is the board member with the fewest donors;
+// ties break by board order. Unassigned donors don't count toward anyone.
+export function nextOwner(members: BoardMember[], donors: Pick<Donor, 'ownerId'>[]): string {
   const load = new Map(members.map((m) => [m.id, 0]))
-  for (const d of donors) load.set(d.ownerId, (load.get(d.ownerId) ?? 0) + 1)
+  for (const d of donors) if (d.ownerId && load.has(d.ownerId)) load.set(d.ownerId, load.get(d.ownerId)! + 1)
   return members.reduce((best, m) => (load.get(m.id)! < load.get(best.id)! ? m : best)).id
+}
+
+// Suggestions for several new donors at once, spreading them out: each pick
+// counts toward the next, so three new donors don't all go to one person.
+export function suggestOwners(members: BoardMember[], donors: Pick<Donor, 'ownerId'>[], donorIds: string[]): Map<string, string> {
+  const load = donors.map((d) => ({ ownerId: d.ownerId }))
+  const out = new Map<string, string>()
+  for (const id of donorIds) {
+    const owner = nextOwner(members, load)
+    out.set(id, owner)
+    load.push({ ownerId: owner })
+  }
+  return out
 }
 
 // --- Retention ------------------------------------------------------------
