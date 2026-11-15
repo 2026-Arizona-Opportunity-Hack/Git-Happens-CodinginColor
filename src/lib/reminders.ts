@@ -46,13 +46,24 @@ export function reminders({ role, memberId, today, donors: visible, gifts, draft
   const ids = new Set(donors.map((d) => d.id))
   const year = yearOf(today)
 
-  for (const d of drafts)
-    if (d.status === 'pending' && ids.has(d.donorId))
-      out.push({
-        id: `draft-${d.id}`, category: 'draft', urgency: 'due', to: '/follow-ups',
-        title: `Approve ${d.kind.replace('-', ' ')} for ${donors.find((x) => x.id === d.donorId)!.name}`,
-        detail: `Drafted ${fmtDate(d.createdAt)}; nothing is sent until someone approves it`,
-      })
+  // Admins also approve drafts on unassigned donors, which no one else would.
+  const draftDonors = new Map(visible.filter((d) => ids.has(d.id) || (role === 'admin' && !d.ownerId)).map((d) => [d.id, d]))
+  for (const d of drafts) {
+    const donor = draftDonors.get(d.donorId)
+    if (d.status !== 'pending' || !donor) continue
+    // A draft saved before the donor lost (or never had) that contact detail
+    // can't be sent; asking to approve it is a dead end.
+    const sendable = d.channel === 'text' ? donor.phone : donor.email
+    out.push({
+      id: `draft-${d.id}`, category: 'draft', urgency: 'due', to: '/follow-ups',
+      title: sendable
+        ? `Approve ${d.kind.replace('-', ' ')} for ${donor.name}`
+        : `Add ${d.channel === 'text' ? 'a phone number' : 'an email address'} for ${donor.name}, or discard the ${d.channel} draft`,
+      detail: sendable
+        ? `Drafted ${fmtDate(d.createdAt)}; nothing is sent until someone approves it`
+        : `The ${d.kind.replace('-', ' ')} drafted ${fmtDate(d.createdAt)} has nowhere to go`,
+    })
+  }
 
   const unassigned = visible.filter((d) => !d.ownerId).length
   if (role === 'admin' && unassigned > 0)
