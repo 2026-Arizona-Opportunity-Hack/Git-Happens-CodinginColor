@@ -97,7 +97,7 @@ function useStoreState(data: Bootstrap, token: GetToken, reload: () => Promise<v
     run(() => api(token, `donors/${donorId}/owner`, 'PUT', { ownerId }))
 
   const importRows = (rows: RawDonorRow[]) =>
-    run(() => api<{ created: number; merged: number; clusters: number }>(token, 'import', 'POST', { rows }))
+    run(() => api<{ created: number; merged: number; clusters: number; gifts: number; skippedGifts: number }>(token, 'import', 'POST', { rows }))
 
   // Fetched by the Members widget itself, whenever its token runs out.
   const widgetToken = useCallback(() => api<{ token: string }>(token, 'widget-token', 'POST').then((r) => r.token), [token])

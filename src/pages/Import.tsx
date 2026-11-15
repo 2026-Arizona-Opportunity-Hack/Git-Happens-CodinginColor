@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { SAMPLE_CSV } from '@/data/samples'
 import type { Source } from '@/data/types'
-import { dedupe, rowsFromCsv } from '@/lib/dedupe'
+import { dedupe, matchDonor, rowsFromCsv, SAME_GIFT_DAYS, splitGifts } from '@/lib/dedupe'
+import { fmtDate, money } from '@/lib/logic'
 import { useStore } from '@/store'
 
 const SOURCES: { key: Source; label: string; hint: string }[] = [
@@ -19,7 +20,7 @@ const SOURCES: { key: Source; label: string; hint: string }[] = [
 ]
 
 export default function Import() {
-  const { importRows, session } = useStore()
+  const { importRows, session, donors, gifts } = useStore()
   const [csv, setCsv] = useState<Partial<Record<Source, string>>>({})
 
   if (session.role !== 'admin') return <p>Only CIC admins can import donor data.</p>
@@ -27,6 +28,19 @@ export default function Import() {
   const rows = Object.entries(csv).flatMap(([src, text]) => rowsFromCsv(text!, src as Source))
   const clusters = dedupe(rows)
   const dupes = clusters.filter((c) => c.rows.length > 1)
+  // Same matching the server runs on commit (admins have every donor and gift
+  // loaded), so the preview shows exactly which gifts will be skipped.
+  const known = new Map<string, { amount: number; date: string }[]>()
+  const plan = clusters.map((c, i) => {
+    const match = matchDonor(c, donors)
+    const key = match?.id ?? `new-${i}`
+    if (!known.has(key)) known.set(key, gifts.filter((g) => g.donorId === match?.id))
+    const split = splitGifts(c.rows, known.get(key)!)
+    known.get(key)!.push(...split.keep)
+    return { cluster: c, match, ...split }
+  })
+  const newGifts = plan.reduce((n, p) => n + p.keep.length, 0)
+  const dupGifts = plan.reduce((n, p) => n + p.skipped.length, 0)
 
   return (
     <>
@@ -65,19 +79,25 @@ export default function Import() {
           <SectionTitle>Preview</SectionTitle>
           <p className="mb-4 text-sm">
             <strong>{rows.length}</strong> rows → <strong>{clusters.length}</strong> unique donors.{' '}
-            <strong>{dupes.length}</strong> merged across sources. Existing donors are matched on commit.
+            <strong>{dupes.length}</strong> merged across sources,{' '}
+            <strong>{plan.filter((p) => p.match).length}</strong> already in the database.{' '}
+            <strong>{newGifts}</strong> gifts to record; <strong>{dupGifts}</strong> skipped as duplicates
+            (same donor and amount, dates within {SAME_GIFT_DAYS} days).
           </p>
           <Card className="py-0">
             <Table>
               <TableHeader>
                 <TableRow className="bg-cic-dark hover:bg-cic-dark">
-                  {['Donor', 'Email', 'Phone', 'Sources', 'Rows', 'Matched on'].map((h) => <TableHead key={h} className="text-white">{h}</TableHead>)}
+                  {['Donor', 'Email', 'Phone', 'Sources', 'Rows', 'Matched on', 'Gifts'].map((h) => <TableHead key={h} className="text-white">{h}</TableHead>)}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {clusters.map((c, i) => (
+                {plan.map(({ cluster: c, match, keep, skipped }, i) => (
                   <TableRow key={i} className={c.rows.length > 1 ? 'bg-cic-tint' : ''}>
-                    <TableCell className="font-medium">{c.name}</TableCell>
+                    <TableCell className="font-medium">
+                      {c.name}
+                      {match && <div className="text-xs font-normal text-muted-foreground">Existing donor: {match.name}</div>}
+                    </TableCell>
                     <TableCell>{c.email ?? '—'}</TableCell>
                     <TableCell>{c.phone ?? '—'}</TableCell>
                     <TableCell className="space-x-1">{c.sources.map((s) => <Badge key={s} variant="outline">{s}</Badge>)}</TableCell>
@@ -89,6 +109,14 @@ export default function Import() {
                         </Badge>
                       ))}
                     </TableCell>
+                    <TableCell>
+                      {keep.length} new
+                      {skipped.length > 0 && (
+                        <div className="text-xs text-amber-900">
+                          {skipped.length} already recorded: {skipped.map((g) => `${money(g.amount)} ${fmtDate(g.date)} (${g.source})`).join(', ')}
+                        </div>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -99,7 +127,7 @@ export default function Import() {
               onClick={async () => {
                 const r = await importRows(rows)
                 if (!r) return
-                toast.success(`${r.created} new donors, ${r.merged} merged into existing records`)
+                toast.success(`${r.created} new donors, ${r.merged} merged into existing records. ${r.gifts} gifts recorded, ${r.skippedGifts} duplicates skipped`)
                 setCsv({})
               }}
             >

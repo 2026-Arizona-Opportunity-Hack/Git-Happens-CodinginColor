@@ -1,0 +1,4 @@
+# Nix and shell scripts run under Linux bash, which breaks on CRLF. Keep them
+# LF even on Windows checkouts where core.autocrlf=true.
+*.nix text eol=lf
+*.sh  text eol=lf
