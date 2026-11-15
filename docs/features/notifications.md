@@ -8,7 +8,7 @@ covers:
 
 # Notifications
 
-One inbox of reminders. The nav shows how many there are.
+One inbox of reminders. The nav badge counts only the ones that need action now (overdue and due), so the page's subtitle splits the total the same way: "6 need action · 2 coming up".
 
 - Overdue and upcoming next steps
 - Quarterly updates due

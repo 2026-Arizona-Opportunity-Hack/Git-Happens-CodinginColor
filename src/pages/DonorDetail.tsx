@@ -14,17 +14,26 @@ import type { Channel, Donor, Gift } from '@/data/types'
 import { funderPacket } from '@/lib/packet'
 import { useStore } from '@/store'
 import { useAsk } from '@/components/ChatWidget'
+import { fmtPhone } from '@/lib/utils'
 import { byDateDesc, calendarLink, donorTimeline, fmtDate, money, offeredEvents, retentionStatus, totalsByYear, UNASSIGNED, yearOf } from '@/lib/logic'
 
 const CHANNEL_ICON = { email: Mail, text: MessageSquare, call: Phone, 'in-person': Users, note: StickyNote }
 
-// Funder packet: giving totals and gift history.
+// Funder packet: giving totals and gift history. The browser saves it with no
+// sign on the page, so a toast names the file.
 function downloadPacket(d: Donor, gifts: Gift[], today: string) {
-  const blob = new Blob([funderPacket(d, gifts, today)], { type: 'text/markdown' })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = `CIC_FunderPacket_${d.name.replace(/\W+/g, '')}_${today.slice(0, 4)}.md`
-  a.click()
+  const file = `CIC_FunderPacket_${d.name.replace(/\W+/g, '')}_${today.slice(0, 4)}.md`
+  try {
+    const url = URL.createObjectURL(new Blob([funderPacket(d, gifts, today)], { type: 'text/markdown' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = file
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    toast.success(`Downloaded ${file}`, { description: 'Check your Downloads folder.' })
+  } catch {
+    toast.error("Couldn't make the funder packet. Try again.")
+  }
 }
 
 export default function DonorDetail() {
@@ -77,7 +86,7 @@ export default function DonorDetail() {
     <>
       <PageHeader
         title={donor.name}
-        description={[donor.org, donor.email, donor.phone].filter(Boolean).join(' · ')}
+        description={[donor.org, donor.email, donor.phone && fmtPhone(donor.phone)].filter(Boolean).join(' · ')}
         actions={
           <>
             {/* The assistant turns what happened into a log, a next step and a draft, as buttons to press. */}

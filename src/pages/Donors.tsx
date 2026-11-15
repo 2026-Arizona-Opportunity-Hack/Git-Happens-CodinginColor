@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { DataTable, type ColumnDef, type Filters } from '@/components/ui/data-table'
 import { applyFilters } from '@/components/ui/filters'
 import { useStore } from '@/store'
+import { IMPORT_SOURCES } from '@/data/sources'
 import type { Donor, Gift } from '@/data/types'
 import { fmtDate, lastGiftDate, money, retentionStatus, yearOf } from '@/lib/logic'
 import { capitalize, donorTextFilter, giftDateFilter, nextStepFilter, sourceFilter, STATUSES } from '@/lib/donor-columns'
@@ -45,7 +46,7 @@ export default function Donors() {
             </Button>
           </>
         }
-        description={`The ${mine.length} donor${mine.length === 1 ? '' : 's'} assigned to you, deduped across the spreadsheet, Zeffy, Benevity, AZ Gives and United Way.`}
+        description={`The ${mine.length} donor${mine.length === 1 ? '' : 's'} assigned to you${fromSources(mine)}.`}
       />
       <DataTable
         caption="My donors"
@@ -59,6 +60,15 @@ export default function Donors() {
       />
     </>
   )
+}
+
+// Name only the sources these donors actually came from, so the subtitle
+// doesn't promise a merge that hasn't happened.
+function fromSources(mine: Donor[]): string {
+  const keys = new Set(mine.flatMap((d) => d.sources))
+  const names = IMPORT_SOURCES.filter((s) => keys.has(s.key)).map((s) => (s.key === 'spreadsheet' ? 'the donor spreadsheet' : s.label.replace(/ export$/, '')))
+  if (names.length === 0) return ''
+  return names.length === 1 ? `, from ${names[0]}` : `, deduped across ${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
 }
 
 type DonorRow = { d: Donor; lifetime: number; last?: string; status: ReturnType<typeof retentionStatus> }
