@@ -129,7 +129,7 @@ bun run db:migrate   # create the local D1 database
 bun run db:seed      # load the fake demo data (re-run any time to reset)
 bun dev              # http://localhost:5173, app + API
 nix build            # typecheck + production build, output in ./result
-bun run test         # unit tests for dedupe and reminders (Node's test runner via tsx)
+bun run test         # unit tests for src/lib (bun's test runner)
 ```
 
 `nix build` installs dependencies from `bun.lock` in a sandbox, checked against a hash in `flake.nix`. After changing dependencies, set that hash (`x86_64-linux = "…"`) to `""`, run `nix build`, and paste the `got:` hash it prints. Other platforms need their own hash added the same way.
