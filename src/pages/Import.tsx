@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { DataTable, type ColumnDef } from '@/components/ui/data-table'
 import { SAMPLE_CSV } from '@/data/samples'
 import { IMPORT_SOURCES as SOURCES, STALE_IMPORT_DAYS } from '@/data/sources'
 import type { Source } from '@/data/types'
@@ -63,6 +63,56 @@ export default function Import() {
   const newGifts = plan.reduce((n, p) => n + p.keep.length, 0)
   const newTotal = plan.reduce((n, p) => n + p.keep.reduce((t, g) => t + g.amount, 0), 0)
   const dupGifts = plan.reduce((n, p) => n + p.skipped.length, 0)
+  const previewColumns: ColumnDef<(typeof plan)[number]>[] = [
+    {
+      id: 'donor',
+      header: 'Donor',
+      accessorFn: (p) => p.cluster.name,
+      meta: { className: 'font-medium' },
+      cell: ({ row: { original: { cluster: c, match } } }) => (
+        <>
+          {c.name}
+          <div className="text-xs font-normal text-muted-foreground">{match ? `Existing donor: ${match.name}` : 'New donor'}</div>
+        </>
+      ),
+    },
+    { id: 'email', header: 'Email', accessorFn: (p) => p.cluster.email, sortUndefined: 'last', cell: ({ getValue }) => getValue<string>() ?? '—' },
+    { id: 'phone', header: 'Phone', accessorFn: (p) => p.cluster.phone, sortUndefined: 'last', cell: ({ getValue }) => getValue<string>() ?? '—' },
+    {
+      id: 'sources',
+      header: 'Sources',
+      enableSorting: false,
+      meta: { className: 'space-x-1' },
+      cell: ({ row: { original: { cluster: c } } }) => c.sources.map((s) => <Badge key={s} variant="outline">{s}</Badge>),
+    },
+    {
+      id: 'matched',
+      header: 'Matched on',
+      // Name-only matches need a human look, so they sort first.
+      accessorFn: (p) => (p.cluster.matchedOn.includes('name') ? 0 : p.cluster.matchedOn.length ? 1 : 2),
+      cell: ({ row: { original: { cluster: c } } }) =>
+        c.matchedOn.length === 0 ? '—' : c.matchedOn.map((m) => (
+          <Badge key={m} className={m === 'name' ? 'bg-amber-100 text-amber-900' : 'bg-cic-dark text-white'}>
+            {m === 'name' ? 'name only: check' : m}
+          </Badge>
+        )),
+    },
+    {
+      id: 'gifts',
+      header: 'Gifts',
+      accessorFn: (p) => p.keep.length,
+      cell: ({ row: { original: { keep, skipped } } }) => (
+        <>
+          {keep.length} new
+          {skipped.length > 0 && (
+            <div className="text-xs text-amber-900">
+              {skipped.length} already recorded: {skipped.map((g) => `${money(g.amount)} ${fmtDate(g.date)} (${g.source})`).join(', ')}
+            </div>
+          )}
+        </>
+      ),
+    },
+  ]
   // Rows whose gift would be dropped: say why, so money never disappears silently.
   const issues = {
     'no-date': rows.filter((r) => r.giftIssue === 'no-date'),
@@ -208,41 +258,13 @@ export default function Import() {
               Preview donors: {rows.length} rows → {clusters.length} donors, {dupes.length} merged across files
             </summary>
             <div className="mt-3">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-cic-dark hover:bg-cic-dark">
-                  {['Donor', 'Email', 'Phone', 'Sources', 'Matched on', 'Gifts'].map((h) => <TableHead key={h} className="text-white">{h}</TableHead>)}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {plan.map(({ cluster: c, match, keep, skipped }, i) => (
-                  <TableRow key={i} className={c.rows.length > 1 ? 'bg-cic-tint' : ''}>
-                    <TableCell className="font-medium">
-                      {c.name}
-                      <div className="text-xs font-normal text-muted-foreground">{match ? `Existing donor: ${match.name}` : 'New donor'}</div>
-                    </TableCell>
-                    <TableCell>{c.email ?? '—'}</TableCell>
-                    <TableCell>{c.phone ?? '—'}</TableCell>
-                    <TableCell className="space-x-1">{c.sources.map((s) => <Badge key={s} variant="outline">{s}</Badge>)}</TableCell>
-                    <TableCell>
-                      {c.matchedOn.length === 0 ? '—' : c.matchedOn.map((m) => (
-                        <Badge key={m} className={m === 'name' ? 'bg-amber-100 text-amber-900' : 'bg-cic-dark text-white'}>
-                          {m === 'name' ? 'name only: check' : m}
-                        </Badge>
-                      ))}
-                    </TableCell>
-                    <TableCell>
-                      {keep.length} new
-                      {skipped.length > 0 && (
-                        <div className="text-xs text-amber-900">
-                          {skipped.length} already recorded: {skipped.map((g) => `${money(g.amount)} ${fmtDate(g.date)} (${g.source})`).join(', ')}
-                        </div>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+              <DataTable
+                caption="Donors this import will create or update"
+                columns={previewColumns}
+                data={plan}
+                pageSize={10}
+                rowClassName={(r) => (r.original.cluster.rows.length > 1 ? 'bg-cic-tint!' : undefined)}
+              />
             </div>
           </details>
 
@@ -298,26 +320,19 @@ export default function Import() {
         {imports.length === 0 ? (
           <p className="text-sm">Nothing imported yet.</p>
         ) : (
-          <Card className="py-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-cic-dark hover:bg-cic-dark">
-                  {['When', 'Source', 'File', 'Rows', 'By'].map((h) => <TableHead key={h} className="text-white">{h}</TableHead>)}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {imports.slice(0, 15).map((i) => (
-                  <TableRow key={i.id}>
-                    <TableCell><time dateTime={i.importedAt}>{fmtWhen(i.importedAt)}</time></TableCell>
-                    <TableCell><Badge variant="outline">{i.source}</Badge></TableCell>
-                    <TableCell>{i.fileName ?? '—'}</TableCell>
-                    <TableCell>{i.rowCount}</TableCell>
-                    <TableCell>{who(i.importedBy)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
+          <DataTable
+            caption="Import history"
+            columns={[
+              { accessorKey: 'importedAt', header: 'When', cell: ({ row: { original: i } }) => <time dateTime={i.importedAt}>{fmtWhen(i.importedAt)}</time> },
+              { accessorKey: 'source', header: 'Source', cell: ({ row: { original: i } }) => <Badge variant="outline">{i.source}</Badge> },
+              { accessorKey: 'fileName', header: 'File', sortUndefined: 'last', cell: ({ row: { original: i } }) => i.fileName ?? '—' },
+              { accessorKey: 'rowCount', header: 'Rows', meta: { className: 'text-right' } },
+              { id: 'by', header: 'By', accessorFn: (i) => who(i.importedBy) },
+            ] satisfies ColumnDef<(typeof imports)[number]>[]}
+            data={imports}
+            getRowId={(i) => i.id}
+            pageSize={10}
+          />
         )}
       </section>
     </>

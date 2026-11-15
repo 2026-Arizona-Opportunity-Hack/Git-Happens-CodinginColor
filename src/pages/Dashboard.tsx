@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { PageHeader, SectionTitle, Stat } from '@/components/common'
 import { Card, CardContent } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { DataTable, type ColumnDef } from '@/components/ui/data-table'
 import { useStore } from '@/store'
 import { fmtDate, money, quarterlyTouchDue, retentionStatus, yearOf } from '@/lib/logic'
 
@@ -32,31 +32,22 @@ export default function Dashboard() {
         {session.role === 'admin' && (
           <section>
             <SectionTitle>Board member load</SectionTitle>
-            <Card className="py-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-cic-dark hover:bg-cic-dark">
-                    <TableHead className="text-white">Board member</TableHead>
-                    <TableHead className="text-right text-white">Donors</TableHead>
-                    <TableHead className="text-right text-white">Touch due</TableHead>
-                    <TableHead className="text-right text-white">Overdue</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {boardMembers.map((m) => {
-                    const mine = donors.filter((d) => d.ownerId === m.id)
-                    return (
-                      <TableRow key={m.id} className="even:bg-cic-tint/60">
-                        <TableCell className="font-medium">{m.name}</TableCell>
-                        <TableCell className="text-right">{mine.length}</TableCell>
-                        <TableCell className="text-right">{mine.filter((d) => quarterlyTouchDue(d, today)).length}</TableCell>
-                        <TableCell className="text-right">{mine.filter((d) => d.nextStep && d.nextStep.due < today).length}</TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </Card>
+            <DataTable
+              caption="Board member load"
+              columns={loadColumns}
+              data={boardMembers.map((m) => {
+                const mine = donors.filter((d) => d.ownerId === m.id)
+                return {
+                  id: m.id,
+                  name: m.name,
+                  donors: mine.length,
+                  touchDue: mine.filter((d) => quarterlyTouchDue(d, today)).length,
+                  overdue: mine.filter((d) => d.nextStep && d.nextStep.due < today).length,
+                }
+              })}
+              getRowId={(r) => r.id}
+            />
+
           </section>
         )}
         {session.role === 'board' && (
@@ -111,3 +102,12 @@ export default function Dashboard() {
     </>
   )
 }
+
+type Load = { id: string; name: string; donors: number; touchDue: number; overdue: number }
+
+const loadColumns: ColumnDef<Load>[] = [
+  { accessorKey: 'name', header: 'Board member', meta: { className: 'font-medium' } },
+  { accessorKey: 'donors', header: 'Donors', meta: { className: 'text-right' } },
+  { accessorKey: 'touchDue', header: 'Touch due', meta: { className: 'text-right' } },
+  { accessorKey: 'overdue', header: 'Overdue', meta: { className: 'text-right' } },
+]
