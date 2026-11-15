@@ -12,6 +12,6 @@ Upcoming events come from CIC's calendar through its iCal address (`CALENDAR_ICS
 
 Once `CALENDAR_ICS_URL` is set, the calendar is the whole list: an event taken off it disappears from the app, and next steps linked to it keep their text and due date. If the address can't be read, the app keeps the events it already has (`wrangler tail` shows `calendar sync failed`).
 
-Until CIC shares its address, it reads the demo calendar in `public/demo-calendar.ics`, which has placeholder dates. Switching to CIC's own calendar is in [the README](../../README.md#events-calendar).
+Until CIC shares its address, it reads the demo calendar in `public/demo-calendar.ics`, which has placeholder dates. Switching to CIC's own calendar is in [Operations](../operations.md#events-calendar).
 
 Tests: `ical.test.ts`, `logic.test.ts`, `reminders.test.ts`, `actions.test.ts`.
