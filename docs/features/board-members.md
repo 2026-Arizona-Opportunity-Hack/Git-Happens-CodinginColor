@@ -8,7 +8,9 @@ covers:
 
 # Board members (admin)
 
-Invite board members by email, change their role, or remove them. The page is WorkOS's [Users Management widget](https://workos.com/docs/widgets/user-management).
+**Donors assigned**, at the top, lists each board member with how many donors they look after (sortable, most first), and under it how many donors are unassigned or still assigned to someone who has left the board. Assignments are changed on [All Donors](all-donors.md).
+
+Below it, invite board members by email, change their role, or remove them. That part is WorkOS's [Users Management widget](https://workos.com/docs/widgets/user-management), whose columns we can't change, which is why the donor counts are a table of their own.
 
 - **Admin** sees every donor and can import.
 - **Member** sees only their own donors.
