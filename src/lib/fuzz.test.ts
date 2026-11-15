@@ -4,10 +4,10 @@ import type { BoardMember, Donor, Draft, RawDonorRow } from '../data/types'
 import { chatAction, CHANNELS, KINDS, type ActionStore, type Attrs } from './actions'
 import { cleanDraft, MAX_CHARS } from './ai-draft'
 import { date, extraFields, HttpError, oneOf, periodRange, str, summarize, type SummaryGift } from './api'
-import { dedupe, normEmail, normName, normPhone, parseAmount, parseCsv, parseDate } from './dedupe'
+import { autoMapping, csvHeaders, dedupe, matchDonor, NEW_COLUMN, normEmail, normName, normPhone, parseAmount, parseCsv, parseDate, rowsFromCsv, sameGift, splitGifts } from './dedupe'
 import { donorsCsv } from './export'
 import { parseIcs } from './ical'
-import { colName, crc32 } from './xlsx'
+import { colName, crc32, xlsx } from './xlsx'
 
 // Property tests: each runs RUNS random cases from a seeded generator, so a
 // failure is repeatable. A failing case prints its seed; rerun it with
@@ -131,6 +131,55 @@ forAll('dedupe puts every row in one cluster, and rows sharing a key together', 
   assert.equal(again.length, clusters.length)
 })
 
+const csvQuote = (s: string) => (/[",\r\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s)
+const realDate = (d?: string) => d === undefined || (/^\d{4}-\d{2}-\d{2}$/.test(d) && new Date(d + 'T00:00:00Z').toISOString().startsWith(d))
+
+forAll('an uploaded file becomes rows with a name, a real amount and date, or a gift warning', (r) => {
+  const headers = [r.pick(['Name', 'Donor Name', 'Full name']), r.pick(['Email', 'E-mail']), r.pick(['Amount', 'Total Amount', 'Gift']), r.pick(['Date', 'Payment Date', 'When']), 'Shirt size']
+  const records = Array.from({ length: r.int(8) }, () => headers.map(() => r.pick([r.text(), '', `$${r.int(500)}`, `${1 + r.int(12)}/${1 + r.int(28)}/2026`, 'a@x.org'])))
+  const text = [headers, ...records].map((l) => l.map(csvQuote).join(',')).join(r.pick(['\n', '\r\n']))
+  const mapping = { ...autoMapping(csvHeaders(text)), 'Shirt size': NEW_COLUMN }
+  const rows = rowsFromCsv(text, 'spreadsheet', mapping)
+  assert.equal(rows.length, records.filter((l) => l[0].trim()).length) // rows without a name are dropped
+  rows.forEach((row) => {
+    assert.ok(row.name.trim())
+    assert.ok(row.amount === undefined || (Number.isFinite(row.amount) && row.amount > 0))
+    assert.ok(realDate(row.date), row.date)
+    // A gift that can't be saved as it is always says why.
+    if (row.amount !== undefined && !row.date) assert.ok(row.giftIssue === 'no-date' || row.giftIssue === 'bad-date')
+    for (const v of Object.values(row.extra ?? {})) assert.ok(v.trim())
+  })
+})
+
+forAll('importing the same gifts again adds none, and every gift is kept or skipped', (r) => {
+  const amount = () => r.pick([25, 50, 50, 100])
+  const day = () => r.int(2) ? `2026-03-${String(1 + r.int(20)).padStart(2, '0')}` : undefined
+  const existing = Array.from({ length: r.int(4) }, (_, i) => ({ id: `g${i}`, amount: amount(), date: day() ?? null }))
+  const before = JSON.stringify(existing)
+  const rows: RawDonorRow[] = Array.from({ length: r.int(10) }, () => ({ source: 'zeffy', name: 'Ana', amount: r.int(5) ? amount() : undefined, date: day() }))
+  const first = splitGifts(rows, existing)
+  assert.equal(JSON.stringify(existing), before) // the caller's list isn't changed
+  // A gift either becomes new, is a duplicate, or (develop) dates a saved undated gift.
+  const dated = 'dated' in first ? (first.dated as { id: string; date: string }[]) : []
+  assert.equal(first.keep.length + first.skipped.length + dated.length, rows.filter((g) => g.amount).length)
+  for (const [i, a] of first.keep.entries()) for (const b of first.keep.slice(i + 1)) assert.ok(!sameGift(a, b))
+  const saved = [...existing.map((g) => ({ ...g, date: dated.find((d) => d.id === g.id)?.date ?? g.date })), ...first.keep]
+  assert.equal(splitGifts(rows, saved).keep.length, 0)
+})
+
+forAll('matchDonor only picks a donor that shares an email, phone or name', (r) => {
+  const pick = <T,>(xs: T[]) => (r.int(3) ? r.pick(xs) : undefined)
+  const person = () => ({ name: r.pick(['Ana Ruiz', 'ANA RUIZ', 'Ben Ortiz', 'Cy']), email: pick(['a@x.org', 'A@x.org ', 'b@x.org']), phone: pick(['602-555-0101', '6025550101', '480-555-0199']) })
+  const donors = Array.from({ length: r.int(4) }, person)
+  for (const c of dedupe(Array.from({ length: 1 + r.int(4) }, () => ({ source: 'spreadsheet' as const, ...person() })))) {
+    const d = matchDonor(c, donors)
+    const shares = (x: (typeof donors)[number]) => (!!c.email && normEmail(x.email) === normEmail(c.email)) ||
+      (!!c.phone && normPhone(x.phone) === normPhone(c.phone)) || normName(x.name) === normName(c.name)
+    if (d) assert.ok(shares(d))
+    else assert.ok(!donors.some(shares))
+  }
+})
+
 // --- api.ts -------------------------------------------------------------------
 
 forAll('request checks return valid values or a 400, never anything else', (r) => {
@@ -250,4 +299,34 @@ test('colName gives every column its own letters, in spreadsheet order', () => {
     // Read it back as bijective base 26.
     assert.equal([...c].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0) - 1, i)
   }
+})
+
+// The stored zip entries of an .xlsx, read back by their local headers.
+function unzip(file: Uint8Array) {
+  const view = new DataView(file.buffer, file.byteOffset)
+  const out = new Map<string, Uint8Array>()
+  for (let at = 0; view.getUint32(at, true) === 0x04034b50;) {
+    const size = view.getUint32(at + 18, true), nameLen = view.getUint16(at + 26, true)
+    const name = new TextDecoder().decode(file.subarray(at + 30, at + 30 + nameLen))
+    const data = file.subarray(at + 30 + nameLen, at + 30 + nameLen + size)
+    assert.equal(crc32(data), view.getUint32(at + 14, true), name)
+    out.set(name, data)
+    at += 30 + nameLen + size
+  }
+  return out
+}
+
+forAll('an Excel export is valid XML holding the same text, whatever the cells contain', (r) => {
+  const cell = () => r.pick<() => string | number | undefined>([() => r.text(), () => r.int(1e6) / 100, () => undefined, () => '￾￿\u0001\u007f' + r.text(3), () => '😀'.slice(0, 1)])()
+  const header = Array.from({ length: 1 + r.int(4) }, () => r.text(6))
+  const rows = Array.from({ length: r.int(5) }, () => header.map(cell))
+  const sheet = unzip(xlsx(r.text(40), header, rows)).get('xl/worksheets/sheet1.xml')!
+  const xml = new TextDecoder('utf-8', { fatal: true }).decode(sheet)
+  // Only characters XML 1.0 allows, and no bare & or < inside text.
+  // eslint-disable-next-line no-control-regex -- the characters XML 1.0 can't contain
+  assert.doesNotMatch(xml, /[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/)
+  const texts = [...xml.matchAll(/<t xml:space="preserve">([^<]*)<\/t>/g)].map((m) => m[1])
+  for (const t of texts) assert.doesNotMatch(t, /&(?!amp;|lt;|gt;|quot;)/)
+  const cells = [header, ...rows].flat().filter((v): v is string => typeof v === 'string' && v !== '')
+  assert.equal(texts.length, cells.length)
 })
