@@ -55,7 +55,7 @@ Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevi
 |---|---|
 | **Dashboard** | Org health; board-member load; upcoming events; recent activity |
 | **Notifications** | One inbox of reminders: overdue/upcoming next steps, quarterly updates due, lapsed donors, drafts to approve, events in the next 3 weeks and (admins) exports not re-imported in 30 days. Nav shows a count |
-| **Follow-ups** | Next steps with due dates; quarterly-touch queue; lapsed-donor nudges; **drafts a human must approve** |
+| **Follow-ups** | Next steps with due dates; quarterly-touch queue; lapsed-donor nudges; **drafts a human must approve**. A draft opens in Gmail, Outlook or the default mail app (or Messages, for texts) with the donor, subject and body filled in, so it goes out from the board member's own address; they confirm "Did you send it?" and the touch is logged |
 | **Donors** | One deduped table across all sources; owner, lifetime, status, next step |
 | **Donor detail** | Timeline of gifts and communications; set a next step (one-click "invite to <event>"); log a text/email/call; draft thank-you/update; **one-click funder packet** |
 | **Retention** | Year over year: new, recovered, increased, same, decreased, lapsed, plus retention rate |
@@ -63,6 +63,8 @@ Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevi
 | **Read API** | Contract for `GET /api/v1/donor-summary`, aggregated by period / program / board member, with a live sample response |
 | **Board members** (admin) | Invite board members, change their role, remove them (WorkOS Users Management widget) |
 | **My account** | Each user edits their profile, changes password and sets up MFA, and signs out other devices (WorkOS widgets) |
+| **Assistant** (every page) | Bottom-right chat that answers questions about the records you can see, with donor cards, tables and links. It can't change anything itself: it offers buttons (log contact, set a next step, draft, approve or discard a draft, reassign for admins) whose labels the app writes, and nothing happens until you press one. Raw HTML, images and outside links in replies are never rendered |
+| **Installable app** | A PWA: "Install app" in Chrome or Edge, or Share → Add to Home Screen on iPhone, gives board members their own icon and window. The service worker (`public/sw.js`) caches only the app shell so it opens offline; `/api` data is never cached |
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
@@ -94,7 +96,7 @@ The password is public on purpose because the data is fake. Replace these accoun
 
 1. **Real exports**: get scrubbed Zeffy/Benevity samples from CIC and fix `COLUMN_MAP` in `dedupe.ts`.
 2. **Read API**: a Worker route behind a hashed API key, returning aggregates only (no PII).
-3. **Sending**: email via Resend/Listmonk and SMS via Twilio. Do this only after approval, and log the send to `interactions`.
+3. **Sending**: drafts open pre-filled in the board member's own mail or Messages app today. Saving drafts straight into their mailbox (Gmail API / Microsoft Graph) needs per-user OAuth and, for Gmail, Google's app verification; sending from the app (Resend, Twilio) would come from CIC rather than the board member.
 4. **Pick a P1**: debrief-to-action (a voice note becomes a contact record, a next step and a draft) or events-aware next steps (Google Calendar).
 5. **Brand**: swap the placeholder mark in `App.tsx` for the real CIC logo, and run Lighthouse (target a11y ≥ 95).
 
@@ -104,7 +106,7 @@ The password is public on purpose because the data is fake. Replace these accoun
 - Backend: a Cloudflare Worker (`worker/index.ts`) serving a JSON API under `/api/*`, next to the static app
 - Database: [Cloudflare D1](https://developers.cloudflare.com/d1/) (SQLite). Schema in `migrations/`
 - Auth: [WorkOS AuthKit](https://workos.com/user-management), free up to 1M users. The Worker verifies each access token with `jose` and looks the user up in the CIC organization in WorkOS, which is the source of truth for who is on the board
-- APIs / services: none yet
+- APIs / services: the [OHack AI gateway](https://ai.ohack.dev) (OpenAI-compatible, model `muse-spark`) for the assistant. `POST /api/chat` sends it the caller's own scoped records, the same data `/api/bootstrap` returns, with the conversation. **That includes donor names, emails and gifts**, so check with CIC before real donor data goes through it.
 
 ## Run it locally
 
@@ -124,7 +126,7 @@ bun run test         # unit tests for dedupe and reminders (Node's test runner v
 
 `nix build` installs dependencies from `bun.lock` in a sandbox, checked against a hash in `flake.nix`. After changing dependencies, set that hash (`x86_64-linux = "…"`) to `""`, run `nix build`, and paste the `got:` hash it prints. Other platforms need their own hash added the same way.
 
-`bun dev` runs the Worker and a local D1 database inside Vite, through `@cloudflare/vite-plugin`. Both the Worker and `bun run db:seed` need the WorkOS Staging secret key, so copy `.env.example` to `.env` and set `WORKOS_API_KEY` before running them. `.env` is gitignored.
+`bun dev` runs the Worker and a local D1 database inside Vite, through `@cloudflare/vite-plugin`. Both the Worker and `bun run db:seed` need the WorkOS Staging secret key, so copy `.env.example` to `.env` and set `WORKOS_API_KEY` before running them. The assistant also needs `AI_API_KEY`, the OHack AI gateway key from your team card; without it everything else works and the chat says it's unavailable. In production it's a Worker secret (`bunx wrangler secret put AI_API_KEY`). `.env` is gitignored.
 
 ### Sign-in (WorkOS)
 

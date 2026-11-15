@@ -6,6 +6,13 @@ import { money } from './logic'
 
 const first = (name: string) => name.split(' ')[0]
 
+export const DRAFT_SUBJECT: Record<DraftKind, string> = {
+  'thank-you': 'Thank you from Coding in Color',
+  'quarterly-update': 'A quarterly update from Coding in Color',
+  'lapsed-nudge': 'We miss you at Coding in Color',
+  'follow-up': 'Following up from Coding in Color',
+}
+
 export function draftBody(kind: DraftKind, donor: Donor, gifts: Gift[], owner: BoardMember): string {
   const last = [...gifts].sort((a, b) => b.date.localeCompare(a.date))[0]
   const hi = donor.org && !donor.email?.includes(first(donor.name).toLowerCase()) ? 'team' : first(donor.name)
