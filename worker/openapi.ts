@@ -329,7 +329,7 @@ export const docsPage = `<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CIC Donor API</title>
-  <link rel="icon" href="/icon.svg">
+  <link rel="icon" href="/icon-192.png" type="image/png">
 </head>
 <body>
   <div id="app"></div>

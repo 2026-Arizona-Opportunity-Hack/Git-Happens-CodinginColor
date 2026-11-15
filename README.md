@@ -81,7 +81,6 @@ Here is what's still unfinished. More detail is in [Security → Known gaps](doc
 4. **Sessions in an HttpOnly cookie.** The sign-in session sits in localStorage today, because keeping it in a cookie through AuthKit's browser SDK needs a $99/month WorkOS custom domain. We'll move sign-in to the Worker, so the session lives in an HttpOnly cookie on our own domain for free ([#179](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/issues/179)).
 5. **Sending from the app.** Today drafts open pre-filled in the board member's own mail or Messages app. Saving them straight to Gmail or Outlook needs per-user OAuth, and for Gmail, Google's app verification.
 6. **Classroom outcomes.** Once the curriculum platform (Problem 1) has a read API, add students served and learning gains to funder packets.
-7. **Brand.** Swap the placeholder logo in `App.tsx` for CIC's.
 
 ## Security: who can see what
 
