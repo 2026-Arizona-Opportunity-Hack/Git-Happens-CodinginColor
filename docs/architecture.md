@@ -50,6 +50,7 @@ Each page's doc in [features/](features/) says where its code is. The pieces eve
 - `worker/index.ts`: the API. Every route resolves the caller first; board members can only read or write donors they own, and import is admin-only.
 - `migrations/`: D1 schema. Add a new numbered file for each change; deploys apply them before the new code goes live.
 - `src/data/types.ts`: the domain model; the D1 schema in `migrations/` stores these shapes.
+- Lists: tables use `DataTable` (`src/components/ui/data-table.tsx`), 25 rows a page; plain lists that can grow wrap in `Paged` (`src/components/common.tsx`), 10 a page.
 
 ## Brand
 

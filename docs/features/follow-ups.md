@@ -17,6 +17,8 @@ A board member's work queue:
 - Lapsed-donor nudges
 - **Drafts a human must approve.** Nothing is sent without a person approving it.
 
+Long lists show a page at a time (10 rows, or 6 drafts) with Previous/Next.
+
 ## Drafts
 
 Every draft (thank-you, quarterly update, lapsed nudge, follow-up, invitation) is written by AI from the donor's **notes**, gifts, next step, logged outreach and the last messages sent to them. They're marked **Drafted by AI: check before sending**. If the AI fails or takes over 12 seconds, the template is used instead.

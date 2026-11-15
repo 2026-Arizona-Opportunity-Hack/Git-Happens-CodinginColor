@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
-import { PageHeader, Stat, StatusBadge } from '@/components/common'
+import { PageHeader, Paged, Stat, StatusBadge } from '@/components/common'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -124,10 +124,11 @@ export default function Retention() {
                       <h2 id={`group-${g.title}`} className="mb-2 flex items-baseline gap-2 text-lg font-semibold text-cic-dark">
                         {g.title} <span className="text-sm font-normal text-muted-foreground">{list.length}</span>
                       </h2>
-                      <Card className="py-0">
+                      <Card className="gap-0 py-0">
                         {list.length ? (
+                          <Paged items={list} label={g.title} className="px-4 py-3">{(page) => (
                           <ul className="divide-y">
-                            {list.map((r) => (
+                            {page.map((r) => (
                               <li key={r.d.id}>
                                 <Link to={`/donors/${r.d.id}`} className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-muted focus-visible:bg-muted focus-visible:outline-none">
                                   <span className="min-w-0 flex-1">
@@ -141,6 +142,7 @@ export default function Retention() {
                               </li>
                             ))}
                           </ul>
+                          )}</Paged>
                         ) : (
                           <p className="px-4 py-3 text-sm text-muted-foreground">{g.empty}</p>
                         )}
