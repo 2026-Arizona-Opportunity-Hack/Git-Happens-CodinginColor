@@ -123,8 +123,8 @@ export default function DonorDetail() {
             </CardContent>
           </Card>
 
-          <Notes key={donor.id} donorId={donor.id} saved={donor.notes ?? ''} readOnly={s.sample} save={s.saveNotes} />
-          <Contact key={`contact-${donor.id}`} donor={donor} readOnly={s.sample} save={s.saveContact} />
+          <Notes key={donor.id} donorId={donor.id} saved={donor.notes ?? ''} save={s.saveNotes} />
+          <Contact key={`contact-${donor.id}`} donor={donor} save={s.saveContact} />
 
           <section>
             <SectionTitle>Timeline</SectionTitle>
@@ -265,8 +265,8 @@ export default function DonorDetail() {
 }
 
 // Email and phone, saved together; a blank field clears it.
-function Contact({ donor, readOnly, save }: {
-  donor: Donor; readOnly: boolean; save: (donorId: string, contact: { email: string; phone: string }) => Promise<unknown>
+function Contact({ donor, save }: {
+  donor: Donor; save: (donorId: string, contact: { email: string; phone: string }) => Promise<unknown>
 }) {
   const [email, setEmail] = useState(donor.email ?? '')
   const [phone, setPhone] = useState(donor.phone ?? '')
@@ -298,19 +298,17 @@ function Contact({ donor, readOnly, save }: {
         <form className="grid gap-3" onSubmit={submit} noValidate>
           <div className="grid gap-1">
             <Label htmlFor="donor-email">Email</Label>
-            <Input id="donor-email" type="email" maxLength={200} value={email} readOnly={readOnly} onChange={(e) => setEmail(e.target.value)}
+            <Input id="donor-email" type="email" maxLength={200} value={email} onChange={(e) => setEmail(e.target.value)}
               aria-invalid={!!errors.email} aria-describedby={errors.email ? 'donor-email-error' : undefined} />
             {errors.email && <p id="donor-email-error" className="text-sm text-destructive">{errors.email}</p>}
           </div>
           <div className="grid gap-1">
             <Label htmlFor="donor-phone">Phone</Label>
-            <Input id="donor-phone" type="tel" maxLength={200} value={phone} readOnly={readOnly} onChange={(e) => setPhone(e.target.value)}
+            <Input id="donor-phone" type="tel" maxLength={200} value={phone} onChange={(e) => setPhone(e.target.value)}
               aria-invalid={!!errors.phone} aria-describedby={errors.phone ? 'donor-phone-error' : undefined} />
             {errors.phone && <p id="donor-phone-error" className="text-sm text-destructive">{errors.phone}</p>}
           </div>
-          {readOnly
-            ? <p className="text-xs text-muted-foreground">Sample data is view-only.</p>
-            : <Button type="submit" variant="outline" disabled={!changed || busy}>{busy ? 'Saving…' : 'Save contact'}</Button>}
+          <Button type="submit" variant="outline" disabled={!changed || busy}>{busy ? 'Saving…' : 'Save contact'}</Button>
         </form>
       </CardContent>
     </Card>
@@ -319,8 +317,8 @@ function Contact({ donor, readOnly, save }: {
 
 // Saves a second after typing stops, and when the box loses focus. The AI
 // reads these notes when it writes this donor's drafts.
-function Notes({ donorId, saved, readOnly, save }: {
-  donorId: string; saved: string; readOnly: boolean; save: (donorId: string, notes: string) => Promise<unknown>
+function Notes({ donorId, saved, save }: {
+  donorId: string; saved: string; save: (donorId: string, notes: string) => Promise<unknown>
 }) {
   const [text, setText] = useState(saved)
   const [state, setState] = useState<'saved' | 'unsaved' | 'saving' | 'error'>('saved')
@@ -355,14 +353,13 @@ function Notes({ donorId, saved, readOnly, save }: {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3">
         <CardTitle><label htmlFor="donor-notes">Notes</label></CardTitle>
-        {!readOnly && <span aria-live="polite" className={state === 'error' ? 'text-sm text-red-800' : 'text-sm text-muted-foreground'}>{status}</span>}
+        <span aria-live="polite" className={state === 'error' ? 'text-sm text-red-800' : 'text-sm text-muted-foreground'}>{status}</span>
       </CardHeader>
       <CardContent>
         <Textarea
           id="donor-notes"
           rows={4}
           value={text}
-          readOnly={readOnly}
           maxLength={10000}
           aria-describedby="donor-notes-hint"
           placeholder="Interests, family, how they like to be contacted, what they asked about…"
@@ -376,7 +373,7 @@ function Notes({ donorId, saved, readOnly, save }: {
           onBlur={flush}
         />
         <p id="donor-notes-hint" className="mt-2 text-xs text-muted-foreground">
-          {readOnly ? 'Sample data is view-only.' : 'The AI uses these notes when it writes drafts for this donor.'}
+          The AI uses these notes when it writes drafts for this donor.
         </p>
       </CardContent>
     </Card>

@@ -67,12 +67,10 @@ Each page has its own doc in [`docs/features/`](docs/features/): who uses it, wh
 - **[Assistant](docs/features/assistant.md)**: chat about your records, debriefs by voice, buttons you press to act
 - **[Search](docs/features/search.md)**: pages and donors, from any page (Ctrl+K)
 - **[Events calendar](docs/features/events-calendar.md)**: CIC's calendar, so invites have real dates
-- **[Use sample data](docs/features/sample-data.md)**: made-up records to try the app before an import
 - **[Read API](docs/features/read-api.md)**: (admin) API keys for CIC's org dashboard, plus interactive API docs
 - **[Board members](docs/features/board-members.md)**: (admin) invite, change role, remove
 - **[My account](docs/features/my-account.md)**: profile, password, MFA
 - **[Installable app](docs/features/installable-app.md)**: install on phones and desktops; opens offline
-- **[Dev tools](docs/features/dev-tools.md)**: (admin, development only) clear the donor database; remove before launch
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
@@ -104,7 +102,7 @@ Judges score Security, so here's what checks this repo. Details and every findin
 - **AI security audits in CI.** Adding a label to a PR (`ai-review`, `ai-review:kimi-k3` or `ai-review:muse-wonder`) has Claude, kimi-k3 or muse-wonder review it, and leaving the PR number empty audits the whole repo. Each report is saved in [`audits/`](audits/) through its own PR. The model gets read-only tools and no GitHub token.
 - **What they found, and what we fixed.** Four audits ran on Nov 15. Two PR audits and Claude's whole-repo audit found nothing. muse-wonder's whole-repo audit found two issues:
   - Donor text could steer the AI (prompt injection). Mostly fixed in [#95](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/pull/95); the last part is [#93](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/issues/93).
-  - Dev tools are switched on. That's on purpose for the demo, and listed as a gap to close before launch.
+  - Dev tools were switched on, letting any admin clear every donor. The page and its route are now removed.
 - **95% coverage gate.** Every PR runs the typecheck and unit tests, and the PR fails if tests cover under 95% of lines or functions in `src/`. Every module counts, tested or not. Coverage is about 98% today, and each P0–P2 feature in CIC's brief maps to its tests ([Testing](docs/testing.md)).
 - **Fuzz tests.** Each run throws 4,500 seeded random inputs at the import pipeline, dedupe, the Excel export, the API input checks, the calendar parser, AI drafts and the assistant's buttons. The fuzz tests found two real bugs, both fixed with regression tests:
   - impossible calendar dates got through ([#84](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/pull/84))

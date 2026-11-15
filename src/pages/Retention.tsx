@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 import { PageHeader, Paged, Stat, StatusBadge } from '@/components/common'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useStore } from '@/store'
@@ -19,7 +19,7 @@ const GROUPS: { title: string; statuses: RetentionStatus[]; empty: string }[] = 
 ]
 
 export default function Retention() {
-  const { donors, gifts, today, setSample } = useStore()
+  const { donors, gifts, today } = useStore()
   const [unit, setUnit] = useState<Period>('year')
   const current = periodOf(today, unit)
   // Tabs run from the first period with a gift (or the one before now) up to
@@ -62,10 +62,9 @@ export default function Retention() {
         <Card>
           <CardContent className="py-10 text-center">
             <h2 className="text-lg font-semibold">No gifts recorded yet</h2>
-            <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">Import donors to see who keeps giving, or try the page with sample data.</p>
+            <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">Import donors to see who keeps giving.</p>
             <div className="mt-6 flex flex-wrap justify-center gap-2">
               <Link to="/import" className={buttonVariants()}>Import donors</Link>
-              <Button variant="outline" onClick={() => setSample(true)}>Use sample data</Button>
             </div>
           </CardContent>
         </Card>

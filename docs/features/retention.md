@@ -3,7 +3,6 @@ title: Retention
 audience: admins
 covers:
   - src/pages/Retention.tsx
-  - src/data/retention-sample.ts
 ---
 
 # Retention (admin)
@@ -17,7 +16,7 @@ Each donor list shows 10 at a time, with Previous/Next once there are more.
 - donors grouped by the year (or quarter) of their first gift, with the share who gave again in each period after;
 - the lapse rate by source (Zeffy, Benevity…) and by program.
 
-With no gifts yet, the page offers **Use sample data** (see [Sample data](sample-data.md)).
+With no gifts yet, the page links to Import.
 
 Gifts with an unknown date count toward lifetime giving but not toward any period, so they don't appear here.
 
