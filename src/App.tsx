@@ -1,12 +1,12 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom'
 import { AuthKitProvider, useAuth } from '@workos-inc/authkit-react'
-import { BarChart3, Bell, Code2, Home, ListTodo, LogOut, Upload, UserCog, UserRound, Users } from 'lucide-react'
+import { BarChart3, Bell, Code2, Home, ListTodo, LogOut, MessageCircle, Upload, UserCog, UserRound, Users } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
 import { StoreProvider, useReminders, useStore } from '@/store'
 import { cn } from '@/lib/utils'
-import { ChatWidget } from '@/components/ChatWidget'
+import { ChatPanel, useChat, useWide } from '@/components/ChatWidget'
 import Dashboard from '@/pages/Dashboard'
 import Donors from '@/pages/Donors'
 import DonorDetail from '@/pages/DonorDetail'
@@ -24,6 +24,8 @@ const NAV = [
   { to: '/follow-ups', label: 'Follow-ups', icon: ListTodo },
   { to: '/donors', label: 'Donors', icon: Users },
   { to: '/retention', label: 'Retention', icon: BarChart3 },
+  // On wide screens the assistant is a column beside every page instead.
+  { to: '/assistant', label: 'Assistant', icon: MessageCircle, narrowOnly: true },
   { to: '/import', label: 'Import', icon: Upload, adminOnly: true },
   { to: '/api', label: 'Read API', icon: Code2, adminOnly: true },
   { to: '/members', label: 'Board members', icon: UserCog, adminOnly: true },
@@ -49,8 +51,10 @@ function Shell() {
   const { session } = useStore()
   // Badge counts what needs action now; "coming up" items don't nag.
   const actionable = useReminders().filter((r) => r.urgency !== 'upcoming').length
+  const chat = useChat()
+  const wide = useWide()
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[240px_1fr]">
+    <div className="min-h-screen md:grid md:grid-cols-[240px_1fr] lg:grid-cols-[240px_1fr_22rem]">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:p-2">Skip to content</a>
       <aside className="border-b border-sidebar-border bg-sidebar p-4 md:sticky md:top-0 md:h-screen md:border-r md:border-b-0">
         <div className="mb-6 flex items-center gap-2">
@@ -63,7 +67,7 @@ function Shell() {
           </div>
         </div>
         <nav aria-label="Main" className="flex gap-1 overflow-x-auto md:flex-col">
-          {NAV.filter((n) => !n.adminOnly || session.role === 'admin').map(({ to, label, icon: Icon }) => (
+          {NAV.filter((n) => (!n.adminOnly || session.role === 'admin') && !(n.narrowOnly && wide)).map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
@@ -99,10 +103,11 @@ function Shell() {
           <Route path="/import" element={<Import />} />
           <Route path="/api" element={<ApiDocs />} />
           <Route path="/members" element={session.role === 'admin' && <Suspense fallback={<p role="status">Loading…</p>}><Members /></Suspense>} />
+          <Route path="/assistant" element={wide ? <Navigate to="/" replace /> : <ChatPanel chat={chat} variant="page" />} />
           <Route path="/account" element={<Suspense fallback={<p role="status">Loading…</p>}><Account /></Suspense>} />
         </Routes>
       </main>
-      <ChatWidget />
+      {wide && <ChatPanel chat={chat} variant="column" />}
       <Toaster />
     </div>
   )
