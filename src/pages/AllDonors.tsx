@@ -78,7 +78,9 @@ export default function AllDonors() {
   // would add to it, so the load can be seen evening out before Save.
   const pending = (id: string) => changed.filter((d) => choice(d) === id).length
   const count = (id: string) => `${load.get(id) ?? 0}${pending(id) ? ` + ${pending(id)} unsaved` : ''}`
-  const items = [{ value: UNASSIGNED, label: 'Unassigned' }, ...boardMembers.map((m) => ({ value: m.id, label: `${m.name} (${count(m.id)})` }))]
+  // The trigger shows only the name so the column stays narrow; the counts
+  // are in the open list, where they help choose.
+  const items = [{ value: UNASSIGNED, label: 'Unassigned' }, ...boardMembers.map((m) => ({ value: m.id, label: m.name }))]
   const totals = (d: Donor) => {
     const gs = gifts.filter((g) => g.donorId === d.id)
     return { d, lifetime: gs.reduce((s, g) => s + g.amount, 0), last: lastGiftDate(gs) }
@@ -103,10 +105,11 @@ export default function AllDonors() {
       header: 'Contact',
       accessorFn: (r) => r.d.email,
       sortUndefined: 'last',
-      meta: { className: 'min-w-40 whitespace-normal wrap-anywhere', filter: { kind: 'text', placeholder: 'Email or phone', text: (r) => `${r.d.email ?? ''} ${r.d.phone ?? ''}` } },
+      meta: { className: 'min-w-40 whitespace-normal break-words', filter: { kind: 'text', placeholder: 'Email or phone', text: (r) => `${r.d.email ?? ''} ${r.d.phone ?? ''}` } },
       cell: ({ row: { original: { d } } }) => (
         <>
-          <div>{d.email ?? '—'}</div>
+          {/* Wraps after the @ rather than mid-word. */}
+          <div>{d.email ? <>{d.email.slice(0, d.email.indexOf('@') + 1)}<wbr />{d.email.slice(d.email.indexOf('@') + 1)}</> : '—'}</div>
           {d.phone && <div className="text-muted-foreground">{fmtPhone(d.phone)}</div>}
         </>
       ),
@@ -140,7 +143,7 @@ export default function AllDonors() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {items.map((it) => <SelectItem key={it.value} value={it.value}>{it.label}</SelectItem>)}
+                {items.map((it) => <SelectItem key={it.value} value={it.value}>{it.value === UNASSIGNED ? it.label : `${it.label} (${count(it.value)})`}</SelectItem>)}
               </SelectContent>
             </Select>
             {dirty && (
