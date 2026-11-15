@@ -13,9 +13,9 @@
 //   bun scripts/check-docs.ts --base origin/main  checks 1-4 against a branch
 //   bun scripts/check-docs.ts --which <file>...   prints the docs covering each file
 
-import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
-import { join } from 'path'
-import { execFileSync } from 'child_process'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
 
 const DOCS_DIR = 'docs'
 const ESCAPE = /^Docs: not needed/im
