@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom'
 import { AuthKitProvider, useAuth } from '@workos-inc/authkit-react'
-import { BarChart3, Bell, Code2, Contact, Home, ListTodo, LogOut, ShieldAlert, Upload, UserCog, UserRound, Users, Wrench } from 'lucide-react'
+import { BarChart3, Bell, Code2, Contact, Home, ListTodo, LogOut, ShieldAlert, Upload, UserCog, UserRound, Users, Wrench, type LucideIcon } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
 import { StoreProvider, useReminders, useStore } from '@/store'
@@ -22,19 +22,37 @@ const Members = lazy(() => import('@/pages/Members'))
 const Account = lazy(() => import('@/pages/Account'))
 const Api = lazy(() => import('@/pages/Api'))
 
-const NAV = [
-  { to: '/', label: 'Dashboard', icon: Home },
-  { to: '/notifications', label: 'Notifications', icon: Bell },
-  { to: '/follow-ups', label: 'Follow-ups', icon: ListTodo },
-  { to: '/donors', label: 'My Donors', icon: Contact },
-  { to: '/all-donors', label: 'All Donors', icon: Users, adminOnly: true },
-  { to: '/retention', label: 'Retention', icon: BarChart3, adminOnly: true },
-  { to: '/import', label: 'Update Donors', icon: Upload, adminOnly: true },
-  { to: '/members', label: 'Board members', icon: UserCog, adminOnly: true },
-  { to: '/api', label: 'Read API', icon: Code2, adminOnly: true },
-  // DEVELOPMENT ONLY: shown while DEV_TOOLS is on; remove before launch.
-  { to: '/dev', label: 'Dev tools', icon: Wrench, adminOnly: true, devOnly: true },
-  { to: '/account', label: 'My account', icon: UserRound },
+type NavItem = { to: string; label: string; icon: LucideIcon; adminOnly?: boolean; devOnly?: boolean }
+
+// Similar pages sit together; group headings show on wide screens only.
+const NAV: { heading: string; items: NavItem[] }[] = [
+  {
+    heading: 'Overview',
+    items: [
+      { to: '/', label: 'Dashboard', icon: Home },
+      { to: '/notifications', label: 'Notifications', icon: Bell },
+      { to: '/follow-ups', label: 'Follow-ups', icon: ListTodo },
+    ],
+  },
+  {
+    heading: 'Donors',
+    items: [
+      { to: '/donors', label: 'My Donors', icon: Contact },
+      { to: '/all-donors', label: 'All Donors', icon: Users, adminOnly: true },
+      { to: '/retention', label: 'Retention', icon: BarChart3, adminOnly: true },
+      { to: '/import', label: 'Update Donors', icon: Upload, adminOnly: true },
+    ],
+  },
+  {
+    heading: 'Settings',
+    items: [
+      { to: '/members', label: 'Board members', icon: UserCog, adminOnly: true },
+      { to: '/api', label: 'Read API', icon: Code2, adminOnly: true },
+      // DEVELOPMENT ONLY: shown while DEV_TOOLS is on; remove before launch.
+      { to: '/dev', label: 'Dev tools', icon: Wrench, adminOnly: true, devOnly: true },
+      { to: '/account', label: 'My account', icon: UserRound },
+    ],
+  },
 ]
 
 function SignedInAs() {
@@ -72,27 +90,40 @@ function Shell() {
             <div className="text-xs text-muted-foreground">Donor Relationships</div>
           </div>
         </div>
-        <nav aria-label="Main" className="flex gap-1 overflow-x-auto md:flex-col">
-          {NAV.filter((n) => (!n.adminOnly || session.role === 'admin') && (!n.devOnly || devTools)).map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap hover:bg-muted',
-                  isActive && 'bg-sidebar-accent font-semibold text-sidebar-accent-foreground',
-                )
-              }
-            >
-              <Icon className="size-4" aria-hidden /> {label}
-              {to === '/notifications' && actionable > 0 && (
-                <span className="ml-auto rounded-full bg-cic-dark px-1.5 text-xs font-semibold text-white">
-                  {actionable}<span className="sr-only"> need action</span>
-                </span>
-              )}
-            </NavLink>
-          ))}
+        <nav aria-label="Main" className="flex gap-1 overflow-x-auto md:flex-col md:gap-4">
+          {NAV.map(({ heading, items }) => {
+            const shown = items.filter((n) => (!n.adminOnly || session.role === 'admin') && (!n.devOnly || devTools))
+            if (!shown.length) return null
+            const id = `nav-${heading.toLowerCase()}`
+            // `contents` keeps the phone layout one scrolling row of links.
+            return (
+              <div key={heading} role="group" aria-labelledby={id} className="contents md:flex md:flex-col md:gap-1">
+                <div id={id} className="hidden px-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase md:block">
+                  {heading}
+                </div>
+                {shown.map(({ to, label, icon: Icon }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={to === '/'}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap hover:bg-muted',
+                        isActive && 'bg-sidebar-accent font-semibold text-sidebar-accent-foreground',
+                      )
+                    }
+                  >
+                    <Icon className="size-4" aria-hidden /> {label}
+                    {to === '/notifications' && actionable > 0 && (
+                      <span className="ml-auto rounded-full bg-cic-dark px-1.5 text-xs font-semibold text-white">
+                        {actionable}<span className="sr-only"> need action</span>
+                      </span>
+                    )}
+                  </NavLink>
+                ))}
+              </div>
+            )
+          })}
         </nav>
         <div className="mt-6 md:mt-auto md:pt-6">
           <DonorSearch />
