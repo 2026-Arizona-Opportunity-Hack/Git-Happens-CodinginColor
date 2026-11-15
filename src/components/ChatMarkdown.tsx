@@ -105,7 +105,12 @@ function useAction(a: Attrs): { label: string; run: () => Promise<unknown> } | {
       const kind = a.kind as DraftKind
       const channel = a.channel === 'text' ? 'text' : 'email'
       if (!donor || !KINDS.includes(kind)) break
-      return { label: `Draft a ${kind.replace('-', ' ')} ${channel} to ${donor.name}`, run: () => store.createDraft(donor.id, kind, channel) }
+      // A body the assistant wrote (a follow-up from a debrief) is saved as the
+      // draft; it still waits in Follow-ups for a human to approve.
+      const body = text(a.body, 4000).replaceAll('\\n', '\n')
+      return body
+        ? { label: `Save this ${kind.replace('-', ' ')} ${channel} to ${donor.name} as a draft to approve: "${body.length > 140 ? body.slice(0, 140) + '…' : body}"`, run: () => store.createDraft(donor.id, kind, channel, body) }
+        : { label: `Draft a ${kind.replace('-', ' ')} ${channel} to ${donor.name}`, run: () => store.createDraft(donor.id, kind, channel) }
     }
     case 'approve':
       if (!draft || !draftDonor) break
