@@ -7,6 +7,7 @@ covers:
   - .github/workflows/security-review.yml
   - .github/prompts
   - scripts/seed-sql.ts
+  - src/data/seed.ts
 ---
 
 # Operations
@@ -22,7 +23,6 @@ How to run this in production: settings, secrets, deploys, the calendar, the boa
 | `WORKOS_CLIENT_ID` | `vars` in `wrangler.jsonc` | WorkOS public client ID; the browser fetches it from `/api/config` |
 | `WORKOS_ORG_ID` | `vars` in `wrangler.jsonc` | The "Coding in Color" organization in WorkOS. Its members are the board |
 | `CALENDAR_ICS_URL` | `vars`, or a Worker secret for a private calendar | CIC's iCal address (see [Events calendar](#events-calendar)) |
-| `DEV_TOOLS` | `vars` in `wrangler.jsonc` | `"true"` shows [Dev tools](features/dev-tools.md). Set it to `"false"` before launch |
 | `DB` | `d1_databases` in `wrangler.jsonc` | The D1 database |
 
 Set a Worker secret with `bunx wrangler secret put <NAME>`. Every name the Worker reads must be in this table; `scripts/check-docs.ts` checks.
@@ -88,4 +88,4 @@ The OHack org doesn't let GitHub Actions open PRs (the repo setting is greyed ou
 
 The model can only read the checkout and run `git diff/log/show`; it gets no GitHub token, and a separate step posts its reply. The comment is advice, not a gate. The prompt is in `.github/prompts/security-review.md`.
 
-To deploy by hand, run `bun run deploy` inside `nix develop` (it builds with `nix build` and uses wrangler, so log in with `wrangler login` first). To reset the live demo to the fake seed data, run `bun run db:seed:remote` (with `WORKOS_API_KEY` in `.env`; it maps the seed's donor owners to WorkOS users by email).
+To deploy by hand, run `bun run deploy` inside `nix develop` (it builds with `nix build` and uses wrangler, so log in with `wrangler login` first). To reset the live demo data, run `bun run db:seed:remote`; it replaces every donor, gift, contact, draft and import record (with `WORKOS_API_KEY` in `.env`; it maps the seed's donor owners to WorkOS users by email).
