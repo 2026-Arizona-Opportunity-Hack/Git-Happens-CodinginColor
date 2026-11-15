@@ -228,17 +228,13 @@ function NotAMember() {
 // Only signed-in users get past here; the Worker re-checks every request.
 function SignedInApp() {
   const { user, isLoading, signIn, signOut, getAccessToken } = useAuth()
+  // Signed-out visitors go straight to the WorkOS sign-in page; there's nothing to see here without it.
+  useEffect(() => {
+    if (!isLoading && !user) signIn({ state: { returnTo: location.pathname } })
+  }, [isLoading, user, signIn])
   if (isLoading) return <AppSkeleton label="Checking your sign-in…" />
-  if (!user)
-    return (
-      <Centered>
-        <div className="max-w-sm space-y-4 text-center">
-          <h1 className="text-2xl font-bold text-cic-dark">Coding in Color donor relationships</h1>
-          <p className="text-muted-foreground">Sign in with your board member account.</p>
-          <Button onClick={() => signIn({ state: { returnTo: location.pathname } })}>Sign in</Button>
-        </div>
-      </Centered>
-    )
+  if (!user) return <AppSkeleton label="Taking you to sign in…" />
+
   return (
     <StoreProvider token={getAccessToken} onSignOut={() => signOut({ returnTo: location.origin })} denied={<NotAMember />}>
       <BrowserRouter>
