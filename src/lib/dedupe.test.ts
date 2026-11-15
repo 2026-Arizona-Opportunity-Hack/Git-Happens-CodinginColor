@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { RawDonorRow } from '../data/types'
 import { SAMPLE_CSV } from '../data/samples'
-import { csvColumns, dedupe, matchDonor, rowsFromCsv, sameGift, splitGifts } from './dedupe'
+import { autoMapping, csvHeaders, dedupe, matchDonor, NEW_COLUMN, rowsFromCsv, sameGift, SKIP, splitGifts } from './dedupe'
 
 const row = (r: Partial<RawDonorRow>): RawDonorRow => ({ source: 'spreadsheet', name: 'Kevin Tran', ...r })
 
@@ -52,13 +52,23 @@ test('matchDonor finds an existing donor by email regardless of case', () => {
   assert.equal(matchDonor(dedupe([row({ name: 'Nobody' })])[0], donors), undefined)
 })
 
-test('csvColumns lists every column and flags the ones the donor database has no field for', () => {
-  const cols = csvColumns('First Name,Last Name,"Email Address",Total Amount,Campaign\nA,B,a@b.c,5,X')
-  assert.deepEqual(cols, [
-    { column: 'First Name', field: 'Name' },
-    { column: 'Last Name', field: 'Name' },
-    { column: 'Email Address', field: 'Email' },
-    { column: 'Total Amount', field: 'Gift amount' },
-    { column: 'Campaign', field: undefined },
-  ])
+test('autoMapping matches known headers and leaves the rest as Do not save', () => {
+  const m = autoMapping(csvHeaders('First Name,Last Name,"Email Address",Total Amount,Campaign,Region\nA,B,a@b.c,5,X,Y'), ['Region'])
+  assert.deepEqual(m, {
+    'First Name': 'firstName', 'Last Name': 'lastName', 'Email Address': 'email', 'Total Amount': 'amount',
+    Campaign: SKIP, Region: 'custom:Region', // an existing custom field matches by name
+  })
+})
+
+test('the mapping decides what is read: remapped, skipped and new columns', () => {
+  const text = 'Who,Mail,Gift,Campaign,Fund\nAda Lovelace,ada@x.org,$50,Giving Tuesday,ai academy'
+  const rows = rowsFromCsv(text, 'zeffy', { Who: 'name', Mail: SKIP, Gift: 'amount', Campaign: NEW_COLUMN, Fund: 'program' })
+  assert.deepEqual(rows, [{
+    source: 'zeffy', name: 'Ada Lovelace', email: undefined, phone: undefined, org: undefined,
+    amount: 50, date: undefined, program: 'AI Academy', extra: { Campaign: 'Giving Tuesday' },
+  }])
+})
+
+test('a file with no name column yields no donors', () => {
+  assert.equal(rowsFromCsv('Mail\na@b.c', 'zeffy', { Mail: 'email' }).length, 0)
 })

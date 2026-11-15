@@ -51,6 +51,17 @@ function date(v: unknown, field: string): string {
   if (typeof v !== 'string' || !ISO_DATE.test(v)) throw new HttpError(400, `${field} must be an ISO date`)
   return v.slice(0, 10)
 }
+// Custom import fields: up to 30 short text values per row.
+function extraFields(v: unknown, field: string): Record<string, string> | undefined {
+  if (v === undefined || v === null) return undefined
+  if (typeof v !== 'object' || Array.isArray(v)) throw new HttpError(400, `${field} must be an object`)
+  const entries = Object.entries(v as Record<string, unknown>)
+  if (entries.length > 30) throw new HttpError(400, `${field} has more than 30 fields`)
+  return Object.fromEntries(entries.map(([k, x]) => [str(k, `${field} key`, 60), str(x, `${field}.${k}`, 500)]))
+}
+// A donor's custom fields from all of its rows; later rows win.
+const clusterExtra = (rows: RawDonorRow[]) => Object.assign({}, ...rows.map((r) => r.extra ?? {})) as Record<string, string>
+
 async function body(req: Request): Promise<Record<string, unknown>> {
   const b = await req.json().catch(() => null)
   if (!b || typeof b !== 'object' || Array.isArray(b)) throw new HttpError(400, 'Expected a JSON object')
@@ -74,6 +85,7 @@ const toDonor = (r: Row): Donor => ({
     ? { text: r.next_step_text as string, due: r.next_step_due as string, eventId: (r.next_step_event_id as string) ?? undefined }
     : undefined,
   lastTouchAt: (r.last_touch_at as string) ?? undefined,
+  extra: r.extra && r.extra !== '{}' ? JSON.parse(r.extra as string) : undefined,
 })
 const toGift = (r: Row): Gift => ({ id: r.id as string, donorId: r.donor_id as string, amount: r.amount as number, date: r.date as string, source: r.source as Source, program: r.program as Program })
 const toInteraction = (r: Row): Interaction => ({ id: r.id as string, donorId: r.donor_id as string, byId: r.by_id as string, channel: r.channel as Channel, date: r.date as string, summary: r.summary as string })
@@ -600,6 +612,7 @@ async function route(req: Request, env: Env): Promise<Response> {
         amount: r.amount === undefined || r.amount === null ? undefined : Number(r.amount) > 0 ? Number(r.amount) : undefined,
         date: r.date ? date(r.date, `rows[${i}].date`) : undefined,
         program: r.program ? oneOf(r.program, PROGRAMS, `rows[${i}].program`) : undefined,
+        extra: extraFields(r.extra, `rows[${i}].extra`),
       }
     })
 
@@ -626,16 +639,17 @@ async function route(req: Request, env: Env): Promise<Response> {
         match.email ??= c.email
         match.phone ??= c.phone
         match.sources = [...new Set([...match.sources, ...c.sources])]
-        writes.push(db.prepare('UPDATE donors SET email = ?, phone = ?, sources = ? WHERE id = ?')
-          .bind(match.email ?? null, match.phone ?? null, JSON.stringify(match.sources), match.id))
+        match.extra = { ...match.extra, ...clusterExtra(c.rows) } // newest import wins per field
+        writes.push(db.prepare('UPDATE donors SET email = ?, phone = ?, sources = ?, extra = ? WHERE id = ?')
+          .bind(match.email ?? null, match.phone ?? null, JSON.stringify(match.sources), JSON.stringify(match.extra), match.id))
       } else {
         created++
-        const d: Donor = { id: id('d'), name: c.name, email: c.email, phone: c.phone, org: c.org, sources: c.sources, ownerId: null }
+        const d: Donor = { id: id('d'), name: c.name, email: c.email, phone: c.phone, org: c.org, sources: c.sources, ownerId: null, extra: clusterExtra(c.rows) }
         donors.push(d)
         createdDonors.push({ id: d.id, name: d.name })
         donorId = d.id
-        writes.push(db.prepare('INSERT INTO donors (id, name, email, phone, org, owner_id, sources) VALUES (?, ?, ?, ?, ?, ?, ?)')
-          .bind(d.id, d.name, d.email ?? null, d.phone ?? null, d.org ?? null, '', JSON.stringify(d.sources)))
+        writes.push(db.prepare('INSERT INTO donors (id, name, email, phone, org, owner_id, sources, extra) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+          .bind(d.id, d.name, d.email ?? null, d.phone ?? null, d.org ?? null, '', JSON.stringify(d.sources), JSON.stringify(d.extra)))
       }
       // Skip gifts this donor already has (same amount, near-same date), so
       // re-imports and donations reported by two sources aren't double counted.

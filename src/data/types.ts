@@ -20,6 +20,7 @@ export interface Donor {
   org?: string
   ownerId: string | null // null: not assigned to a board member yet
   sources: Source[]
+  extra?: Record<string, string> // custom fields created while importing
   nextStep?: NextStep
   lastTouchAt?: string
 }
@@ -89,4 +90,5 @@ export interface RawDonorRow {
   amount?: number
   date?: string
   program?: Program
+  extra?: Record<string, string> // custom columns chosen while staging
 }

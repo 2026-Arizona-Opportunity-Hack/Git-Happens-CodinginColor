@@ -135,6 +135,10 @@ export default function DonorDetail() {
             <CardContent className="space-y-3 text-sm">
               <div className="flex justify-between"><span>Status {yearOf(s.today)}</span><StatusBadge status={retentionStatus(gifts, yearOf(s.today))} /></div>
               <div className="flex justify-between"><span>Last contact</span><span>{donor.lastTouchAt ? fmtDate(donor.lastTouchAt) : 'Never'}</span></div>
+              {/* Custom columns created while importing. */}
+              {Object.entries(donor.extra ?? {}).map(([k, v]) => (
+                <div key={k} className="flex justify-between gap-3"><span>{k}</span><span className="text-right">{v}</span></div>
+              ))}
               <div>
                 <Label className="mb-1">Owner</Label>
                 {s.session.role === 'admin' ? (

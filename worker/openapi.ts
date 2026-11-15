@@ -222,7 +222,8 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
           type: 'object',
           properties: {
             id: { type: 'string' }, name: { type: 'string' }, email: { type: 'string' }, phone: { type: 'string' }, org: { type: 'string' },
-            ownerId: { type: ['string', 'null'], description: 'null until an admin assigns a board member' }, sources: { type: 'array', items: { enum: enums.sources } }, nextStep: ref('NextStep'), lastTouchAt: isoDate,
+            ownerId: { type: ['string', 'null'], description: 'null until an admin assigns a board member' },
+            extra: { type: 'object', additionalProperties: { type: 'string' }, description: 'Custom fields created while importing' }, sources: { type: 'array', items: { enum: enums.sources } }, nextStep: ref('NextStep'), lastTouchAt: isoDate,
           },
         },
         Gift: {

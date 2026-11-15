@@ -1,4 +1,4 @@
-import type { Donor, RawDonorRow, Source } from '../data/types'
+import type { Donor, Program, RawDonorRow, Source } from '../data/types'
 
 // Dedupe strategy, strongest signal first:
 //   1. normalized email
@@ -144,32 +144,72 @@ export function parseCsv(text: string): Record<string, string>[] {
 
 // Column mappings per source. Real exports should be checked against these
 // as soon as CIC shares samples.
-const COLUMN_MAP: Record<string, Partial<Record<keyof RawDonorRow, string[]>>> = {
-  default: {
-    name: ['name', 'full name', 'donor name', 'donor'],
-    email: ['email', 'email address', 'donor email'],
-    phone: ['phone', 'phone number', 'mobile'],
-    org: ['org', 'organization', 'company', 'employer'],
-    amount: ['amount', 'total amount', 'donation amount', 'gift amount'],
-    date: ['date', 'payment date', 'donation date', 'gift date'],
-  },
+// --- Column mapping -----------------------------------------------------------
+// Each uploaded file's columns map to a donor-database field, to a custom
+// field (stored in the donor's `extra`), or to nothing. autoMapping() guesses
+// from common export headers; the admin can change any of it while staging.
+
+export const SKIP = '__skip__' // "Do not save"
+export const NEW_COLUMN = '__new__' // "Create a new column" named after the CSV header
+export const CUSTOM = 'custom:' // prefix: custom:<field name>
+
+export const DB_FIELDS = [
+  { key: 'name', label: 'Name' },
+  { key: 'firstName', label: 'First name' },
+  { key: 'lastName', label: 'Last name' },
+  { key: 'email', label: 'Email' },
+  { key: 'phone', label: 'Phone' },
+  { key: 'org', label: 'Organization' },
+  { key: 'amount', label: 'Gift amount' },
+  { key: 'date', label: 'Gift date' },
+  { key: 'program', label: 'Gift program' },
+] as const
+
+// Header spellings recognized automatically (lowercased).
+const KNOWN_HEADERS: Record<string, string[]> = {
+  name: ['name', 'full name', 'donor name', 'donor'],
+  firstName: ['first name', 'firstname', 'first'],
+  lastName: ['last name', 'lastname', 'last'],
+  email: ['email', 'email address', 'donor email'],
+  phone: ['phone', 'phone number', 'mobile'],
+  org: ['org', 'organization', 'company', 'employer'],
+  amount: ['amount', 'total amount', 'donation amount', 'gift amount'],
+  date: ['date', 'payment date', 'donation date', 'gift date'],
+  program: ['program', 'designation', 'fund'],
 }
 
-const FIELD_LABELS: Record<string, string> = {
-  name: 'Name', email: 'Email', phone: 'Phone', org: 'Organization', amount: 'Gift amount', date: 'Gift date',
-}
+const PROGRAMS: Program[] = ['K12', 'AI Academy', 'Summer Camp', 'Day of Compute', 'General']
 
-// Every column in a CSV's header row, with the donor-database field it fills,
-// or no field when the app has nowhere to store it (those values are dropped).
-// Drives the "Columns found" section of the import staging popup.
-export function csvColumns(text: string): { column: string; field?: string }[] {
+export type ColumnMapping = Record<string, string> // CSV header -> target
+
+// The header row as written (original case).
+export function csvHeaders(text: string): string[] {
   const firstLine = text.split(/\r?\n/).find((l) => l.trim()) ?? ''
-  return parseCsvHeader(firstLine).map((column) => {
-    const key = column.trim().toLowerCase()
-    if (key === 'first name' || key === 'last name') return { column, field: 'Name' }
-    const field = Object.entries(COLUMN_MAP.default).find(([, names]) => names?.includes(key))?.[0]
-    return { column, field: field && FIELD_LABELS[field] }
-  })
+  return parseCsvHeader(firstLine)
+}
+
+// Best guess for each header. A target is used by at most one column; custom
+// fields that already exist match a header with the same name.
+export function autoMapping(headers: string[], customFields: string[] = []): ColumnMapping {
+  const taken = new Set<string>()
+  const out: ColumnMapping = {}
+  for (const h of headers) {
+    const key = h.trim().toLowerCase()
+    const custom = customFields.find((f) => f.toLowerCase() === key)
+    const field = Object.entries(KNOWN_HEADERS).find(([, names]) => names.includes(key))?.[0]
+    const target = field ?? (custom ? CUSTOM + custom : SKIP)
+    out[h] = target !== SKIP && taken.has(target) ? SKIP : target
+    taken.add(out[h])
+  }
+  return out
+}
+
+// What a target is called in the UI.
+export function targetLabel(target: string, header: string): string {
+  if (target === SKIP) return 'Do not save'
+  if (target === NEW_COLUMN) return `New column: ${header}`
+  if (target.startsWith(CUSTOM)) return `${target.slice(CUSTOM.length)} (custom)`
+  return DB_FIELDS.find((f) => f.key === target)?.label ?? target
 }
 
 // The header row as written (original case), using the same quoting rules.
@@ -191,23 +231,33 @@ function parseCsvHeader(line: string): string[] {
   return out.filter((h) => h)
 }
 
-export function rowsFromCsv(text: string, source: Source): RawDonorRow[] {
-  const map = COLUMN_MAP.default
-  const pick = (rec: Record<string, string>, field: keyof RawDonorRow) =>
-    map[field]?.map((k) => rec[k]).find((v) => v)
+// Rows from a CSV using the given mapping (auto-detected when omitted).
+export function rowsFromCsv(text: string, source: Source, mapping: ColumnMapping = autoMapping(csvHeaders(text))): RawDonorRow[] {
+  const entries = Object.entries(mapping).filter(([, t]) => t !== SKIP)
+  const col = (target: string) => entries.find(([, t]) => t === target)?.[0]
+  const val = (rec: Record<string, string>, target: string) => {
+    const h = col(target)
+    return (h && rec[h.trim().toLowerCase()]) || undefined
+  }
+  const customs = entries
+    .filter(([, t]) => t === NEW_COLUMN || t.startsWith(CUSTOM))
+    .map(([h, t]) => ({ key: h.trim().toLowerCase(), name: t === NEW_COLUMN ? h.trim() : t.slice(CUSTOM.length) }))
   return parseCsv(text)
-    .map((rec) => {
-      const first = rec['first name'], last = rec['last name']
-      const name = pick(rec, 'name') ?? [first, last].filter(Boolean).join(' ')
-      const amount = Number((pick(rec, 'amount') ?? '').replace(/[$,]/g, ''))
+    .map((rec): RawDonorRow => {
+      const name = val(rec, 'name') ?? [val(rec, 'firstName'), val(rec, 'lastName')].filter(Boolean).join(' ')
+      const amount = Number((val(rec, 'amount') ?? '').replace(/[$,]/g, ''))
+      const program = PROGRAMS.find((p) => p.toLowerCase() === val(rec, 'program')?.toLowerCase())
+      const extra = Object.fromEntries(customs.filter((c) => rec[c.key]).map((c) => [c.name, rec[c.key]]))
       return {
         source,
         name,
-        email: pick(rec, 'email'),
-        phone: pick(rec, 'phone'),
-        org: pick(rec, 'org'),
+        email: val(rec, 'email'),
+        phone: val(rec, 'phone'),
+        org: val(rec, 'org'),
         amount: Number.isFinite(amount) && amount > 0 ? amount : undefined,
-        date: pick(rec, 'date'),
+        date: val(rec, 'date'),
+        program,
+        extra: Object.keys(extra).length ? extra : undefined,
       }
     })
     .filter((r) => r.name)

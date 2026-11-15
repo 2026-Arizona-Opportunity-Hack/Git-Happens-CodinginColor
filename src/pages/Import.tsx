@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { MoveRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader, SectionTitle } from '@/components/common'
 import { Badge } from '@/components/ui/badge'
@@ -12,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { SAMPLE_CSV } from '@/data/samples'
 import { IMPORT_SOURCES as SOURCES, STALE_IMPORT_DAYS } from '@/data/sources'
 import type { Source } from '@/data/types'
-import { csvColumns, dedupe, matchDonor, rowsFromCsv, SAME_GIFT_DAYS, splitGifts } from '@/lib/dedupe'
+import { autoMapping, CUSTOM, csvHeaders, DB_FIELDS, dedupe, matchDonor, NEW_COLUMN, rowsFromCsv, SAME_GIFT_DAYS, SKIP, splitGifts, targetLabel, type ColumnMapping } from '@/lib/dedupe'
 import { daysBetween, fmtDate, money, suggestOwners } from '@/lib/logic'
 import { latestImport } from '@/lib/reminders'
 import { useStore } from '@/store'
@@ -25,19 +26,27 @@ const label = (src: Source) => SOURCES.find((s) => s.key === src)?.label ?? src
 // Upload CSVs -> staging popup (columns found + what merges) -> save ->
 // New Donors popup -> assign the chosen ones on All Donors.
 export default function Import() {
-  const { importRows, assignOwners, imports, today, boardMembers, donors, gifts } = useStore()
+  const { importRows, imports, today, boardMembers, donors, gifts } = useStore()
   const navigate = useNavigate()
   const [csv, setCsv] = useState<Partial<Record<Source, string>>>({})
   const [files, setFiles] = useState<Partial<Record<Source, string>>>({})
+  // Column choices made in staging, per file; unset files use autoMapping.
+  const [mappings, setMappings] = useState<Partial<Record<Source, ColumnMapping>>>({})
   const [staging, setStaging] = useState(false)
   const [saving, setSaving] = useState(false)
   const [created, setCreated] = useState<{ id: string; name: string }[] | null>(null)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const who = (id: string) => boardMembers.find((m) => m.id === id)?.name ?? 'a former board member'
-  const clear = () => { setCsv({}); setFiles({}) }
+  const clear = () => { setCsv({}); setFiles({}); setMappings({}) }
+  // Custom fields earlier imports created; offered as targets and auto-matched by name.
+  const customFields = [...new Set(donors.flatMap((d) => Object.keys(d.extra ?? {})))].sort()
+  const autoFor = (src: Source) => autoMapping(csvHeaders(csv[src]!), customFields)
+  const mappingFor = (src: Source) => mappings[src] ?? autoFor(src)
+  const setTarget = (src: Source, header: string, target: string) =>
+    setMappings((m) => ({ ...m, [src]: { ...mappingFor(src), [header]: target } }))
 
   const loaded = Object.entries(csv) as [Source, string][]
-  const rows = loaded.flatMap(([src, text]) => rowsFromCsv(text, src))
+  const rows = loaded.flatMap(([src, text]) => rowsFromCsv(text, src, mappingFor(src)))
   const clusters = dedupe(rows)
   const dupes = clusters.filter((c) => c.rows.length > 1)
   // Same matching the server runs on commit (admins have every donor and gift
@@ -53,8 +62,8 @@ export default function Import() {
   })
   const newGifts = plan.reduce((n, p) => n + p.keep.length, 0)
   const dupGifts = plan.reduce((n, p) => n + p.skipped.length, 0)
-  const columns = loaded.map(([src, text]) => ({ src, cols: csvColumns(text) }))
-  const notInDb = [...new Set(columns.flatMap((c) => c.cols.filter((x) => !x.field).map((x) => x.column)))]
+  // A file with no name column yields no donors at all; say so instead of saving nothing.
+  const nameless = loaded.filter(([src]) => !Object.values(mappingFor(src)).some((t) => ['name', 'firstName', 'lastName'].includes(t))).map(([src]) => src)
 
   const save = async () => {
     setSaving(true)
@@ -70,17 +79,14 @@ export default function Import() {
     }
   }
 
-  // Selected donors get the suggested board member (fewest donors, spread as
-  // we go); the rest stay unassigned. Both show up on All Donors.
-  const assign = async () => {
+  // Selected donors open on All Donors with a suggested board member (fewest
+  // donors, spread as we go) filled in but not saved: the admin confirms with
+  // Update or Update all. Unselected ones stay under Unassigned.
+  const assign = () => {
     const ids = created!.filter((d) => picked.has(d.id)).map((d) => d.id)
-    if (ids.length) {
-      const suggested = suggestOwners(boardMembers, donors, ids)
-      const ok = await assignOwners(ids.map((donorId) => ({ donorId, ownerId: suggested.get(donorId)! })))
-      if (!ok) return
-    }
+    const suggested = ids.length ? Object.fromEntries(suggestOwners(boardMembers, donors, ids)) : {}
     setCreated(null)
-    navigate('/all-donors', { state: { newIds: ids } })
+    navigate('/all-donors', { state: { suggested } })
   }
 
   return (
@@ -88,7 +94,7 @@ export default function Import() {
       <PageHeader
         title="Update Donors"
         description="Upload each export, review it in the staging step, then save. New donors are assigned on All Donors."
-        actions={<Button variant="outline" onClick={() => { setCsv(SAMPLE_CSV); setFiles({ spreadsheet: 'sample-spreadsheet.csv', zeffy: 'sample-zeffy.csv', benevity: 'sample-benevity.csv' }) }}>Load sample files</Button>}
+        actions={<Button variant="outline" onClick={() => { setCsv(SAMPLE_CSV); setMappings({}); setFiles({ spreadsheet: 'sample-spreadsheet.csv', zeffy: 'sample-zeffy.csv', benevity: 'sample-benevity.csv' }) }}>Load sample files</Button>}
       />
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -120,18 +126,20 @@ export default function Import() {
                     if (!file || !text) return
                     setCsv((c) => ({ ...c, [s.key]: text }))
                     setFiles((f) => ({ ...f, [s.key]: file.name }))
+                    setMappings((m) => { const next = { ...m }; delete next[s.key]; return next }) // new file: re-detect its columns
                   }}
                 />
-                {csv[s.key] && <p className="mt-2 text-sm text-cic-dark">{rowsFromCsv(csv[s.key]!, s.key).length} rows loaded</p>}
+                {csv[s.key] && <p className="mt-2 text-sm text-cic-dark">{rowsFromCsv(csv[s.key]!, s.key, mappingFor(s.key)).length} rows loaded</p>}
               </CardContent>
             </Card>
           )
         })}
       </div>
 
-      {rows.length > 0 && (
+      {/* Shown even at 0 rows: a file whose name column wasn't recognized needs mapping first. */}
+      {loaded.length > 0 && (
         <div className="mt-6 flex flex-wrap items-center gap-3">
-          <Button onClick={() => setStaging(true)}>Review {rows.length} rows</Button>
+          <Button onClick={() => setStaging(true)}>Review and map columns</Button>
           <Button variant="ghost" onClick={clear}>Clear</Button>
           <span className="text-sm text-muted-foreground">Nothing is saved until you confirm in the review step.</span>
         </div>
@@ -141,45 +149,44 @@ export default function Import() {
       <Dialog open={staging} onOpenChange={(o) => !saving && setStaging(o)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
           <DialogHeader>
-            <DialogTitle>Review before saving</DialogTitle>
+            <DialogTitle>Your import is ready to save</DialogTitle>
             <DialogDescription>
-              {rows.length} rows → {clusters.length} unique donors: {plan.filter((p) => !p.match).length} new,{' '}
-              {plan.filter((p) => p.match).length} already in the database, {dupes.length} merged across files.{' '}
-              {newGifts} gifts to record; {dupGifts} skipped as duplicates (same donor and amount within {SAME_GIFT_DAYS} days).
+              Check how each column maps to the donor database. Unmapped columns aren't saved unless you pick a field for them or create a new column.
             </DialogDescription>
           </DialogHeader>
 
-          <section aria-labelledby="cols-heading">
-            <h3 id="cols-heading" className="mb-2 font-semibold text-cic-dark">Columns found</h3>
-            {notInDb.length > 0 ? (
-              <p role="note" className="mb-3 rounded-md bg-amber-100 p-3 text-amber-950">
-                <strong>{notInDb.length} column{notInDb.length === 1 ? ' is' : 's are'} not in the donor database</strong> and won't be saved:{' '}
-                {notInDb.join(', ')}.
-              </p>
-            ) : (
-              <p className="mb-3 rounded-md bg-cic-tint p-3 text-cic-dark">Every column matches a field in the donor database.</p>
-            )}
-            <div className="grid gap-3 md:grid-cols-3">
-              {columns.map(({ src, cols }) => (
-                <div key={src} className="rounded-md border p-3">
-                  <div className="mb-2 font-medium">{label(src)} <span className="font-normal text-muted-foreground">· {files[src]}</span></div>
-                  <ul className="space-y-1">
-                    {cols.map((c) => (
-                      <li key={c.column} className="flex items-center justify-between gap-2">
-                        <span>{c.column}</span>
-                        {c.field
-                          ? <Badge variant="outline">→ {c.field}</Badge>
-                          : <Badge className="bg-amber-100 text-amber-900">Not in database</Badge>}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </section>
+          {loaded.map(([src]) => {
+            const mapping = mappingFor(src)
+            const auto = autoFor(src)
+            const headers = Object.keys(mapping)
+            const mapped = headers.filter((h) => auto[h] !== SKIP)
+            const unmapped = headers.filter((h) => auto[h] === SKIP)
+            return (
+              <section key={src} aria-label={`${label(src)} columns`} className="space-y-4">
+                <h3 className="font-semibold text-cic-dark">{label(src)} <span className="font-normal text-muted-foreground">· {files[src]}</span></h3>
+                {nameless.includes(src) && (
+                  <p role="alert" className="rounded-md bg-red-100 p-3 text-red-900">Map a column to Name (or First name / Last name). Without one, no donors can be read from this file.</p>
+                )}
+                <ColumnTable
+                  title="Mapped fields" count={mapped.length} note={`${mapped.length} column${mapped.length === 1 ? '' : 's'} matched to the donor database`}
+                  headers={mapped} mapping={mapping} customFields={customFields} onChange={(h, t) => setTarget(src, h, t)} tone="mapped"
+                />
+                {unmapped.length > 0 && (
+                  <ColumnTable
+                    title="Unmapped columns" count={unmapped.length} note="Not in the donor database. Choose a field, create a new column, or leave as Do not save."
+                    headers={unmapped} mapping={mapping} customFields={customFields} onChange={(h, t) => setTarget(src, h, t)} tone="unmapped"
+                  />
+                )}
+              </section>
+            )
+          })}
 
-          <section aria-labelledby="donors-heading">
-            <h3 id="donors-heading" className="mb-2 font-semibold text-cic-dark">Donors</h3>
+          <details className="rounded-md border p-3">
+            <summary className="cursor-pointer font-semibold text-cic-dark">
+              Preview donors: {rows.length} rows → {clusters.length} donors ({plan.filter((p) => !p.match).length} new, {plan.filter((p) => p.match).length} already in the database).{' '}
+              {newGifts} gifts to record, {dupGifts} skipped as duplicates (same donor and amount within {SAME_GIFT_DAYS} days); {dupes.length} merged across files.
+            </summary>
+            <div className="mt-3">
             <Table>
               <TableHeader>
                 <TableRow className="bg-cic-dark hover:bg-cic-dark">
@@ -215,11 +222,12 @@ export default function Import() {
                 ))}
               </TableBody>
             </Table>
-          </section>
+            </div>
+          </details>
 
           <DialogFooter>
             <Button variant="ghost" disabled={saving} onClick={() => setStaging(false)}>Back</Button>
-            <Button disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save to database'}</Button>
+            <Button disabled={saving || rows.length === 0} onClick={save}>{saving ? 'Saving…' : 'Save to database'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -230,8 +238,9 @@ export default function Import() {
           <DialogHeader>
             <DialogTitle>New Donors ({created?.length ?? 0})</DialogTitle>
             <DialogDescription>
-              These donors weren't in the database before. Selected donors get the board member with the fewest donors, which you can change on
-              All Donors. Unselected donors go to the Unassigned section there.
+              These donors weren't in the database before. Selected donors open at the bottom of All Donors with a suggested board member (whoever
+              has the fewest donors) that you can change, and nothing is assigned until you click Update or Update all. Unselected donors go to the
+              Unassigned section.
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-2">
@@ -291,5 +300,65 @@ export default function Import() {
         )}
       </section>
     </>
+  )
+}
+
+// One block of the staging step: file column -> arrow -> database column.
+// A target can only be used by one column in the file; Do not save and
+// Create a new column are always available.
+function ColumnTable({ title, count, note, headers, mapping, customFields, onChange, tone }: {
+  title: string; count: number; note: string; headers: string[]; mapping: ColumnMapping; customFields: string[]
+  onChange: (header: string, target: string) => void; tone: 'mapped' | 'unmapped'
+}) {
+  const id = `cols-${title.replace(/\W/g, '')}-${headers.join('').replace(/\W/g, '').slice(0, 20)}`
+  return (
+    <div className="rounded-lg bg-muted/60 p-4">
+      <div className="flex items-center gap-2">
+        <h4 id={id} className="font-semibold">{title}</h4>
+        <Badge className={tone === 'mapped' ? 'bg-cic-green text-cic-dark' : 'bg-amber-100 text-amber-900'}>{count}</Badge>
+      </div>
+      <p className="mb-3 text-sm text-muted-foreground">{note}</p>
+      <div className="overflow-hidden rounded-md border bg-background">
+        <table className="w-full text-sm" aria-labelledby={id}>
+          <thead>
+            <tr className="border-b text-left">
+              <th scope="col" className="px-4 py-2 font-medium">Your file column</th>
+              <th scope="col" className="px-4 py-2 font-medium">Mapping</th>
+              <th scope="col" className="px-4 py-2 font-medium">Database column</th>
+            </tr>
+          </thead>
+          <tbody>
+            {headers.map((h) => {
+              const taken = new Set(Object.entries(mapping).filter(([other, t]) => other !== h && t !== SKIP && t !== NEW_COLUMN).map(([, t]) => t))
+              const options = [
+                SKIP,
+                ...DB_FIELDS.map((f) => f.key as string).filter((k) => !taken.has(k)),
+                ...customFields.map((f) => CUSTOM + f).filter((k) => !taken.has(k)),
+                NEW_COLUMN,
+              ]
+              const value = mapping[h]
+              return (
+                <tr key={h} className="border-b last:border-0">
+                  <td className="px-4 py-2">{h}</td>
+                  <td className="px-4 py-2">
+                    <MoveRight aria-hidden className={value === SKIP ? 'text-muted-foreground' : 'text-cic-green'} />
+                  </td>
+                  <td className="px-4 py-2">
+                    <select
+                      aria-label={`Database column for ${h}`}
+                      className="w-full rounded-md border bg-background px-3 py-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                      value={value}
+                      onChange={(e) => onChange(h, e.target.value)}
+                    >
+                      {options.map((o) => <option key={o} value={o}>{o === NEW_COLUMN ? `Create a new column (“${h}”)` : targetLabel(o, h)}</option>)}
+                    </select>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }
