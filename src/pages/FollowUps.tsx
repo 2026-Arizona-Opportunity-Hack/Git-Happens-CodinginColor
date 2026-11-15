@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
-import { PageHeader, SectionTitle } from '@/components/common'
+import { PageHeader, Paged, SectionTitle } from '@/components/common'
 import { SendDraft } from '@/components/SendDraft'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,10 +9,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import type { DraftKind } from '@/data/types'
-import { DRAFT_SUBJECT, draftBody } from '@/lib/drafts'
+import { DRAFT_SUBJECT, draftBody, draftChannel, THANK_YOU_DAYS, thankableGift } from '@/lib/drafts'
 import { useStore } from '@/store'
 import { calendarLink, daysBetween, fmtDate, quarterlyTouchDue, retentionStatus, yearOf } from '@/lib/logic'
-import { cn } from '@/lib/utils'
+import { cn, fmtPhone } from '@/lib/utils'
 
 // The board member's work queue. The AI drafts and the system reminds; a
 // human sends. Template emails offers the plain templates instead.
@@ -51,8 +51,9 @@ export default function FollowUps() {
       {pending.length > 0 && (
         <section className="mb-8">
           <SectionTitle>Drafts awaiting approval ({pending.length})</SectionTitle>
+          <Paged items={pending} size={6} label="Drafts" className="mt-4 border-t-0 pt-0">{(page) => (
           <div className="grid items-start gap-4 lg:grid-cols-2">
-            {pending.map((d) => (
+            {page.map((d) => (
               <Card key={d.id}>
                 <CardHeader>
                   <CardTitle>{name(d.donorId)}</CardTitle>
@@ -70,6 +71,7 @@ export default function FollowUps() {
               </Card>
             ))}
           </div>
+          )}</Paged>
         </section>
       )}
 
@@ -78,8 +80,9 @@ export default function FollowUps() {
           <SectionTitle>Next steps{overdue > 0 && <span className="text-red-700"> ({overdue} overdue)</span>}</SectionTitle>
           <Card>
             <CardContent>
+              <Paged items={steps} label="Next steps">{(page) => (
               <ul className="divide-y">
-                {steps.map((d) => {
+                {page.map((d) => {
                   const late = daysBetween(d.nextStep!.due, today)
                   return (
                     <li key={d.id} className={cn('flex items-center justify-between gap-3 py-3', late > 0 && '-mx-(--card-spacing) bg-red-50 px-(--card-spacing)')}>
@@ -98,6 +101,7 @@ export default function FollowUps() {
                 })}
                 {steps.length === 0 && <li className="py-3 text-muted-foreground">No next steps set.</li>}
               </ul>
+              )}</Paged>
             </CardContent>
           </Card>
         </section>
@@ -106,8 +110,9 @@ export default function FollowUps() {
           <SectionTitle>Quarterly update due ({touchDue.length})</SectionTitle>
           <Card>
             <CardContent>
+              <Paged items={touchDue} label="Quarterly update due">{(page) => (
               <ul className="divide-y">
-                {touchDue.map((d) => (
+                {page.map((d) => (
                   <li key={d.id} className="flex items-center justify-between gap-3 py-3">
                     <div>
                       <Link to={`/donors/${d.id}`} className="font-medium text-cic-dark underline">{d.name}</Link>
@@ -121,6 +126,7 @@ export default function FollowUps() {
                   </li>
                 ))}
               </ul>
+              )}</Paged>
             </CardContent>
           </Card>
 
@@ -129,8 +135,9 @@ export default function FollowUps() {
               <h2 id="lapsed" tabIndex={-1} className="mt-8 mb-3 scroll-mt-24 md:scroll-mt-4 text-lg text-red-700 outline-none">Lapsed donors ({lapsed.length}) — call before year end</h2>
               <Card>
                 <CardContent>
+                  <Paged items={lapsed} label="Lapsed donors">{(page) => (
                   <ul className="divide-y">
-                    {lapsed.map((d) => (
+                    {page.map((d) => (
                       <li key={d.id} className="flex items-center justify-between gap-3 py-3">
                         <Link to={`/donors/${d.id}`} className="font-medium text-cic-dark underline">{d.name}</Link>
                         <Button size="sm" variant="outline" disabled={hasPending(d.id)} onClick={() => draft(d.id, 'lapsed-nudge')}>
@@ -139,6 +146,7 @@ export default function FollowUps() {
                       </li>
                     ))}
                   </ul>
+                  )}</Paged>
                 </CardContent>
               </Card>
             </>
@@ -170,7 +178,13 @@ function TemplateEmails() {
   if (!donor) return null
 
   const owner = boardMembers.find((m) => m.id === donor.ownerId) ?? boardMembers.find((m) => m.id === session.memberId) ?? { id: '', name: 'Coding in Color', email: '' }
-  const channel = donor.email || !donor.phone ? 'email' : 'text'
+  const channel = draftChannel(donor)
+  // A thank-you is only for a recent gift (see thankableGift).
+  const blocked = !channel
+    ? `${donor.name} has no email or phone number on file.`
+    : kind === 'thank-you' && !thankableGift(gifts.filter((g) => g.donorId === donor.id), today)
+      ? `${donor.name} has no gift in the last ${THANK_YOU_DAYS} days to thank them for.`
+      : undefined
   const body = draftBody(kind, donor, gifts.filter((g) => g.donorId === donor.id), owner, events.find((e) => e.date >= today))
   const use = async () => {
     setSaving(true)
@@ -206,10 +220,11 @@ function TemplateEmails() {
           </div>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              {channel === 'email' ? <>Subject: <span className="text-foreground">{DRAFT_SUBJECT[kind]}</span> · to {donor.email}</> : <>Text message to {donor.phone}</>}
+              {channel === 'email' ? <>Subject: <span className="text-foreground">{DRAFT_SUBJECT[kind]}</span> · to {donor.email}</> : channel === 'text' ? <>Text message to {donor.phone && fmtPhone(donor.phone)}</> : 'No contact info'}
             </p>
             <pre className="whitespace-pre-wrap rounded-md border bg-muted/40 p-3 font-sans text-sm" aria-label="Template preview">{body}</pre>
-            <Button disabled={saving} onClick={use}>{saving ? 'Adding…' : 'Use this template'}</Button>
+            {blocked && <p className="text-sm text-muted-foreground">{blocked}</p>}
+            <Button disabled={saving || !!blocked} onClick={use}>{saving ? 'Adding…' : 'Use this template'}</Button>
           </div>
         </CardContent>
       </Card>

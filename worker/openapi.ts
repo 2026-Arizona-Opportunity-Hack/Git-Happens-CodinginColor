@@ -110,7 +110,7 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
           tags: ['Drafts'], summary: 'Draft a message', description: 'The server writes the body from the donor\'s history and the programs they funded, signed by the donor\'s owner. Thank-yous, quarterly updates and lapsed nudges are written by the AI gateway (`ai: true`), falling back to a template if it fails or is slow. It starts as `pending`.',
           requestBody: jsonBody({
             type: 'object', required: ['donorId', 'kind'],
-            properties: { donorId: { type: 'string' }, kind: { enum: enums.kinds.filter((k) => k !== 'event-invite'), description: 'Invitations come from POST /api/donors/{id}/invite' }, channel: { enum: ['email', 'text'], default: 'email' }, body: { type: 'string', maxLength: 4000, description: 'Use this body instead of writing one, e.g. a follow-up the assistant wrote from a debrief. Still starts as `pending`.' }, template: { type: 'boolean', default: false, description: 'The body is a template someone picked, so the draft is not marked as written by AI' } },
+            properties: { donorId: { type: 'string' }, kind: { enum: enums.kinds.filter((k) => k !== 'event-invite'), description: 'Invitations come from POST /api/donors/{id}/invite' }, channel: { enum: ['email', 'text'], default: 'email', description: 'Used if the donor has that contact detail, otherwise whichever of email or text they have. A donor with neither gets a 400.' }, body: { type: 'string', maxLength: 4000, description: 'Use this body instead of writing one, e.g. a follow-up the assistant wrote from a debrief. Still starts as `pending`.' }, template: { type: 'boolean', default: false, description: 'The body is a template someone picked, so the draft is not marked as written by AI' } },
           }),
           responses: { 201: jsonResponse('The new draft', ref('Draft')), ...errors(400, 401, 403, 404) },
         },
@@ -156,7 +156,7 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
       '/api/import': {
         post: {
           tags: ['Admin'], summary: 'Import donor rows (admin only)',
-          description: 'Rows are deduplicated, matched against existing donors, and new donors are assigned round-robin. Gifts a donor already has (same amount, near-same date) are skipped. All or nothing.',
+          description: 'Rows are deduplicated, matched against existing donors, and new donors are saved unassigned (the response lists them) for an admin to assign on All Donors, where Suggest assignment proposes board members. Gifts a donor already has (same amount, near-same date) are skipped. All or nothing.',
           requestBody: jsonBody({
             type: 'object', required: ['rows'],
             properties: {

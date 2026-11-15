@@ -8,7 +8,7 @@ covers:
 
 # Notifications
 
-One inbox of reminders. The nav shows how many there are.
+One inbox of reminders. The nav badge counts only the ones that need action now (overdue and due), so the page's subtitle splits the total the same way: "6 need action · 2 coming up".
 
 - Overdue and upcoming next steps
 - Quarterly updates due
@@ -18,6 +18,8 @@ One inbox of reminders. The nav shows how many there are.
 - (admins) exports not re-imported in 30 days, and unassigned donors
 
 Donor reminders cover only the donors assigned to you, admins included. Admins also get the org-wide ones (stale exports, unassigned donors).
+
+Each section shows 10 reminders at a time, with Previous/Next once there are more.
 
 ## How it works
 

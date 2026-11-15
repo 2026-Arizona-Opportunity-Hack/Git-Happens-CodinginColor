@@ -1,6 +1,7 @@
-import type { BoardMember, Channel, CicEvent, Donor, Draft, DraftKind, Role } from '../data/types'
+import type { BoardMember, Channel, CicEvent, Donor, Draft, DraftKind, Gift, Role } from '../data/types'
 import { unsafeDraftText } from './ai-draft'
-import { fmtDate, inviteDue } from './logic'
+import { draftChannel, thankableGift } from './drafts'
+import { fmtDate, inviteDue, offeredEvents } from './logic'
 
 // The assistant's `::action{...}` buttons. The model only proposes arguments;
 // this checks them against what the person can see and writes the label
@@ -17,6 +18,7 @@ export interface ActionStore {
   today: string
   session: { role: Role }
   donors: Donor[]
+  gifts: Gift[]
   drafts: Draft[]
   events: CicEvent[]
   boardMembers: BoardMember[]
@@ -39,6 +41,8 @@ export function chatAction(a: Attrs, store: ActionStore): ChatAction {
   const draft = store.drafts.find((d) => d.id === a.draft && d.status === 'pending')
   const draftDonor = draft && store.donors.find((d) => d.id === draft.donorId)
   const text = (s?: string, max = 300) => (s ?? '').trim().slice(0, max)
+  // Only the events the donor page offers, so a button never names one it doesn't.
+  const event = a.event === undefined ? undefined : offeredEvents(store.events, store.today).find((e) => e.id === a.event)
 
   switch (a.type) {
     case 'log': {
@@ -46,14 +50,22 @@ export function chatAction(a: Attrs, store: ActionStore): ChatAction {
       if (!donor || !CHANNELS.includes(channel) || !text(a.summary)) break
       return { label: `Log ${channel} with ${donor.name}: "${text(a.summary)}"`, run: () => store.logInteraction(donor.id, channel, text(a.summary)) }
     }
-    case 'next-step':
-      if (!donor || !text(a.text) || !isDate(a.due)) break
+    case 'next-step': {
+      // With an event: the step is the invitation, due a week before it. Unlike
+      // `invite` this drafts nothing, so a debrief's own follow-up draft is the
+      // only message (it can carry the invitation).
+      if (event && donor) {
+        const due = inviteDue(event.date, store.today)
+        const step = `Invite to ${event.name}`
+        return { label: `Set ${donor.name}'s next step: "${step}" by ${fmtDate(due)}`, run: () => store.setNextStep(donor.id, { text: step, due, eventId: event.id }) }
+      }
+      if (!donor || a.event !== undefined || !text(a.text) || !isDate(a.due)) break
       return {
         label: `Set ${donor.name}'s next step: "${text(a.text)}" by ${fmtDate(a.due!)}`,
         run: () => store.setNextStep(donor.id, { text: text(a.text), due: a.due! }),
       }
+    }
     case 'invite': {
-      const event = store.events.find((e) => e.id === a.event && e.date >= store.today)
       if (!donor || !event) break
       return {
         label: `Invite ${donor.name} to ${event.name} (${fmtDate(event.date)}): next step due ${fmtDate(inviteDue(event.date, store.today))}, plus a draft invitation`,
@@ -62,8 +74,11 @@ export function chatAction(a: Attrs, store: ActionStore): ChatAction {
     }
     case 'draft': {
       const kind = a.kind as DraftKind
-      const channel = a.channel === 'text' ? 'text' : 'email'
-      if (!donor || !KINDS.includes(kind)) break
+      // The channel the donor can actually get; none, or a thank-you with no
+      // recent gift to thank them for, isn't offered.
+      const channel = donor && draftChannel(donor, a.channel === 'text' ? 'text' : 'email')
+      if (!donor || !channel || !KINDS.includes(kind)) break
+      if (kind === 'thank-you' && !thankableGift(store.gifts.filter((g) => g.donorId === donor.id), store.today)) break
       // A body the assistant wrote (a follow-up from a debrief) is saved as the
       // draft; it still waits in Follow-ups for a human to approve.
       // A body with links or payment details isn't offered at all, the same

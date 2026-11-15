@@ -2,9 +2,20 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { RawDonorRow } from '../data/types'
 import { SAMPLE_CSV } from '../data/samples'
-import { autoMapping, csvHeaders, CUSTOM, DB_FIELDS, dedupe, matchDonor, mergeNotes, NEW_COLUMN, parseAmount, parseDate, rowsFromCsv, sameGift, SKIP, splitGifts, targetLabel } from './dedupe'
+import { autoMapping, csvHeaders, CUSTOM, DB_FIELDS, dedupe, detectSource, matchDonor, mergeNotes, NEW_COLUMN, parseAmount, parseDate, rowsFromCsv, sameGift, SKIP, splitGifts, targetLabel } from './dedupe'
 
 const row = (r: Partial<RawDonorRow>): RawDonorRow => ({ source: 'spreadsheet', name: 'Kevin Tran', ...r })
+
+test('a file is recognized as Zeffy or Benevity from its headers, so it can be caught in the wrong slot', () => {
+  assert.equal(detectSource(csvHeaders(SAMPLE_CSV.zeffy)), 'zeffy')
+  assert.equal(detectSource(csvHeaders(SAMPLE_CSV.benevity)), 'benevity')
+  assert.equal(detectSource(csvHeaders(SAMPLE_CSV.spreadsheet)), undefined)
+  // Real export headers
+  assert.equal(detectSource(['Payment Date (America/Phoenix)', 'First Name', 'Last Name', 'Email', 'Total Amount', 'Campaign Title']), 'zeffy')
+  assert.equal(detectSource(['Company', 'Project', 'Donor First Name', 'Donor Last Name', 'Email', 'Total Donation to be Acknowledged']), 'benevity')
+  // One matching header isn't enough to call it
+  assert.equal(detectSource(['Name', 'Email', 'Company', 'Amount']), undefined)
+})
 
 test('same amount within 3 days is the same gift; 4 days or a different amount is not', () => {
   assert.ok(sameGift({ amount: 500, date: '2026-06-30' }, { amount: 500, date: '2026-07-03' }))

@@ -11,20 +11,30 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import type { Channel, Donor, Gift } from '@/data/types'
+import { draftChannel, THANK_YOU_DAYS, thankableGift } from '@/lib/drafts'
 import { funderPacket } from '@/lib/packet'
 import { useStore } from '@/store'
 import { useAsk } from '@/components/ChatWidget'
-import { byDateDesc, calendarLink, donorTimeline, fmtDate, money, retentionStatus, totalsByYear, UNASSIGNED, yearOf } from '@/lib/logic'
+import { fmtPhone } from '@/lib/utils'
+import { byDateDesc, calendarLink, donorTimeline, fmtDate, money, offeredEvents, retentionStatus, totalsByYear, UNASSIGNED, yearOf } from '@/lib/logic'
 
 const CHANNEL_ICON = { email: Mail, text: MessageSquare, call: Phone, 'in-person': Users, note: StickyNote }
 
-// Funder packet: giving totals and gift history.
+// Funder packet: giving totals and gift history. The browser saves it with no
+// sign on the page, so a toast names the file.
 function downloadPacket(d: Donor, gifts: Gift[], today: string) {
-  const blob = new Blob([funderPacket(d, gifts, today)], { type: 'text/markdown' })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = `CIC_FunderPacket_${d.name.replace(/\W+/g, '')}_${today.slice(0, 4)}.md`
-  a.click()
+  const file = `CIC_FunderPacket_${d.name.replace(/\W+/g, '')}_${today.slice(0, 4)}.md`
+  try {
+    const url = URL.createObjectURL(new Blob([funderPacket(d, gifts, today)], { type: 'text/markdown' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = file
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    toast.success(`Downloaded ${file}`, { description: 'Check your Downloads folder.' })
+  } catch {
+    toast.error("Couldn't make the funder packet. Try again.")
+  }
 }
 
 export default function DonorDetail() {
@@ -39,6 +49,15 @@ export default function DonorDetail() {
   const [stepDue, setStepDue] = useState(donor?.nextStep?.due ?? '')
   // Set by an "Invite to" chip; retyping the step unlinks it from the event.
   const [stepEvent, setStepEvent] = useState(donor?.nextStep?.eventId)
+  // The step can also change outside this form (an assistant button), so
+  // follow the saved value whenever it changes.
+  const step = donor?.nextStep
+  const stepKey = `${step?.text}|${step?.due}|${step?.eventId}`
+  const [seenStep, setSeenStep] = useState(stepKey)
+  if (stepKey !== seenStep) {
+    setSeenStep(stepKey)
+    setStepText(step?.text ?? ''); setStepDue(step?.due ?? ''); setStepEvent(step?.eventId)
+  }
 
   if (!donor) return <p>Donor not found, or not assigned to you. <Link className="underline" to="/donors">Back to donors</Link></p>
 
@@ -47,7 +66,7 @@ export default function DonorDetail() {
   const timeline = donorTimeline(gifts, touches)
   const byYear = [...totalsByYear(gifts).entries()].sort((a, b) => a[0] - b[0])
   const max = Math.max(1, ...byYear.map(([, v]) => v))
-  const upcoming = s.events.filter((e) => e.date >= s.today)
+  const upcoming = offeredEvents(s.events, s.today)
 
   // One click: the next step and a draft invitation, both saved.
   const invite = async (eventId: string) => {
@@ -57,10 +76,13 @@ export default function DonorDetail() {
     toast.success(`Next step set for ${fmtDate(r.nextStep.due)}, and an invitation drafted.`, { action: { label: 'Review draft', onClick: () => nav('/follow-ups') } })
   }
 
+  // Email if there's an address, else text; neither means no draft to send.
+  const draftVia = draftChannel(donor)
+  const thankable = thankableGift(gifts, s.today)
   const draft = async (kind: Parameters<typeof s.createDraft>[1]) => {
     // AI-written drafts can take several seconds.
     const t = toast.loading('Writing the draft…')
-    if (!(await s.createDraft(donor.id, kind, donor.email ? 'email' : 'text'))) return void toast.dismiss(t)
+    if (!(await s.createDraft(donor.id, kind, draftVia))) return void toast.dismiss(t)
     toast.success('Draft created. Review it in Follow-ups.', { id: t, action: { label: 'Open', onClick: () => nav('/follow-ups') } })
   }
 
@@ -68,7 +90,7 @@ export default function DonorDetail() {
     <>
       <PageHeader
         title={donor.name}
-        description={[donor.org, donor.email, donor.phone].filter(Boolean).join(' · ')}
+        description={[donor.org, donor.email, donor.phone && fmtPhone(donor.phone)].filter(Boolean).join(' · ')}
         actions={
           <>
             {/* The assistant turns what happened into a log, a next step and a draft, as buttons to press. */}
@@ -186,7 +208,7 @@ export default function DonorDetail() {
                 <div className="mt-4 border-t pt-3">
                   <p className="mb-2 text-sm font-medium">Invite to an event</p>
                   <ul className="space-y-1">
-                    {upcoming.slice(0, 3).map((ev) => (
+                    {upcoming.map((ev) => (
                       <li key={ev.id}>
                         <Button type="button" size="sm" variant="secondary" className="h-auto w-full justify-start whitespace-normal py-1.5 text-left" aria-label={`Invite to ${ev.name}, ${fmtDate(ev.date)}`} onClick={() => invite(ev.id)}>
                           {ev.name}, {fmtDate(ev.date)}
@@ -227,9 +249,11 @@ export default function DonorDetail() {
           <Card>
             <CardHeader><CardTitle>Draft a message</CardTitle></CardHeader>
             <CardContent className="grid gap-2">
-              <Button variant="outline" onClick={() => draft('thank-you')}>Thank-you</Button>
-              <Button variant="outline" onClick={() => draft('quarterly-update')}>Quarterly update</Button>
-              <Button variant="outline" onClick={() => draft('follow-up')}>Follow-up</Button>
+              {!draftVia && <p className="text-sm text-muted-foreground">No contact info: add an email or phone number for {donor.name} before drafting a message.</p>}
+              <Button variant="outline" disabled={!draftVia || !thankable} aria-describedby={draftVia && !thankable ? 'no-thank-you' : undefined} onClick={() => draft('thank-you')}>Thank-you</Button>
+              {draftVia && !thankable && <p id="no-thank-you" className="text-sm text-muted-foreground">No gift in the last {THANK_YOU_DAYS} days to thank them for.</p>}
+              <Button variant="outline" disabled={!draftVia} onClick={() => draft('quarterly-update')}>Quarterly update</Button>
+              <Button variant="outline" disabled={!draftVia} onClick={() => draft('follow-up')}>Follow-up</Button>
             </CardContent>
           </Card>
         </aside>

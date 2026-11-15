@@ -254,6 +254,22 @@ export function autoMapping(headers: string[], customFields: string[] = []): Col
   return out
 }
 
+// Headers only one platform's export writes, to catch a file chosen in the
+// wrong slot (a Benevity report loaded as Zeffy tags every donor "zeffy").
+// The donor spreadsheet has no signature: CIC's own columns are generic.
+const SOURCE_SIGNS: [Source, RegExp][] = [
+  ['zeffy', /\bzeffy\b|^campaign( title| name)?$|^form( name| title)?$|^payment date$|^payment method$|^refund amount$|^total amount$/],
+  ['benevity', /\bbenevity\b|to be acknowledged|cause support fee|match(ed)? amount|^company$|^donation date$|^donor (first |last )?name$|^project( name)?$/],
+]
+
+// The platform a file's headers look like it came from, when two or more of
+// its headers say so and no other platform's do as much; otherwise undefined.
+export function detectSource(headers: string[]): Source | undefined {
+  const scores = SOURCE_SIGNS.map(([src, re]) => [src, headers.filter((h) => re.test(headerKey(h))).length] as const).sort((a, b) => b[1] - a[1])
+  const [best, next] = scores
+  return best[1] >= 2 && best[1] > (next?.[1] ?? 0) ? best[0] : undefined
+}
+
 // What a target is called in the UI.
 export function targetLabel(target: string, header: string): string {
   if (target === SKIP) return 'Do not save'

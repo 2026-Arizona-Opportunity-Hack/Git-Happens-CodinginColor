@@ -17,9 +17,15 @@ A board member's work queue:
 - Lapsed-donor nudges
 - **Drafts a human must approve.** Nothing is sent without a person approving it.
 
+Long lists show a page at a time (10 rows, or 6 drafts) with Previous/Next.
+
 ## Drafts
 
 Every draft (thank-you, quarterly update, lapsed nudge, follow-up, invitation) is written by AI from the donor's **notes**, gifts, next step, logged outreach and the last messages sent to them. They're marked **Drafted by AI: check before sending**. If the AI fails or takes over 12 seconds, the template is used instead.
+
+A text draft names the number it goes to, formatted as (555) 555-1234 for US numbers.
+
+A draft goes out by email when the donor has an address, else by text. A donor with neither gets no draft ("No contact info"), and the API refuses one. A **thank-you** is only offered for a gift in the last 60 days (`THANK_YOU_DAYS` in `src/lib/drafts.ts`). Thanking a lapsed donor for a gift from last year reads as a form letter, so use a lapsed nudge instead.
 
 **Template emails** at the bottom shows the standard thank-you, update, nudge and follow-up filled in for any donor. **Use this template** adds it to the drafts as written, without the AI.
 

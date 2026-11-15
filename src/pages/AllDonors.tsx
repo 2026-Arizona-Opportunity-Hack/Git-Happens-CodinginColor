@@ -12,7 +12,7 @@ import type { Donor } from '@/data/types'
 import { fmtDate, lastGiftDate, money, suggestOwners, UNASSIGNED } from '@/lib/logic'
 import { donorsCsv, donorsXlsx, download } from '@/lib/export'
 import { donorTextFilter, giftDateFilter, sourceFilter } from '@/lib/donor-columns'
-import { cn } from '@/lib/utils'
+import { cn, fmtPhone } from '@/lib/utils'
 import { useStore } from '@/store'
 
 // Every donor and who looks after them. This is where an admin manages board
@@ -74,7 +74,11 @@ export default function AllDonors() {
     toast.info(`Suggested a board member for ${todo.length} donor${todo.length === 1 ? '' : 's'}. Check them, then Save.`)
   }
 
-  const items = [{ value: UNASSIGNED, label: 'Unassigned' }, ...boardMembers.map((m) => ({ value: m.id, label: `${m.name} (${load.get(m.id) ?? 0})` }))]
+  // Each member's saved count, plus unsaved choices (Suggest or by hand) that
+  // would add to it, so the load can be seen evening out before Save.
+  const pending = (id: string) => changed.filter((d) => choice(d) === id).length
+  const count = (id: string) => `${load.get(id) ?? 0}${pending(id) ? ` + ${pending(id)} unsaved` : ''}`
+  const items = [{ value: UNASSIGNED, label: 'Unassigned' }, ...boardMembers.map((m) => ({ value: m.id, label: `${m.name} (${count(m.id)})` }))]
   const totals = (d: Donor) => {
     const gs = gifts.filter((g) => g.donorId === d.id)
     return { d, lifetime: gs.reduce((s, g) => s + g.amount, 0), last: lastGiftDate(gs) }
@@ -84,7 +88,8 @@ export default function AllDonors() {
       id: 'donor',
       header: 'Donor',
       accessorFn: (r) => r.d.name,
-      meta: { filter: donorTextFilter() },
+      // Name and contact wrap so the table fits beside the docked assistant.
+      meta: { className: 'min-w-36 whitespace-normal', filter: donorTextFilter() },
       cell: ({ row: { original: { d } } }) => (
         <>
           <Link to={`/donors/${d.id}`} className="font-medium text-cic-dark underline">{d.name}</Link>
@@ -98,11 +103,11 @@ export default function AllDonors() {
       header: 'Contact',
       accessorFn: (r) => r.d.email,
       sortUndefined: 'last',
-      meta: { filter: { kind: 'text', placeholder: 'Email or phone', text: (r) => `${r.d.email ?? ''} ${r.d.phone ?? ''}` } },
+      meta: { className: 'min-w-40 whitespace-normal wrap-anywhere', filter: { kind: 'text', placeholder: 'Email or phone', text: (r) => `${r.d.email ?? ''} ${r.d.phone ?? ''}` } },
       cell: ({ row: { original: { d } } }) => (
         <>
           <div>{d.email ?? '—'}</div>
-          {d.phone && <div className="text-muted-foreground">{d.phone}</div>}
+          {d.phone && <div className="text-muted-foreground">{fmtPhone(d.phone)}</div>}
         </>
       ),
     },
@@ -112,7 +117,7 @@ export default function AllDonors() {
       id: 'sources',
       header: 'Sources',
       enableSorting: false,
-      meta: { className: 'space-x-1', filter: sourceFilter() },
+      meta: { className: 'space-x-1 whitespace-normal', filter: sourceFilter() },
       cell: ({ row: { original: { d } } }) => d.sources.map((s) => <Badge key={s} variant="outline">{s}</Badge>),
     },
     {

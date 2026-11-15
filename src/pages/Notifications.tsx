@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CalendarDays, FileSpreadsheet, MailCheck, UserRound, type LucideIcon } from 'lucide-react'
-import { PageHeader, SectionTitle } from '@/components/common'
+import { PageHeader, Paged, SectionTitle } from '@/components/common'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -21,6 +21,11 @@ const URGENCY: { key: Urgency; label: string; badge: string }[] = [
   { key: 'upcoming', label: 'Coming up', badge: 'bg-cic-tint text-cic-dark' },
 ]
 
+// The sidebar badge counts only what needs action, so say how the page's total
+// splits, or the two numbers look like they disagree.
+const summary = (now: number, upcoming: number) =>
+  `${now} need${now === 1 ? 's' : ''} action · ${upcoming} coming up`
+
 // One inbox for everything the app would otherwise make you go looking for.
 export default function Notifications() {
   const { session } = useStore()
@@ -34,6 +39,7 @@ export default function Notifications() {
     <>
       <PageHeader
         title="Notifications"
+        description={summary(all.filter((r) => r.urgency !== 'upcoming').length, all.filter((r) => r.urgency === 'upcoming').length)}
       />
 
       <div role="group" aria-label="Filter reminders" className="mb-6 flex flex-wrap gap-2">
@@ -61,9 +67,10 @@ export default function Notifications() {
         return (
           <section key={u.key} className="mb-8">
             <SectionTitle>{u.label} ({items.length})</SectionTitle>
-            <Card className="py-0">
+            <Card className="gap-0 py-0">
+              <Paged items={items} label={u.label} className="px-4 py-3">{(page) => (
               <ul className="divide-y">
-                {items.map((r) => {
+                {page.map((r) => {
                   const cat = CATEGORIES.find((c) => c.key === r.category)!
                   return (
                     <li key={r.id} className="flex items-start gap-3 px-4 py-3">
@@ -79,6 +86,7 @@ export default function Notifications() {
                   )
                 })}
               </ul>
+              )}</Paged>
             </Card>
           </section>
         )
