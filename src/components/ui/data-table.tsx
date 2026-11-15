@@ -124,7 +124,7 @@ export function DataTable<T>({
           )}
         </TableBody>
       </Table>
-      {total > PAGE_SIZES[0] && (
+      {total > 0 && (
         <nav aria-label="Table pages" className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm">
           <div className="flex items-center gap-2">
             <span id={sizeLabel} className="text-muted-foreground">Rows per page</span>

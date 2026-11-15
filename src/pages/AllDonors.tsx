@@ -54,7 +54,6 @@ export default function AllDonors() {
     .filter((d) => inMain(d) && match(d))
     .sort((a, b) => (rank(a) === -1 && rank(b) === -1 ? a.name.localeCompare(b.name) : rank(a) === -1 ? 1 : rank(b) === -1 ? -1 : rank(a) - rank(b)))
   const unassigned = donors.filter((d) => !inMain(d) && match(d)).sort((a, b) => a.name.localeCompare(b.name))
-  const totalUnassigned = donors.filter((d) => !d.ownerId).length
   const shown = [...assigned, ...unassigned]
 
   const save = async (list: Donor[]) => {
@@ -163,7 +162,6 @@ export default function AllDonors() {
             </Button>
           </>
         }
-        description={`Every donor and the board member responsible for them: ${donors.length} donors, ${totalUnassigned} unassigned. Choose a board member, then click Update for one row or Update all at the bottom.`}
       />
       <section aria-labelledby="filters-heading" className="mb-6 rounded-lg border bg-muted/40 p-4">
         <h2 id="filters-heading" className="mb-3 text-sm font-semibold text-cic-dark">Filters</h2>
