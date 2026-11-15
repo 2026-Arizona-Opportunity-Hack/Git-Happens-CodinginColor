@@ -63,6 +63,7 @@ export default function Dashboard() {
                 }
               })}
               getRowId={(r) => r.id}
+              pageSize={10}
             />
 
           </section>

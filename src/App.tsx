@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
-import { AuthKitProvider, useAuth } from '@workos-inc/authkit-react'
+import { AuthProvider, useAuth } from '@/auth'
 import { BarChart3, Bell, Code2, Contact, Home, ListTodo, LogOut, Menu, ShieldAlert, Upload, UserCog, UserRound, Users, X, type LucideIcon } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
@@ -55,15 +55,8 @@ const NAV: { heading: string; items: NavItem[] }[] = [
   },
 ]
 
-// signOut clears the user before it navigates to WorkOS's logout URL. Without this
-// flag, SignedInApp would see no user and start a sign-in that cancels the logout.
-let signingOut = false
 function useSignOut() {
-  const { signOut } = useAuth()
-  return () => {
-    signingOut = true
-    signOut({ returnTo: location.origin })
-  }
+  return useAuth().signOut
 }
 
 function SignedInAs() {
@@ -256,7 +249,7 @@ function SignedInApp() {
   const signOut = useSignOut()
   // Signed-out visitors go straight to the WorkOS sign-in page; there's nothing to see here without it.
   useEffect(() => {
-    if (!isLoading && !user && !signingOut) signIn({ state: { returnTo: location.pathname } })
+    if (!isLoading && !user) signIn()
   }, [isLoading, user, signIn])
   if (isLoading) return <AppSkeleton label="Checking your sign-in…" />
   if (!user) return <AppSkeleton label="Taking you to sign in…" />
@@ -270,30 +263,12 @@ function SignedInApp() {
   )
 }
 
-// Sends the user back to the page they started sign-in from. state comes back
-// through the URL unprotected, so only same-origin paths are followed.
-function returnTo({ state }: { state?: Record<string, unknown> | null }) {
-  if (typeof state?.returnTo !== 'string') return
-  const url = new URL(state.returnTo, location.origin)
-  if (url.origin === location.origin) history.replaceState(null, '', url.pathname)
-}
-
+// Sign-in runs in the Worker (worker/auth.ts), which keeps the session in an
+// HttpOnly cookie; see docs/decisions/006-session-cookie.md.
 export default function App() {
-  const [clientId, setClientId] = useState<string>()
-  const [error, setError] = useState(false)
-  useEffect(() => {
-    fetch('/api/config')
-      .then((r) => r.json())
-      .then((c) => setClientId(c.workosClientId))
-      .catch(() => setError(true))
-  }, [])
-  if (error) return <Centered><p role="alert">Could not reach the server. Check your connection and refresh.</p></Centered>
-  if (!clientId) return <AppSkeleton label="Loading…" />
-  // devMode keeps the session in localStorage; it's required without a WorkOS
-  // custom domain, which costs more than this project's hosting budget.
   return (
-    <AuthKitProvider clientId={clientId} redirectUri={location.origin} devMode onRedirectCallback={returnTo}>
+    <AuthProvider>
       <SignedInApp />
-    </AuthKitProvider>
+    </AuthProvider>
   )
 }

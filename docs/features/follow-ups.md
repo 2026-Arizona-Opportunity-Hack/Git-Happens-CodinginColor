@@ -17,7 +17,9 @@ A board member's work queue:
 - Lapsed-donor nudges
 - **Drafts a human must approve.** Nothing is sent without a person approving it.
 
-Long lists show a page at a time (10 rows, or 6 drafts) with Previous/Next.
+Long lists show a page at a time (10 rows) with Previous/Next.
+
+**Drafts awaiting approval** lists who each draft is to and its subject down the left. Pick one to read, edit and send it on the right. Sending or discarding it moves on to the next draft.
 
 ## Drafts
 

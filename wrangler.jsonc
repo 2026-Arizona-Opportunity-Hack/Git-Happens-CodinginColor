@@ -8,7 +8,7 @@
     // Client-side routes (/donors/d7) fall back to index.html
     "not_found_handling": "single-page-application",
     // /api/* goes to the Worker; everything else is a static file
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": ["/api/*", "/auth/*"]
   },
   "d1_databases": [
     { "binding": "DB", "database_name": "githappens", "database_id": "7ecb8d1a-5f89-456a-b880-e00ba97d5dfb", "migrations_dir": "migrations" }

@@ -52,7 +52,7 @@ Setup, deploy and every environment variable are in [Getting it running](#for-ci
 | [Operations](docs/operations.md) | Every setting and secret, deploying, sign-in setup, the calendar, resetting the demo |
 | [Security](docs/security.md) | Who can see what, every audit finding and its fix, known gaps |
 | [Testing](docs/testing.md) | Running the tests, the coverage gate, which test covers which feature |
-| [Decisions](docs/decisions/) | Why it's built this way: AI model, Cloudflare + D1, WorkOS, drafts opening in the mail app, AuthKit dev mode |
+| [Decisions](docs/decisions/) | Why it's built this way: AI model, Cloudflare + D1, WorkOS, drafts opening in the mail app, the session cookie |
 | [API reference](https://githappens.jurenka.software/api/docs) | Generated from `worker/openapi.ts` |
 
 ### How the docs stay current
@@ -78,15 +78,14 @@ Here is what's still unfinished. More detail is in [Security → Known gaps](doc
 1. **Real exports.** Get scrubbed Zeffy and Benevity samples from CIC and adjust `COLUMN_MAP` in `src/lib/dedupe.ts`.
 2. **Replace the demo accounts** before real donors are loaded. The password is public on purpose.
 3. **Real calendar.** Set `CALENDAR_ICS_URL` to CIC's Google Calendar ([Events calendar](docs/operations.md#events-calendar)).
-4. **Sessions in an HttpOnly cookie.** The sign-in session sits in localStorage today, because keeping it in a cookie through AuthKit's browser SDK needs a $99/month WorkOS custom domain. We'll move sign-in to the Worker, so the session lives in an HttpOnly cookie on our own domain for free ([#179](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/issues/179)).
-5. **Sending from the app.** Today drafts open pre-filled in the board member's own mail or Messages app. Saving them straight to Gmail or Outlook needs per-user OAuth, and for Gmail, Google's app verification.
-6. **Classroom outcomes.** Once the curriculum platform (Problem 1) has a read API, add students served and learning gains to funder packets.
+4. **Sending from the app.** Today drafts open pre-filled in the board member's own mail or Messages app. Saving them straight to Gmail or Outlook needs per-user OAuth, and for Gmail, Google's app verification.
+5. **Classroom outcomes.** Once the curriculum platform (Problem 1) has a read API, add students served and learning gains to funder packets.
 
 ## Security: who can see what
 
 ### Protecting donor data
 
-- **Every donor route needs a signed-in board member** (WorkOS AuthKit). Someone who can sign in to WorkOS but isn't in CIC's organization gets a 403.
+- **Every donor route needs a signed-in board member** (WorkOS AuthKit). The session is an encrypted HttpOnly cookie, never in localStorage ([decision 006](docs/decisions/006-session-cookie.md)). Someone who can sign in to WorkOS but isn't in CIC's organization gets a 403.
 - **No secrets in git.** Keys live in `.env` locally and in Worker secrets in production. A hook blocks commits that contain keys or `.env` files. [`.env.example`](.env.example) lists what's needed.
 - **Input is validated, and every SQL query uses bound parameters.** 4,500 seeded fuzz inputs run against import, dedupe, the Excel export, the API input checks, the calendar parser, AI drafts and the assistant's buttons on every PR. They found two real bugs, both fixed with regression tests ([#84](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/pull/84), [#128](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/pull/128)).
 - **The read API returns totals only**, with no names, emails or IDs. D1 stores only the SHA-256 of each API key.
@@ -99,7 +98,7 @@ Here is what's still unfinished. More detail is in [Security → Known gaps](doc
 
 - **Two roles, set in WorkOS.** *Admin* sees every donor and can import, assign donors, manage the board and issue API keys. *Member* sees only the donors assigned to them.
 - **Enforced on the server, not just hidden in the UI.** Every donor route filters by `owner_id` for members, and admin routes call `requireAdmin` (`worker/index.ts`). A member's browser never receives another member's donors.
-- **Known gaps** are listed in [Security](docs/security.md#known-gaps): no rate limit on the AI routes yet, the session is kept in localStorage (AuthKit dev mode, moving to an HttpOnly cookie in [#179](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/issues/179)), and the AI gateway sees donor data.
+- **Known gaps** are listed in [Security](docs/security.md#known-gaps): no rate limit on the AI routes yet, and the AI gateway sees donor data.
 
 ## Accessibility
 
