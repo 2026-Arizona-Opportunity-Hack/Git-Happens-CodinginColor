@@ -48,6 +48,8 @@ export default function DonorDetail() {
   const [note, setNote] = useState('')
   const [stepText, setStepText] = useState(donor?.nextStep?.text ?? '')
   const [stepDue, setStepDue] = useState(donor?.nextStep?.due ?? '')
+  // Set by an "Invite to" chip; retyping the step unlinks it from the event.
+  const [stepEvent, setStepEvent] = useState(donor?.nextStep?.eventId)
 
   if (!donor) return <p>Donor not found, or not assigned to you. <Link className="underline" to="/donors">Back to donors</Link></p>
 
@@ -152,13 +154,13 @@ export default function DonorDetail() {
                 className="space-y-3"
                 onSubmit={(e) => {
                   e.preventDefault()
-                  s.setNextStep(donor.id, stepText && stepDue ? { text: stepText, due: stepDue } : undefined)
+                  s.setNextStep(donor.id, stepText && stepDue ? { text: stepText, due: stepDue, eventId: stepEvent } : undefined)
                   toast.success('Next step saved')
                 }}
               >
                 <div>
                   <Label htmlFor="step" className="mb-1">What</Label>
-                  <Input id="step" value={stepText} onChange={(e) => setStepText(e.target.value)} placeholder="e.g. Invite to Day of Compute" />
+                  <Input id="step" value={stepText} onChange={(e) => { setStepText(e.target.value); setStepEvent(undefined) }} placeholder="e.g. Invite to Day of Compute" />
                 </div>
                 <div>
                   <Label htmlFor="due" className="mb-1">Due</Label>
@@ -166,7 +168,7 @@ export default function DonorDetail() {
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {upcoming.slice(0, 3).map((ev) => (
-                    <Button key={ev.id} type="button" size="xs" variant="secondary" onClick={() => { setStepText(`Invite to ${ev.name}`); setStepDue(ev.date) }}>
+                    <Button key={ev.id} type="button" size="xs" variant="secondary" onClick={() => { setStepText(`Invite to ${ev.name}`); setStepDue(ev.date); setStepEvent(ev.id) }}>
                       Invite to {ev.name}
                     </Button>
                   ))}
