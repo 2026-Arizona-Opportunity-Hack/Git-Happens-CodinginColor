@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { calendarLink, inviteDue, nextOwner, suggestOwners } from './logic'
+import { calendarLink, inviteDue, nextOwner, periodLabel, periodOf, retentionStatus, suggestOwners } from './logic'
 
 const members = [{ id: 'a', name: 'Ann', email: '' }, { id: 'b', name: 'Ben', email: '' }, { id: 'c', name: 'Cy', email: '' }]
 const owned = (...ids: (string | null)[]) => ids.map((ownerId) => ({ ownerId }))
@@ -26,4 +26,14 @@ test('the calendar link is an all-day event on the due date', () => {
   assert.equal(url.searchParams.get('dates'), '20261231/20270101')
   assert.equal(url.searchParams.get('text'), 'Invite to Day of Compute (Verizon Foundation)')
   assert.match(url.searchParams.get('details')!, /https:\/\/app\.test\/donors\/d4$/)
+})
+
+test('quarters count across a year end, so Q1 is compared with the Q4 before it', () => {
+  const gift = (amount: number, date: string) => ({ id: date, donorId: 'd', amount, date, source: 'zeffy' as const, program: 'General' as const })
+  const q1 = periodOf('2027-02-10', 'quarter')
+  assert.equal(periodOf('2026-12-31', 'quarter'), q1 - 1)
+  assert.equal(periodLabel(q1, 'quarter'), 'Q1 2027')
+  assert.equal(retentionStatus([gift(100, '2026-11-01'), gift(150, '2027-02-10')], q1, 'quarter'), 'increased')
+  assert.equal(retentionStatus([gift(100, '2026-11-01')], q1, 'quarter'), 'lapsed')
+  assert.equal(retentionStatus([gift(100, '2026-02-01'), gift(100, '2027-02-10')], q1, 'quarter'), 'recovered')
 })
