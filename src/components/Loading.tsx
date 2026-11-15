@@ -2,11 +2,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 
 export function Logo() {
-  return (
-    <div aria-hidden className="flex size-8 items-center justify-center rounded-md bg-cic-dark text-sm font-bold text-white">
-      C<span className="text-cic-green">i</span>C
-    </div>
-  )
+  // Coding in Color's own mark, from codingincolor.net. Decorative: the app name sits beside it.
+  return <img src="/cic-logo.png" alt="" className="size-8 rounded-md" />
+
 }
 
 // Rows of a table while its data loads.
