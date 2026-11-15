@@ -11,6 +11,7 @@ Built at [ASU Fall Hackathon 2026 | Phoenix Hackathon for Nonprofits: Nov 14-15]
 | | |
 |---|---|
 | **Nonprofit** | [Coding in Color](https://www.ohack.dev/nonprofit/YIXYdYCoxIZC08uQ5DL3) |
+| **Live site** | [githappens.jurenka.software](https://githappens.jurenka.software) (sign in as a board member; the data is fake) |
 | **Problem statement** | [Donor & Funder Relationship Platform (CIC Problem 2)](https://www.ohack.dev/project/e26932c0df1b11f189a8dead68f07eb5) |
 | **Team page** | [Git Happens](https://www.ohack.dev/hack/fall-2026/team/28a0f23ce05c11f1bd10deadfb009123) · [Team Dashboard](https://www.ohack.dev/hack/fall-2026/manageteam) (story, demo video, submit) |
 | **Slack** | team: [#githappens](https://opportunity-hack.slack.com/app_redirect?channel=githappens) · nonprofit: [#npo-coding-in-color](https://opportunity-hack.slack.com/app_redirect?channel=npo-coding-in-color) · help: [#ask-a-mentor](https://opportunity-hack.slack.com/archives/C01E5CGDQ74) |
@@ -32,11 +33,11 @@ Start recording your demo video by **Sun Nov 15, 12:00 PM MST** — hacking ends
 
 Everything is submitted from your [Team Dashboard](https://www.ohack.dev/hack/fall-2026/manageteam); judges read the dashboard, this README and your demo video.
 
-- [ ] **Code pushed** to this repo, in small PRs (see `AGENTS.md`) — judges and future recruiters read the history
+- [x] **Code pushed** to this repo, in small PRs (see `AGENTS.md`) — judges and future recruiters read the history
 - [ ] **Project story** written on the dashboard (`#project`): the problem, who it helps, what you built, what's next
 - [ ] **Demo video** (4 minutes or less) on YouTube, Vimeo, Loom or Google Drive, linked on the dashboard (`#demo`) — show it working, not slides
 - [ ] **Submit** on the dashboard (you can keep editing until the close)
-- [ ] This README filled in below: team, tech stack, how to run it, live link if you have one
+- [x] This README filled in below: team, tech stack, how to run it, live link if you have one
 - Optional: a [DevPost entry](https://opportunity-hack-2026-arizona.devpost.com/) — the dashboard is the submission of record.
 
 Judges score **Scope, Documentation, Polish and Security**, plus a separate **Accessibility** prize — the rubric is at [ohack.dev/hackathon-judging-criteria](https://www.ohack.dev/hackathon-judging-criteria). Document your work as GitHub Issues as you go: that's how you get public credit for it.
@@ -139,7 +140,7 @@ bun run test         # unit tests for src/lib, failing under 95% coverage (docs/
 
 - Live demo: https://githappens.jurenka.software
 - Demo video:
-- Design / docs:
+- Docs: [docs/](docs/)
 
 ## After the hackathon
 
