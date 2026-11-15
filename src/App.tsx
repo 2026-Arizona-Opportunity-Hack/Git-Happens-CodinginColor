@@ -17,6 +17,7 @@ import Import from '@/pages/Import'
 import Notifications from '@/pages/Notifications'
 const Members = lazy(() => import('@/pages/Members'))
 const Account = lazy(() => import('@/pages/Account'))
+const Api = lazy(() => import('@/pages/Api'))
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: Home },
@@ -28,6 +29,7 @@ const NAV = [
   { to: '/assistant', label: 'Assistant', icon: MessageCircle, narrowOnly: true },
   { to: '/import', label: 'Import', icon: Upload, adminOnly: true },
   { to: '/members', label: 'Board members', icon: UserCog, adminOnly: true },
+  { to: '/api', label: 'Read API', icon: Code2, adminOnly: true },
   { to: '/account', label: 'My account', icon: UserRound },
 ]
 
@@ -86,12 +88,6 @@ function Shell() {
               )}
             </NavLink>
           ))}
-          {/* Served by the Worker, not the router, so it's a plain link. */}
-          {session.role === 'admin' && (
-            <a href="/api/docs" target="_blank" rel="noopener" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap hover:bg-muted">
-              <Code2 className="size-4" aria-hidden /> API docs<span className="sr-only"> (opens in a new tab)</span>
-            </a>
-          )}
         </nav>
         <div className="mt-6 md:mt-auto md:pt-6">
           <SignedInAs />
@@ -108,6 +104,7 @@ function Shell() {
           <Route path="/retention" element={<Retention />} />
           <Route path="/import" element={<Import />} />
           <Route path="/members" element={session.role === 'admin' && <Suspense fallback={<p role="status">Loading…</p>}><Members /></Suspense>} />
+          <Route path="/api" element={session.role === 'admin' && <Suspense fallback={<p role="status">Loading…</p>}><Api /></Suspense>} />
           <Route path="/assistant" element={wide ? <Navigate to="/" replace /> : <ChatPanel chat={chat} variant="page" />} />
           <Route path="/account" element={<Suspense fallback={<p role="status">Loading…</p>}><Account /></Suspense>} />
         </Routes>

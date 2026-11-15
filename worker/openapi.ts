@@ -17,7 +17,9 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
       title: 'Coding in Color donor relationships API',
       version: '1.0.0',
       description: [
-        'The JSON API behind the donor relationships app. Every route except `/api/config` needs a WorkOS AuthKit access token for a CIC board member, sent as `Authorization: Bearer <token>`.',
+        'The JSON API behind the donor relationships app. Every route except `/api/config` and the read API needs a WorkOS AuthKit access token for a CIC board member, sent as `Authorization: Bearer <token>`.',
+        '',
+        'The **read API** (`/api/v1/*`) is for CIC\'s own dashboard and other integrations. It takes an API key instead (`Authorization: Bearer cic_live_…`), which an admin creates on the app\'s API page, and returns aggregates only: no donor names, emails or IDs.',
         '',
         'Board members only see and change donors they own. Routes marked **admin only** return 403 for everyone else.',
         '',
@@ -32,7 +34,8 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
       { name: 'Donors', description: 'Contact log, next steps and ownership' },
       { name: 'Drafts', description: 'Messages a human approves before anything is sent' },
       { name: 'Assistant', description: 'Read-only chat over the caller\'s own records' },
-      { name: 'Admin', description: 'Import and board member management' },
+      { name: 'Admin', description: 'Import, board member and API key management' },
+      { name: 'Read API', description: 'Aggregates for CIC\'s dashboard, authenticated with an API key' },
     ],
     paths: {
       '/api/config': {
@@ -143,6 +146,36 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
           },
         },
       },
+      '/api/v1/summary': {
+        get: {
+          tags: ['Read API'], summary: 'Totals and recent activity for a period', security: [{ apiKey: [] }],
+          description: 'Gifts summed by quarter, program and board member (the donor\'s owner), plus the 25 latest gifts and contacts. `program` filters gifts only; `board_member` filters gifts by donor owner and contacts by who made them.',
+          parameters: [
+            { name: 'period', in: 'query', description: 'A year or a quarter; defaults to this year', schema: { type: 'string', pattern: '^\\d{4}(-Q[1-4])?$', examples: ['2026', '2026-Q4'] } },
+            { name: 'program', in: 'query', schema: { enum: enums.programs } },
+            { name: 'board_member', in: 'query', description: 'A board member ID', schema: { type: 'string' } },
+          ],
+          responses: { 200: jsonResponse('Aggregates for the period', ref('Summary')), ...errors(400, 401) },
+        },
+      },
+      '/api/keys': {
+        get: {
+          tags: ['Admin'], summary: 'List API keys (admin only)', description: 'Active keys first. Only the prefix of each key is kept.',
+          responses: { 200: jsonResponse('Keys, newest first', { type: 'array', items: ref('ApiKey') }), ...errors(401, 403) },
+        },
+        post: {
+          tags: ['Admin'], summary: 'Create an API key (admin only)', description: 'The response is the only time the full key is shown.',
+          requestBody: jsonBody({ type: 'object', required: ['name'], properties: { name: { type: 'string', maxLength: 100, examples: ['CIC org dashboard'] } } }),
+          responses: { 201: jsonResponse('The new key', { allOf: [ref('ApiKey'), { type: 'object', properties: { key: { type: 'string', examples: ['cic_live_0123456789abcdef0123456789abcdef'] } } }] }), ...errors(400, 401, 403) },
+        },
+      },
+      '/api/keys/{id}': {
+        delete: {
+          tags: ['Admin'], summary: 'Revoke an API key (admin only)', description: 'It stops working immediately.',
+          parameters: [idParam('id', 'Key ID')],
+          responses: { 200: ok, ...errors(401, 403, 404) },
+        },
+      },
       '/api/widget-token': {
         post: {
           tags: ['Admin'], summary: 'Token for the WorkOS members widget (admin only)',
@@ -153,9 +186,10 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
     components: {
       securitySchemes: {
         workos: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', description: 'A WorkOS AuthKit access token for a CIC board member' },
+        apiKey: { type: 'http', scheme: 'bearer', description: 'A read API key (cic_live_…) from the app\'s API page' },
       },
       responses: Object.fromEntries(
-        [[400, 'Invalid input'], [401, 'Missing or expired token'], [403, 'Not a board member, or admin only'], [404, 'Not found, or not yours'], [409, 'The draft is no longer pending']]
+        [[400, 'Invalid input'], [401, 'Missing, expired or revoked token or key'], [403, 'Not a board member, or admin only'], [404, 'Not found, or not yours'], [409, 'The draft is no longer pending']]
           .map(([c, d]) => [`E${c}`, jsonResponse(d as string, ref('Error'))]),
       ),
       schemas: {
@@ -197,6 +231,39 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
           properties: {
             source: { enum: enums.sources }, name: { type: 'string', maxLength: 200 }, email: { type: 'string' }, phone: { type: 'string', maxLength: 50 }, org: { type: 'string' },
             amount: { type: 'number', exclusiveMinimum: 0 }, date: isoDate, program: { enum: enums.programs },
+          },
+        },
+        ApiKey: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' }, name: { type: 'string' }, prefix: { type: 'string', examples: ['cic_live_0123'] }, createdAt: { type: 'string', format: 'date-time' },
+            createdBy: { type: 'string' }, lastUsedAt: { type: 'string', format: 'date-time' }, revokedAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        Summary: {
+          type: 'object',
+          properties: {
+            period: { type: 'string', examples: ['2026-Q4'] }, from: isoDate, to: { ...isoDate, description: 'Exclusive' },
+            filters: { type: 'object', properties: { program: { type: ['string', 'null'] }, board_member: { type: ['string', 'null'] } } },
+            totals: {
+              type: 'object',
+              properties: {
+                raised: { type: 'number' }, gifts: { type: 'integer' }, donors: { type: 'integer', description: 'Distinct donors who gave' },
+                by_quarter: { type: 'object', additionalProperties: { type: 'number' }, examples: [{ Q3: 1200, Q4: 5400 }] },
+                by_program: { type: 'object', additionalProperties: { type: 'number' }, examples: [{ 'AI Academy': 5000, General: 1600 }] },
+                by_board_member: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, raised: { type: 'number' } } } },
+              },
+            },
+            recent_activity: {
+              type: 'array', maxItems: 25,
+              items: {
+                type: 'object',
+                properties: {
+                  date: isoDate, type: { enum: ['gift', 'contact'] }, board_member: { type: 'string' },
+                  amount: { type: 'number', description: 'Gifts only' }, program: { enum: enums.programs, description: 'Gifts only' }, channel: { enum: enums.channels, description: 'Contacts only' },
+                },
+              },
+            },
           },
         },
         Bootstrap: {
