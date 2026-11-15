@@ -47,7 +47,7 @@
             outputHashMode = "recursive";
             outputHashAlgo = "sha256";
             outputHash = {
-              x86_64-linux = "sha256-IJLtwJ0IHCXdGwpwtmFxdUpAuEEU0Plcd/PEgAvqHsQ=";
+              x86_64-linux = "sha256-I7pPdjXz+8eTbftKIln18e5Ng62ftKj8vQOpqbr0m4A=";
             }.${pkgs.stdenv.hostPlatform.system} or pkgs.lib.fakeHash;
           };
         in

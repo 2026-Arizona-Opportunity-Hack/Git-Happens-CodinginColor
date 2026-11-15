@@ -62,7 +62,7 @@ Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevi
 | **Read API** | Contract for `GET /api/v1/donor-summary`, aggregated by period / program / board member, with a live sample response |
 | **Board members** (admin) | Invite board members, change their role, remove them (WorkOS Users Management widget) |
 | **My account** | Each user edits their profile, changes password and sets up MFA, and signs out other devices (WorkOS widgets) |
-| **Assistant** (every page) | Bottom-right chat that answers questions about the records you can see. Read-only |
+| **Assistant** (every page) | Bottom-right chat that answers questions about the records you can see, with donor cards, tables and links. It can't change anything itself: it offers buttons (log contact, set a next step, draft, approve or discard a draft, reassign for admins) whose labels the app writes, and nothing happens until you press one. Raw HTML, images and outside links in replies are never rendered |
 
 ![Dashboard](docs/screenshots/dashboard.png)
 

@@ -4,10 +4,12 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useStore, type ChatTurn } from '@/store'
 import { cn } from '@/lib/utils'
+import { ChatMarkdown } from '@/components/ChatMarkdown'
 
 // Bottom-right assistant. It answers from the same data the signed-in user can
-// see (the Worker builds its context from their scoped records) and can't
-// change anything. The conversation lives in memory and resets on reload.
+// see (the Worker builds its context from their scoped records). It can't
+// change anything itself; replies can offer buttons (see ChatMarkdown) that
+// the person presses. The conversation lives in memory and resets on reload.
 export function ChatWidget() {
   const { chat } = useStore()
   const [open, setOpen] = useState(false)
@@ -73,19 +75,19 @@ export function ChatWidget() {
           <div ref={log} role="log" aria-live="polite" className="flex-1 space-y-3 overflow-y-auto p-4 text-sm">
             {turns.length === 0 && (
               <p className="text-muted-foreground">
-                Ask about your donors, gifts, follow-ups or events, like "Who is overdue for a touch?" I can see what you can see in the app, and I can't change anything.
+                Ask about your donors, gifts, follow-ups or events, like "Who is overdue for a touch?" I can see what you can see in the app. I'll offer buttons for changes, and nothing happens until you press one.
               </p>
             )}
             {turns.map((t, i) => (
               <div
                 key={i}
                 className={cn(
-                  'max-w-[85%] rounded-lg px-3 py-2 whitespace-pre-wrap',
-                  t.role === 'user' ? 'ml-auto bg-cic-dark text-white' : 'bg-cic-tint text-foreground',
+                  'max-w-[85%] rounded-lg px-3 py-2',
+                  t.role === 'user' ? 'ml-auto bg-cic-dark text-white whitespace-pre-wrap' : 'bg-cic-tint text-foreground',
                 )}
               >
                 <span className="sr-only">{t.role === 'user' ? 'You: ' : 'Assistant: '}</span>
-                {t.content}
+                {t.role === 'user' ? t.content : <ChatMarkdown>{t.content}</ChatMarkdown>}
               </div>
             ))}
             {busy && <p className="text-muted-foreground" role="status">Thinking…</p>}
