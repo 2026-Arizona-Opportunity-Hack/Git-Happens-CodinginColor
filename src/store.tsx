@@ -161,6 +161,10 @@ function useStoreState(real: Bootstrap, token: GetToken, reload: () => Promise<v
   const saveNotes = (donorId: string, notes: string) =>
     change(() => api(token, `donors/${donorId}/notes`, 'PUT', { notes }))
 
+  // Sets the donor's email and phone ('' clears one).
+  const saveContact = (donorId: string, contact: { email: string; phone: string }) =>
+    change(() => api(token, `donors/${donorId}/contact`, 'PUT', contact))
+
   // Sets the next step "Invite to <event>" and drafts the invitation.
   const invite = (donorId: string, eventId: string) =>
     change(() => api<{ nextStep: NonNullable<Donor['nextStep']>; draft: Draft }>(token, `donors/${donorId}/invite`, 'POST', { eventId }))
@@ -196,7 +200,7 @@ function useStoreState(real: Bootstrap, token: GetToken, reload: () => Promise<v
 
   return {
     ...data, drafts, member, ownerName, chat, sample, setSample,
-    createDraft, updateDraft, approveDraft, discardDraft, logInteraction, setNextStep, saveNotes, invite, reassign, assignOwners, importRows, clearDonors, widgetToken,
+    createDraft, updateDraft, approveDraft, discardDraft, logInteraction, setNextStep, saveNotes, saveContact, invite, reassign, assignOwners, importRows, clearDonors, widgetToken,
     listApiKeys, createApiKey, revokeApiKey,
   }
 }

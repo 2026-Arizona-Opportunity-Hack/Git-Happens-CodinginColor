@@ -5,7 +5,7 @@ import { cleanDraft, draftPrompt, inert } from '../src/lib/ai-draft'
 import { draftBody, draftChannel } from '../src/lib/drafts'
 import { parseIcs } from '../src/lib/ical'
 import { daysBetween, inviteDue, offeredEvents, quarterlyTouchDue, retentionStatus, totalsByYear, yearOf } from '../src/lib/logic'
-import { date, extraFields, HttpError, oneOf, optStr, periodRange, str, summarize, type SummaryContact, type SummaryGift } from '../src/lib/api'
+import { contactFields, date, extraFields, HttpError, oneOf, optStr, periodRange, str, summarize, type SummaryContact, type SummaryGift } from '../src/lib/api'
 import { docsPage, openapi } from './openapi'
 
 // JSON API over D1. Every route resolves the caller's session first, and
@@ -528,6 +528,14 @@ async function route(req: Request, env: Env): Promise<Response> {
       const notes = (await body(req)).notes
       if (typeof notes !== 'string' || notes.length > 10000) throw new HttpError(400, 'notes must be a string up to 10000 chars')
       await db.prepare('UPDATE donors SET notes = ? WHERE id = ?').bind(notes.trim(), donor.id).run()
+      return json({ ok: true })
+    }
+
+    // PUT /api/donors/:id/contact {email?, phone?}: only the fields sent change; '' clears one.
+    if (m === 'PUT' && parts[2] === 'contact') {
+      const c = contactFields(await body(req))
+      await db.prepare('UPDATE donors SET email = ?, phone = ? WHERE id = ?')
+        .bind(c.email === undefined ? donor.email ?? null : c.email, c.phone === undefined ? donor.phone ?? null : c.phone, donor.id).run()
       return json({ ok: true })
     }
 

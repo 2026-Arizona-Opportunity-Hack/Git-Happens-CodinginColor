@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { date, extraFields, HttpError, oneOf, optStr, periodRange, str, summarize } from './api'
+import { contactFields, date, extraFields, HttpError, oneOf, optStr, periodRange, str, summarize } from './api'
 
 const rejects = (fn: () => unknown, message: RegExp) =>
   assert.throws(fn, (e: unknown) => e instanceof HttpError && e.status === 400 && message.test(e.message))
@@ -13,6 +13,14 @@ test('strings are trimmed; blank, non-string or too long is a 400', () => {
   assert.equal(optStr('', 'org'), undefined)
   assert.equal(optStr(null, 'org'), undefined)
   assert.equal(optStr(' APS ', 'org'), 'APS')
+})
+
+test('contact edits check email and phone, and blank clears a field', () => {
+  assert.deepEqual(contactFields({ email: ' ana@example.org ' }), { email: 'ana@example.org' })
+  assert.deepEqual(contactFields({ email: '', phone: '(520) 555-0106' }), { email: null, phone: '(520) 555-0106' })
+  assert.deepEqual(contactFields({ phone: null }), { phone: null })
+  for (const bad of [{}, null, { email: 'not-an-email' }, { email: 'a@b' }, { phone: '123' }, { phone: '555-CALL-NOW' }, { phone: '1'.repeat(16) }, { email: 'x'.repeat(195) + '@b.org' }, { email: 5 }])
+    assert.throws(() => contactFields(bad), HttpError)
 })
 
 test('enums and dates only accept what the API allows', () => {
