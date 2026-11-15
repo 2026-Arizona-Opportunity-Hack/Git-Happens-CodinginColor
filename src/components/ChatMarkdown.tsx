@@ -4,7 +4,7 @@ import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkDirective from 'remark-directive'
 import { visit } from 'unist-util-visit'
-import { Check } from 'lucide-react'
+import { Check, MousePointerClick } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { chatAction, type Attrs } from '@/lib/actions'
 import { byDateDesc, fmtDate, money } from '@/lib/logic'
@@ -85,7 +85,13 @@ function ActionButton(props: Attrs) {
       className="my-1 h-auto w-full justify-start whitespace-normal py-1.5 text-left"
     >
       {state === 'done' && <Check aria-hidden />}
-      {state === 'done' ? `Done: ${action.label}` : action.label}
+      <span className="flex-1">{state === 'done' ? `Done: ${action.label}` : action.label}</span>
+      {/* Says it's a button to press: the label alone reads like a sentence. */}
+      {state !== 'done' && (
+        <span className="flex shrink-0 items-center gap-1 self-center rounded bg-cic-dark px-2 py-0.5 text-xs font-semibold text-white">
+          <MousePointerClick aria-hidden className="size-3" /> {state === 'busy' ? 'Saving…' : 'Apply'}
+        </span>
+      )}
     </Button>
   )
 }
