@@ -99,7 +99,7 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
       },
       '/api/drafts': {
         post: {
-          tags: ['Drafts'], summary: 'Draft a message', description: 'The server writes the body from the donor\'s history, signed by the donor\'s owner. It starts as `pending`.',
+          tags: ['Drafts'], summary: 'Draft a message', description: 'The server writes the body from the donor\'s history and the outcomes of the programs they funded, signed by the donor\'s owner. Thank-yous, quarterly updates and lapsed nudges are written by the AI gateway (`ai: true`), falling back to a template if it fails or is slow. It starts as `pending`.',
           requestBody: jsonBody({
             type: 'object', required: ['donorId', 'kind'],
             properties: { donorId: { type: 'string' }, kind: { enum: enums.kinds.filter((k) => k !== 'event-invite'), description: 'Invitations come from POST /api/donors/{id}/invite' }, channel: { enum: ['email', 'text'], default: 'email' } },
@@ -251,6 +251,7 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
           properties: {
             id: { type: 'string' }, donorId: { type: 'string' }, kind: { enum: enums.kinds }, channel: { enum: ['email', 'text'] }, body: { type: 'string' },
             createdAt: isoDate, status: { enum: ['pending', 'approved', 'discarded'] }, approvedBy: { type: 'string' },
+            ai: { type: 'boolean', description: 'Written by the AI gateway (or the assistant) rather than a template' },
           },
         },
         Event: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, date: isoDate } },
