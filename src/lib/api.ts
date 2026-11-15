@@ -26,6 +26,27 @@ export function date(v: unknown, field: string): string {
   if (typeof v !== 'string' || !ISO_DATE.test(v)) throw new HttpError(400, `${field} must be an ISO date`)
   return v.slice(0, 10)
 }
+// A donor's contact details: only the fields sent change, and '' or null
+// clears one. Phones keep their formatting but need 7 to 15 digits.
+export function contactFields(v: unknown): { email?: string | null; phone?: string | null } {
+  if (!v || typeof v !== 'object') throw new HttpError(400, 'body must be an object')
+  const b = v as Record<string, unknown>
+  const out: { email?: string | null; phone?: string | null } = {}
+  for (const k of ['email', 'phone'] as const) {
+    const x = b[k]
+    if (x === undefined) continue
+    if (x === null || (typeof x === 'string' && !x.trim())) { out[k] = null; continue }
+    if (typeof x !== 'string' || x.length > 200) throw new HttpError(400, `${k} must be a string up to 200 chars`)
+    out[k] = x.trim()
+  }
+  if (out.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(out.email)) throw new HttpError(400, 'email must look like name@example.org')
+  if (out.phone) {
+    const digits = out.phone.replace(/\D/g, '').length
+    if (digits < 7 || digits > 15 || !/^[\d\s()+.-]+$/.test(out.phone)) throw new HttpError(400, 'phone must be 7 to 15 digits')
+  }
+  if (!('email' in out) && !('phone' in out)) throw new HttpError(400, 'send email, phone or both')
+  return out
+}
 // Custom import fields: up to 30 short text values per row.
 export function extraFields(v: unknown, field: string): Record<string, string> | undefined {
   if (v === undefined || v === null) return undefined

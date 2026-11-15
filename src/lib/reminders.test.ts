@@ -52,13 +52,30 @@ test("an admin's donor reminders only cover donors assigned to them", () => {
 })
 
 test('a pending draft for my donor asks for approval; approved drafts and other donors do not', () => {
-  const donors = [{ id: 'd1', name: 'Ana', ownerId: 'u1', sources: [], lastTouchAt: '2026-11-01' }]
+  const donors = [{ id: 'd1', name: 'Ana', email: 'ana@example.org', ownerId: 'u1', sources: [], lastTouchAt: '2026-11-01' }]
   const draft = (id: string, donorId: string, status: 'pending' | 'approved') =>
     ({ id, donorId, kind: 'thank-you' as const, channel: 'email' as const, body: 'Hi', createdAt: '2026-11-13', status })
   const drafts = [draft('x1', 'd1', 'pending'), draft('x2', 'd1', 'approved'), draft('x3', 'other', 'pending')]
   const rs = reminders({ ...base, role: 'board', memberId: 'u1', imports: [], donors, drafts }).filter((r) => r.category === 'draft')
   assert.deepEqual(rs.map((r) => r.title), ['Approve thank you for Ana'])
   assert.match(rs[0].detail, /nothing is sent until someone approves it/)
+})
+
+test("admins see drafts on unassigned donors; board members don't", () => {
+  const donors = [{ id: 'd1', name: 'Carlos', email: 'c@example.org', ownerId: '', sources: [], lastTouchAt: '2026-11-01' }]
+  const drafts = [{ id: 'x1', donorId: 'd1', kind: 'follow-up' as const, channel: 'email' as const, body: 'Hi', createdAt: '2026-11-13', status: 'pending' as const }]
+  const titles = (role: 'admin' | 'board') =>
+    reminders({ ...base, role, memberId: 'u1', imports: [], donors, drafts }).filter((r) => r.category === 'draft').map((r) => r.title)
+  assert.deepEqual(titles('admin'), ['Approve follow up for Carlos'])
+  assert.deepEqual(titles('board'), [])
+})
+
+test('a draft with no way to reach the donor asks for the contact detail, not approval', () => {
+  const donors = [{ id: 'd1', name: 'Aaliyah', email: 'a@example.org', ownerId: 'u1', sources: [], lastTouchAt: '2026-11-01' }]
+  const drafts = [{ id: 'x1', donorId: 'd1', kind: 'thank-you' as const, channel: 'text' as const, body: 'Hi', createdAt: '2026-11-13', status: 'pending' as const }]
+  const [r] = reminders({ ...base, role: 'board', memberId: 'u1', imports: [], donors, drafts }).filter((r) => r.category === 'draft')
+  assert.equal(r.title, 'Add a phone number for Aaliyah, or discard the text draft')
+  assert.match(r.detail, /nowhere to go/)
 })
 
 test('a next step due within a week is due; one further out is not a reminder yet', () => {

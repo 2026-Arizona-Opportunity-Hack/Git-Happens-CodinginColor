@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { CalendarPlus, Download, MessageSquareText, Gift as GiftIcon, Mail, MessageSquare, Phone, StickyNote, Users } from 'lucide-react'
 import { toast } from 'sonner'
@@ -123,6 +123,7 @@ export default function DonorDetail() {
           </Card>
 
           <Notes key={donor.id} donorId={donor.id} saved={donor.notes ?? ''} readOnly={s.sample} save={s.saveNotes} />
+          <Contact key={`contact-${donor.id}`} donor={donor} readOnly={s.sample} save={s.saveContact} />
 
           <section>
             <SectionTitle>Timeline</SectionTitle>
@@ -249,7 +250,7 @@ export default function DonorDetail() {
           <Card>
             <CardHeader><CardTitle>Draft a message</CardTitle></CardHeader>
             <CardContent className="grid gap-2">
-              {!draftVia && <p className="text-sm text-muted-foreground">No contact info: add an email or phone number for {donor.name} before drafting a message.</p>}
+              {!draftVia && <p className="text-sm text-muted-foreground">No contact info: add an email or phone number for {donor.name} under <a className="underline" href="#donor-contact">Contact</a> before drafting a message.</p>}
               <Button variant="outline" disabled={!draftVia || !thankable} aria-describedby={draftVia && !thankable ? 'no-thank-you' : undefined} onClick={() => draft('thank-you')}>Thank-you</Button>
               {draftVia && !thankable && <p id="no-thank-you" className="text-sm text-muted-foreground">No gift in the last {THANK_YOU_DAYS} days to thank them for.</p>}
               <Button variant="outline" disabled={!draftVia} onClick={() => draft('quarterly-update')}>Quarterly update</Button>
@@ -259,6 +260,43 @@ export default function DonorDetail() {
         </aside>
       </div>
     </>
+  )
+}
+
+// Email and phone, saved together; a blank field clears it.
+function Contact({ donor, readOnly, save }: {
+  donor: Donor; readOnly: boolean; save: (donorId: string, contact: { email: string; phone: string }) => Promise<unknown>
+}) {
+  const [email, setEmail] = useState(donor.email ?? '')
+  const [phone, setPhone] = useState(donor.phone ?? '')
+  const [busy, setBusy] = useState(false)
+  const changed = email.trim() !== (donor.email ?? '') || phone.trim() !== (donor.phone ?? '')
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    const ok = await save(donor.id, { email: email.trim(), phone: phone.trim() })
+    setBusy(false)
+    if (ok !== undefined) toast.success('Contact details saved.')
+  }
+  return (
+    <Card id="donor-contact">
+      <CardHeader><CardTitle>Contact</CardTitle></CardHeader>
+      <CardContent>
+        <form className="grid gap-3" onSubmit={submit}>
+          <div className="grid gap-1">
+            <Label htmlFor="donor-email">Email</Label>
+            <Input id="donor-email" type="email" maxLength={200} value={email} readOnly={readOnly} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+          <div className="grid gap-1">
+            <Label htmlFor="donor-phone">Phone</Label>
+            <Input id="donor-phone" type="tel" maxLength={200} value={phone} readOnly={readOnly} onChange={(e) => setPhone(e.target.value)} />
+          </div>
+          {readOnly
+            ? <p className="text-xs text-muted-foreground">Sample data is view-only.</p>
+            : <Button type="submit" variant="outline" disabled={!changed || busy}>{busy ? 'Saving…' : 'Save contact'}</Button>}
+        </form>
+      </CardContent>
+    </Card>
   )
 }
 
