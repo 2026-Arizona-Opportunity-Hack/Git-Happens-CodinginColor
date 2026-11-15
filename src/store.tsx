@@ -126,8 +126,8 @@ function useStoreState(real: Bootstrap, token: GetToken, reload: () => Promise<v
   const ownerName = (d: Pick<Donor, 'ownerId'>) =>
     d.ownerId ? data.boardMembers.find((m) => m.id === d.ownerId)?.name ?? 'Former board member' : 'Unassigned'
 
-  const createDraft = (donorId: string, kind: DraftKind, channel: 'email' | 'text' = 'email') =>
-    change(() => api<Draft>(token, 'drafts', 'POST', { donorId, kind, channel }))
+  const createDraft = (donorId: string, kind: DraftKind, channel: 'email' | 'text' = 'email', body?: string) =>
+    change(() => api<Draft>(token, 'drafts', 'POST', { donorId, kind, channel, body }))
 
   const updateDraft = (id: string, body: string) => {
     if (sample) return void change(async () => {})

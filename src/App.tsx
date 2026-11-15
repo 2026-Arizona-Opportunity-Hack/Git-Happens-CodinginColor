@@ -6,7 +6,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
 import { StoreProvider, useReminders, useStore } from '@/store'
 import { cn } from '@/lib/utils'
-import { Assistant, useChat } from '@/components/ChatWidget'
+import { Assistant, ChatProvider, useChat } from '@/components/ChatWidget'
 import { SiteSearch } from '@/components/SiteSearch'
 import { InstallPrompt } from '@/components/InstallPrompt'
 import { AppSkeleton, Logo, PageSkeleton } from '@/components/Loading'
@@ -120,6 +120,7 @@ function Shell() {
   const chat = useChat()
   const canSee = (n: NavItem) => (!n.adminOnly || session.role === 'admin') && (!n.devOnly || devTools)
   return (
+    <ChatProvider value={chat}>
     <div className="min-h-screen md:grid md:grid-cols-[240px_1fr] lg:grid-cols-[240px_1fr_auto]">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:p-2">Skip to content</a>
       <aside className="border-b border-sidebar-border bg-sidebar p-4 md:sticky md:top-0 md:flex md:h-screen md:flex-col md:overflow-y-auto md:border-r md:border-b-0">
@@ -198,6 +199,7 @@ function Shell() {
       <Assistant chat={chat} />
       <Toaster />
     </div>
+    </ChatProvider>
   )
 }
 

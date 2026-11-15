@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
 import { ChevronLeft, MessageCircle, Mic, Send, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -28,9 +28,19 @@ export function useChat() {
       setBusy(false)
     }
   }
-  return { turns, busy, error, send }
+  // Text a page asks to put in the message box (the donor page's Debrief
+  // button). The visible panel takes it once and clears it.
+  const [prefill, setPrefill] = useState<string | null>(null)
+  return { turns, busy, error, send, prefill, ask: setPrefill }
 }
 export type Chat = ReturnType<typeof useChat>
+
+const ChatContext = createContext<Chat | null>(null)
+export const ChatProvider = ChatContext.Provider
+// Opens the assistant with `text` in the message box, ready to finish and send.
+export const useAsk = () => useContext(ChatContext)?.ask ?? (() => {})
+
+const wide = () => window.matchMedia('(min-width: 1024px)').matches
 
 // Whether the docked assistant is open, kept per browser; it starts open.
 const OPEN_KEY = 'cic-assistant-closed'
@@ -131,6 +141,12 @@ export function Assistant({ chat }: { chat: Chat }) {
     setDocked(true)
     requestAnimationFrame(() => dockedInput.current?.focus())
   }
+  // A page asked for the assistant: open whichever form fits the screen.
+  useEffect(() => {
+    if (chat.prefill === null) return
+    if (wide()) setDocked(true)
+    else setOverlay(true)
+  }, [chat.prefill, setDocked])
   return (
     <>
       <div className="sticky top-0 hidden h-screen lg:block">
@@ -179,7 +195,7 @@ export function Assistant({ chat }: { chat: Chat }) {
 // person presses.
 // As a dialog (phones) it takes focus and closes on Escape; docked, it's a
 // landmark beside the page and leaves focus alone.
-function ChatPanel({ chat: { turns, busy, error, send }, onClose, dialog, input: inputRef, className }: {
+function ChatPanel({ chat: { turns, busy, error, send, prefill, ask }, onClose, dialog, input: inputRef, className }: {
   chat: Chat; onClose: () => void; dialog?: boolean; input?: RefObject<HTMLTextAreaElement | null>; className?: string
 }) {
   const [draft, setDraft] = useState('')
@@ -188,6 +204,19 @@ function ChatPanel({ chat: { turns, busy, error, send }, onClose, dialog, input:
   const input = inputRef ?? ownInput
   const inputId = useId()
   const dictation = useDictation(draft, setDraft)
+
+  // Take text a page asked for, if this is the panel on screen (the docked
+  // one stays mounted but hidden on small screens).
+  useEffect(() => {
+    if (prefill === null || !!dialog === wide()) return
+    setDraft(prefill)
+    ask(null)
+    requestAnimationFrame(() => {
+      const el = input.current
+      el?.focus()
+      el?.setSelectionRange(prefill.length, prefill.length)
+    })
+  }, [prefill, dialog, ask, input])
 
   useEffect(() => {
     log.current?.scrollTo({ top: log.current.scrollHeight })
