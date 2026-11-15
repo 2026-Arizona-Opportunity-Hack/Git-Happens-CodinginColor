@@ -12,7 +12,7 @@ covers:
 
 # Operations
 
-How to run this in production: settings, secrets, deploys, the calendar, the board, and resetting the demo. For running it on your own machine, see [Run it locally](../README.md#run-it-locally).
+How to run this in production: settings, secrets, deploys, the calendar, the board, and resetting the demo. For running it on your own machine, see [Run it locally](../README.md#1-run-it-on-your-machine).
 
 ## Settings and secrets
 
