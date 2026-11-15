@@ -1,7 +1,7 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthKitProvider, useAuth } from '@workos-inc/authkit-react'
-import { BarChart3, Bell, Code2, Contact, GraduationCap, Home, ListTodo, LogOut, ShieldAlert, Upload, UserCog, UserRound, Users, Wrench, type LucideIcon } from 'lucide-react'
+import { BarChart3, Bell, Code2, Contact, GraduationCap, Home, ListTodo, LogOut, Menu, ShieldAlert, Upload, UserCog, UserRound, Users, Wrench, X, type LucideIcon } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
 import { StoreProvider, useReminders, useStore } from '@/store'
@@ -110,6 +110,26 @@ function ScrollToTop() {
   return null
 }
 
+// The phone menu is open only on the page it was opened from, so picking a
+// page closes it; Escape closes it too and puts focus back on its button.
+// From md up it's always shown, so this only matters on phones.
+function useMobileMenu(button: React.RefObject<HTMLButtonElement | null>) {
+  const { pathname } = useLocation()
+  const [openOn, setOpenOn] = useState<string | null>(null)
+  const open = openOn === pathname
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setOpenOn(null)
+      button.current?.focus()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, button])
+  return { open, toggle: () => setOpenOn(open ? null : pathname) }
+}
+
 function SampleBanner() {
   const { sample, setSample } = useStore()
   const { pathname } = useLocation()
@@ -130,27 +150,43 @@ function Shell() {
   const actionable = useReminders().filter((r) => r.urgency !== 'upcoming').length
   const chat = useChat()
   const canSee = (n: NavItem) => (!n.adminOnly || session.role === 'admin') && (!n.devOnly || devTools)
+  const menuButton = useRef<HTMLButtonElement>(null)
+  const menu = useMobileMenu(menuButton)
   return (
     <ChatProvider value={chat}>
     <div className="min-h-screen md:grid md:grid-cols-[240px_1fr] lg:grid-cols-[240px_1fr_auto]">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:p-2">Skip to content</a>
-      <aside className="border-b border-sidebar-border bg-sidebar p-4 md:sticky md:top-0 md:flex md:h-screen md:flex-col md:overflow-y-auto md:border-r md:border-b-0">
-        <div className="mb-6 flex items-center gap-2">
+      <aside className="sticky top-0 z-30 border-b border-sidebar-border bg-sidebar p-4 md:flex md:h-screen md:flex-col md:overflow-y-auto md:border-r md:border-b-0">
+        <div className="flex items-center gap-2 md:mb-6">
           <Logo />
           <div className="leading-tight">
             <div className="font-bold text-cic-dark">Coding in Color</div>
             <div className="text-xs text-muted-foreground">Donor Relationships</div>
           </div>
+          <Button
+            ref={menuButton}
+            variant="outline"
+            size="icon"
+            className="ml-auto bg-white md:hidden"
+            aria-label="Menu"
+            aria-expanded={menu.open}
+            aria-controls="site-menu"
+            onClick={menu.toggle}
+          >
+            {menu.open ? <X aria-hidden /> : <Menu aria-hidden />}
+          </Button>
         </div>
-        <nav aria-label="Main" className="flex gap-1 overflow-x-auto md:flex-col md:gap-4">
+        {/* Phones: a panel under the bar that the menu button opens.
+            Wider screens: `contents`, so these sit in the sidebar column. */}
+        <div id="site-menu" className={cn('mt-4 max-h-[calc(100dvh-5rem)] overflow-y-auto md:contents', !menu.open && 'hidden')}>
+        <nav aria-label="Main" className="flex flex-col gap-4">
           {NAV.map(({ heading, items }) => {
             const shown = items.filter(canSee)
             if (!shown.length) return null
             const id = `nav-${heading.toLowerCase()}`
-            // `contents` keeps the phone layout one scrolling row of links.
             return (
-              <div key={heading} role="group" aria-labelledby={id} className="contents md:flex md:flex-col md:gap-1">
-                <div id={id} className="hidden px-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase md:block">
+              <div key={heading} role="group" aria-labelledby={id} className="flex flex-col gap-1">
+                <div id={id} className="px-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                   {heading}
                 </div>
                 {shown.map(({ to, label, icon: Icon }) => (
@@ -181,6 +217,7 @@ function Shell() {
           <SampleToggle />
           <SiteSearch pages={NAV.flatMap((g) => g.items).filter(canSee)} />
           <SignedInAs />
+        </div>
         </div>
       </aside>
       <main id="main" className="mx-auto w-full max-w-6xl min-w-0 p-4 pb-24 md:p-8 md:pb-24 lg:pb-8">

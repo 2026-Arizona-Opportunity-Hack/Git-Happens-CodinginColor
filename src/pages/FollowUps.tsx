@@ -63,7 +63,7 @@ export default function FollowUps() {
       )}
 
       <div className="grid gap-8 lg:grid-cols-2">
-        <section id="next-steps" tabIndex={-1} className="scroll-mt-4 outline-none">
+        <section id="next-steps" tabIndex={-1} className="scroll-mt-24 md:scroll-mt-4 outline-none">
           <SectionTitle>Next steps{overdue > 0 && <span className="text-red-700"> ({overdue} overdue)</span>}</SectionTitle>
           <Card>
             <CardContent>
@@ -115,7 +115,7 @@ export default function FollowUps() {
 
           {lapsed.length > 0 && (
             <>
-              <h2 id="lapsed" tabIndex={-1} className="mt-8 mb-3 scroll-mt-4 text-lg text-red-700 outline-none">Lapsed donors ({lapsed.length}) — call before year end</h2>
+              <h2 id="lapsed" tabIndex={-1} className="mt-8 mb-3 scroll-mt-24 md:scroll-mt-4 text-lg text-red-700 outline-none">Lapsed donors ({lapsed.length}) — call before year end</h2>
               <Card>
                 <CardContent>
                   <ul className="divide-y">
