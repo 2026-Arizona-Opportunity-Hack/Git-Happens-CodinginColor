@@ -24,3 +24,8 @@ test('a moved occurrence of a recurring event does not add a second event', () =
   const ev = (extra: string) => `BEGIN:VEVENT\nUID:r\nDTSTART;VALUE=DATE:20261201\nSUMMARY:Class\n${extra}END:VEVENT\n`
   assert.equal(parseIcs(ev('RRULE:FREQ=WEEKLY\n') + ev('RECURRENCE-ID;VALUE=DATE:20261208\n')).length, 1)
 })
+
+test('events on dates that do not exist are skipped, not given a broken date', () => {
+  const ev = (start: string) => `BEGIN:VEVENT\nUID:${start}\nDTSTART:${start}\nSUMMARY:X\nEND:VEVENT\n`
+  assert.deepEqual(parseIcs(ev('20260000') + ev('20260230') + ev('01410213T120000Z') + ev('20260301')).map((e) => e.date), ['2026-03-01'])
+})

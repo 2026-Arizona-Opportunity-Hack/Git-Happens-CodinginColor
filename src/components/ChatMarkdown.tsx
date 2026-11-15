@@ -6,8 +6,8 @@ import remarkDirective from 'remark-directive'
 import { visit } from 'unist-util-visit'
 import { Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { Channel, DraftKind } from '@/data/types'
-import { byDateDesc, fmtDate, inviteDue, money } from '@/lib/logic'
+import { chatAction, type Attrs } from '@/lib/actions'
+import { byDateDesc, fmtDate, money } from '@/lib/logic'
 import { useStore } from '@/store'
 
 // Renders assistant replies. The model writes Markdown plus two block
@@ -16,12 +16,9 @@ import { useStore } from '@/store'
 // the app, and every action is a button the person has to press. Its label is
 // written here from the checked arguments, never by the model, and the click
 // goes through the same API calls (and the same server checks) as the pages.
+// The checks and labels are chatAction in src/lib/actions.ts.
 
-const CHANNELS: Channel[] = ['email', 'text', 'call', 'in-person', 'note']
-const KINDS: DraftKind[] = ['thank-you', 'quarterly-update', 'lapsed-nudge', 'follow-up']
 const BLOCKS = ['donor', 'action']
-
-type Attrs = Record<string, string | undefined>
 
 interface DirectiveNode {
   type: string
@@ -70,65 +67,8 @@ function DonorCard({ id }: { id?: string }) {
   )
 }
 
-const isDate = (s?: string) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s)
-
-// Checks the model's arguments against what this person can see and returns
-// the button's label and what it does, or why it can't be offered.
-function useAction(a: Attrs): { label: string; run: () => Promise<unknown> } | { error: string } {
-  const store = useStore()
-  const donor = store.donors.find((d) => d.id === a.donor)
-  const draft = store.drafts.find((d) => d.id === a.draft && d.status === 'pending')
-  const draftDonor = draft && store.donors.find((d) => d.id === draft.donorId)
-  const text = (s?: string, max = 300) => (s ?? '').trim().slice(0, max)
-
-  switch (a.type) {
-    case 'log': {
-      const channel = a.channel as Channel
-      if (!donor || !CHANNELS.includes(channel) || !text(a.summary)) break
-      return { label: `Log ${channel} with ${donor.name}: "${text(a.summary)}"`, run: () => store.logInteraction(donor.id, channel, text(a.summary)) }
-    }
-    case 'next-step':
-      if (!donor || !text(a.text) || !isDate(a.due)) break
-      return {
-        label: `Set ${donor.name}'s next step: "${text(a.text)}" by ${fmtDate(a.due!)}`,
-        run: () => store.setNextStep(donor.id, { text: text(a.text), due: a.due! }),
-      }
-    case 'invite': {
-      const event = store.events.find((e) => e.id === a.event && e.date >= store.today)
-      if (!donor || !event) break
-      return {
-        label: `Invite ${donor.name} to ${event.name} (${fmtDate(event.date)}): next step due ${fmtDate(inviteDue(event.date, store.today))}, plus a draft invitation`,
-        run: () => store.invite(donor.id, event.id),
-      }
-    }
-    case 'draft': {
-      const kind = a.kind as DraftKind
-      const channel = a.channel === 'text' ? 'text' : 'email'
-      if (!donor || !KINDS.includes(kind)) break
-      // A body the assistant wrote (a follow-up from a debrief) is saved as the
-      // draft; it still waits in Follow-ups for a human to approve.
-      const body = text(a.body, 4000).replaceAll('\\n', '\n')
-      return body
-        ? { label: `Save this ${kind.replace('-', ' ')} ${channel} to ${donor.name} as a draft to approve: "${body.length > 140 ? body.slice(0, 140) + '…' : body}"`, run: () => store.createDraft(donor.id, kind, channel, body) }
-        : { label: `Draft a ${kind.replace('-', ' ')} ${channel} to ${donor.name}`, run: () => store.createDraft(donor.id, kind, channel) }
-    }
-    case 'approve':
-      if (!draft || !draftDonor) break
-      return { label: `Approve and mark sent: ${draft.kind.replace('-', ' ')} to ${draftDonor.name}`, run: () => store.approveDraft(draft.id) }
-    case 'discard':
-      if (!draft || !draftDonor) break
-      return { label: `Discard the ${draft.kind.replace('-', ' ')} draft to ${draftDonor.name}`, run: () => store.discardDraft(draft.id) }
-    case 'reassign': {
-      const owner = store.boardMembers.find((m) => m.id === a.owner)
-      if (store.session.role !== 'admin' || !donor || !owner) break
-      return { label: `Reassign ${donor.name} to ${owner.name}`, run: () => store.reassign(donor.id, owner.id) }
-    }
-  }
-  return { error: "(The assistant suggested an action that isn't available.)" }
-}
-
 function ActionButton(props: Attrs) {
-  const action = useAction(props)
+  const action = chatAction(props, useStore())
   const [state, setState] = useState<'idle' | 'busy' | 'done'>('idle')
   if ('error' in action) return <p className="text-muted-foreground">{action.error}</p>
   const go = async () => {

@@ -126,7 +126,9 @@ export function splitGifts(rows: RawDonorRow[], existing: GiftLike[]) {
   const keep: (RawDonorRow & GiftLike)[] = []
   const skipped: (RawDonorRow & GiftLike)[] = []
   const dated: { id: string; date: string }[] = []
-  for (const r of rows) {
+  // Dated rows go first so they date saved gifts before an undated row of the
+  // same amount is skipped against them; otherwise a re-import adds it again.
+  for (const r of [...rows].sort((a, b) => Number(!a.date) - Number(!b.date))) {
     if (!r.amount) continue
     const g = r as RawDonorRow & GiftLike
     if (seen.some((s) => sameGift(s, g))) { skipped.push(g); continue }

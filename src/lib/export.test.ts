@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Donor, Gift } from '../data/types'
 import { parseCsv } from './dedupe'
-import { donorsCsv, donorsXlsx } from './export'
+import { donorsCsv, donorsXlsx, download } from './export'
 import { crc32 } from './xlsx'
 
 const donors: Donor[] = [
@@ -58,3 +58,26 @@ test('the Excel export is a valid workbook with numeric money and escaped, non-f
   assert.ok(!sheet.includes('<f>'), 'no formulas')
 })
 
+
+test('download saves a CSV with a byte-order mark through a temporary link, then cleans up', async () => {
+  const clicked: string[] = []
+  const blobs: Blob[] = []
+  const link = { click: () => clicked.push(link.download), remove: () => clicked.push('removed'), download: '' }
+  const g = globalThis as Record<string, unknown>
+  const saved = { document: g.document, create: URL.createObjectURL, revoke: URL.revokeObjectURL }
+  g.document = { createElement: () => link, body: { append: () => {} } }
+  URL.createObjectURL = (b: Blob) => (blobs.push(b), 'blob:1')
+  URL.revokeObjectURL = (u: string) => void clicked.push(`revoked ${u}`)
+  try {
+    download('donors.csv', 'a,b')
+    download('donors.xlsx', new Uint8Array([1, 2]))
+  } finally {
+    g.document = saved.document
+    URL.createObjectURL = saved.create
+    URL.revokeObjectURL = saved.revoke
+  }
+  assert.deepEqual(clicked, ['donors.csv', 'removed', 'revoked blob:1', 'donors.xlsx', 'removed', 'revoked blob:1'])
+  assert.equal(blobs[0].type, 'text/csv;charset=utf-8')
+  assert.deepEqual([...new Uint8Array(await blobs[0].arrayBuffer())], [0xef, 0xbb, 0xbf, ...Buffer.from('a,b')]) // UTF-8 BOM, then the CSV
+  assert.match(blobs[1].type, /spreadsheetml/)
+})

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { RawDonorRow } from '../data/types'
 import { SAMPLE_CSV } from '../data/samples'
-import { autoMapping, csvHeaders, dedupe, matchDonor, mergeNotes, NEW_COLUMN, parseAmount, parseDate, rowsFromCsv, sameGift, SKIP, splitGifts } from './dedupe'
+import { autoMapping, csvHeaders, CUSTOM, DB_FIELDS, dedupe, matchDonor, mergeNotes, NEW_COLUMN, parseAmount, parseDate, rowsFromCsv, sameGift, SKIP, splitGifts, targetLabel } from './dedupe'
 
 const row = (r: Partial<RawDonorRow>): RawDonorRow => ({ source: 'spreadsheet', name: 'Kevin Tran', ...r })
 
@@ -148,4 +148,12 @@ test('a Notes column maps to notes, and re-imports never repeat a note', () => {
   assert.equal(rowsFromCsv('Name,Notes\nAda,Loves robotics\n', 'spreadsheet')[0].notes, 'Loves robotics')
   assert.equal(mergeNotes('', [{ notes: 'Loves robotics' }, { notes: ' Loves robotics ' }, {}]), 'Loves robotics')
   assert.equal(mergeNotes('Met at Day of Compute\nLoves robotics', [{ notes: 'Loves robotics' }, { notes: 'Prefers texts' }]), 'Met at Day of Compute\nLoves robotics\nPrefers texts')
+})
+
+test('mapping targets are labelled the way the staging popup shows them', () => {
+  assert.equal(targetLabel(SKIP, 'Notes'), 'Do not save')
+  assert.equal(targetLabel(`${NEW_COLUMN}Shirt size`, 'Size'), 'New column: Shirt size')
+  assert.equal(targetLabel(NEW_COLUMN, 'Size'), 'New column: Size')
+  assert.equal(targetLabel(`${CUSTOM}Campaign`, 'Campaign'), 'Campaign (custom)')
+  assert.equal(targetLabel('email', 'E-mail'), DB_FIELDS.find((f) => f.key === 'email')!.label)
 })

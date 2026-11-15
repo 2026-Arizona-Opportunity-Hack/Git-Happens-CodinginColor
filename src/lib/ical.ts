@@ -11,9 +11,12 @@ const TZ = 'America/Phoenix'
 function day(value: string): string | undefined {
   const m = value.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?$/)
   if (!m) return undefined
-  if (!m[7]) return `${m[1]}-${m[2]}-${m[3]}`
-  const utc = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]))
-  return utc.toLocaleDateString('en-CA', { timeZone: TZ }) // en-CA formats as YYYY-MM-DD
+  const d = m[7]
+    ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6])).toLocaleDateString('en-CA', { timeZone: TZ }) // en-CA formats as YYYY-MM-DD
+    : `${m[1]}-${m[2]}-${m[3]}`
+  // Only real dates: not month 00, Feb 30, or year 141 (which en-CA writes unpadded).
+  const t = Date.parse(`${d}T00:00:00Z`)
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) && t === t && new Date(t).toISOString().startsWith(d) ? d : undefined
 }
 
 const unescape = (v: string) => v.replace(/\\([\\;,nN])/g, (_, c) => (c === 'n' || c === 'N' ? ' ' : c)).trim()

@@ -25,6 +25,22 @@ const PURPOSE: Partial<Record<DraftKind, string>> = {
   'event-invite': 'invite them to the event below and say why it would mean something to them',
 }
 
+// Imported text (donor names, notes, event names) on one line, without the
+// `::donor`/`::action` directive syntax or tags, so a planted "instruction"
+// can't start a line of its own, close the <data> block or write a button.
+export function inert(s: string): string {
+  return s.replace(/[\r\n\u2028\u2029]+/g, ' ').replace(/:{2,}/g, ':').replace(/[<>]/g, '')
+}
+
+// Message text a board member shouldn't be handed to send: links and web or
+// email addresses other than CIC's own site, payment or bank details, and long
+// digit runs like account numbers.
+export function unsafeDraftText(s: string): boolean {
+  return /https?:\/\/|(?<![\w.-])(?!codingincolor\.org\b)[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}\b/i.test(s)
+    || /\b(routing|account (number|no)|acct|iban|swift|wire|bank details|venmo|zelle|cash ?app|paypal|bitcoin|crypto|gift cards?)\b/i.test(s)
+    || /\d{8,}/.test(s)
+}
+
 export function draftPrompt(kind: DraftKind, channel: 'email' | 'text', donor: Donor, gifts: Gift[], owner: BoardMember, template: string, event?: CicEvent, ctx: DraftContext = { interactions: [], sent: [] }) {
   const history = [...gifts].sort(byDateDesc).slice(0, 10)
     .map((g) => `- ${g.date ?? 'date unknown'}: ${money(g.amount)} to ${g.program}`)
@@ -44,13 +60,13 @@ export function draftPrompt(kind: DraftKind, channel: 'email' | 'text', donor: D
   ].join('\n')
   const user = [
     `Purpose: ${PURPOSE[kind] ?? 'follow up'}.`,
-    `Donor: ${donor.name}${donor.org ? ` (${donor.org})` : ''}`,
+    `Donor: ${inert(donor.name)}${donor.org ? ` (${inert(donor.org)})` : ''}`,
     `Gifts, newest first:\n${history.join('\n') || '- none recorded'}`,
-    `Next step: ${donor.nextStep ? `${donor.nextStep.text} (due ${donor.nextStep.due})` : 'none'}`,
-    `Notes about them:\n${ctx.notes?.trim() || 'none'}`,
-    `Logged outreach, newest first:\n${ctx.interactions.slice(0, 10).map((i) => `- ${i.date} ${i.channel}: ${i.summary}`).join('\n') || '- none logged'}`,
-    `Messages already sent to them, newest first:\n${ctx.sent.slice(0, 3).map((b) => `---\n${b}`).join('\n') || 'none'}`,
-    `Next CIC event: ${event ? `${event.name} on ${event.date}` : 'none scheduled'}`,
+    `Next step: ${donor.nextStep ? `${inert(donor.nextStep.text)} (due ${donor.nextStep.due})` : 'none'}`,
+    `Notes about them:\n${inert(ctx.notes ?? '').trim() || 'none'}`,
+    `Logged outreach, newest first:\n${ctx.interactions.slice(0, 10).map((i) => `- ${i.date} ${i.channel}: ${inert(i.summary)}`).join('\n') || '- none logged'}`,
+    `Messages already sent to them, newest first:\n${ctx.sent.slice(0, 3).map((b) => `- ${inert(b)}`).join('\n') || 'none'}`,
+    `Next CIC event: ${event ? `${inert(event.name)} on ${event.date}` : 'none scheduled'}`,
     `Template, as a starting point only (keep its facts, but write it for this person):\n${template}`,
   ].join('\n\n')
   return [{ role: 'system' as const, content: system }, { role: 'user' as const, content: user }]
@@ -62,6 +78,6 @@ export function cleanDraft(reply: string | null | undefined, channel: 'email' | 
   if (!reply) return null
   let s = reply.trim().replace(/^```[a-z]*\n?|\n?```$/g, '').trim()
   s = s.replace(/^subject:.*\n+/i, '').trim()
-  if (!s || s.length > MAX_CHARS[channel] || /\[[^\]]*\]|https?:\/\//i.test(s)) return null
+  if (!s || s.length > MAX_CHARS[channel] || /\[[^\]]*\]/.test(s) || unsafeDraftText(s)) return null
   return s
 }
