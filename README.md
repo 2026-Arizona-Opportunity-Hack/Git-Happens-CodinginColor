@@ -54,11 +54,12 @@ Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevi
 | Page | Brief requirement (P0) |
 |---|---|
 | **Dashboard** | Org health; board-member load; upcoming events; recent activity |
+| **Notifications** | One inbox of reminders: overdue/upcoming next steps, quarterly updates due, lapsed donors, drafts to approve, events in the next 3 weeks and (admins) exports not re-imported in 30 days. Nav shows a count |
 | **Follow-ups** | Next steps with due dates; quarterly-touch queue; lapsed-donor nudges; **drafts a human must approve** |
 | **Donors** | One deduped table across all sources; owner, lifetime, status, next step |
 | **Donor detail** | Timeline of gifts and communications; set a next step (one-click "invite to <event>"); log a text/email/call; draft thank-you/update; **one-click funder packet** |
 | **Retention** | Year over year: new, recovered, increased, same, decreased, lapsed, plus retention rate |
-| **Import** | Spreadsheet + Zeffy + Benevity CSVs → dedupe preview → commit; new donors assigned **round-robin to the member with the fewest** |
+| **Import** | Spreadsheet + Zeffy + Benevity CSVs → dedupe preview → commit; new donors assigned **round-robin to the member with the fewest**. Each source shows when it was last imported (stale after 30 days), plus an import history |
 | **Read API** | Contract for `GET /api/v1/donor-summary`, aggregated by period / program / board member, with a live sample response |
 | **Board members** (admin) | Invite board members, change their role, remove them (WorkOS Users Management widget) |
 | **My account** | Each user edits their profile, changes password and sets up MFA, and signs out other devices (WorkOS widgets) |
@@ -81,6 +82,7 @@ The password is public on purpose because the data is fake. Replace these accoun
 ### Where the logic lives
 
 - `src/lib/dedupe.ts`: CSV parsing, per-source column mapping, union-find dedupe on email, then phone, then name+org, then name. Name-only matches are flagged for review. Gifts are deduped too: for one donor, the same amount within 3 days of a gift already recorded (or already in this import) is skipped, so re-imports and a donation reported by two sources count once. The preview lists every skipped gift.
+- `src/lib/reminders.ts`: Notifications rules. Computed from current data, never stored, so a reminder clears once the work is done. Thresholds are constants at the top and in `src/data/sources.ts`.
 - `src/lib/logic.ts`: round-robin assignment, retention classification, quarterly cadence.
 - `src/lib/drafts.ts`: message templates. **Swap point for AI drafting**: same inputs, and a human still approves.
 - `src/store.tsx`: the API client. It loads `/api/bootstrap`, and each action calls one route and reloads, so the UI always shows what D1 holds.
@@ -117,7 +119,7 @@ bun run db:migrate   # create the local D1 database
 bun run db:seed      # load the fake demo data (re-run any time to reset)
 bun dev              # http://localhost:5173, app + API
 nix build            # typecheck + production build, output in ./result
-bun run test         # unit tests for import dedupe (Node's test runner via tsx)
+bun run test         # unit tests for dedupe and reminders (Node's test runner via tsx)
 ```
 
 `nix build` installs dependencies from `bun.lock` in a sandbox, checked against a hash in `flake.nix`. After changing dependencies, set that hash (`x86_64-linux = "…"`) to `""`, run `nix build`, and paste the `got:` hash it prints. Other platforms need their own hash added the same way.

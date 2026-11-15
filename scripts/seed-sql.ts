@@ -22,7 +22,7 @@ const q = (v: unknown) =>
 const row = (table: string, values: Record<string, unknown>) =>
   `INSERT INTO ${table} (${Object.keys(values).join(', ')}) VALUES (${Object.values(values).map(q).join(', ')});`
 
-const out = ['DELETE FROM drafts;', 'DELETE FROM interactions;', 'DELETE FROM gifts;', 'DELETE FROM donors;', 'DELETE FROM events;']
+const out = ['DELETE FROM imports;', 'DELETE FROM drafts;', 'DELETE FROM interactions;', 'DELETE FROM gifts;', 'DELETE FROM donors;', 'DELETE FROM events;']
 for (const e of seed.events) out.push(row('events', { ...e }))
 for (const d of seed.donors)
   out.push(row('donors', {

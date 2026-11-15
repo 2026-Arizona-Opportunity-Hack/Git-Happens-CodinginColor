@@ -1,5 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose'
-import type { BoardMember, Channel, Donor, Draft, DraftKind, Gift, Interaction, NextStep, Program, RawDonorRow, Source } from '../src/data/types'
+import type { BoardMember, Channel, Donor, Draft, DraftKind, Gift, ImportRecord, Interaction, NextStep, Program, RawDonorRow, Source } from '../src/data/types'
 import { dedupe, matchDonor, splitGifts } from '../src/lib/dedupe'
 import { draftBody } from '../src/lib/drafts'
 import { nextOwner } from '../src/lib/logic'
@@ -70,6 +70,10 @@ const toDonor = (r: Row): Donor => ({
 })
 const toGift = (r: Row): Gift => ({ id: r.id as string, donorId: r.donor_id as string, amount: r.amount as number, date: r.date as string, source: r.source as Source, program: r.program as Program })
 const toInteraction = (r: Row): Interaction => ({ id: r.id as string, donorId: r.donor_id as string, byId: r.by_id as string, channel: r.channel as Channel, date: r.date as string, summary: r.summary as string })
+const toImport = (r: Row): ImportRecord => ({
+  id: r.id as string, source: r.source as Source, fileName: (r.file_name as string) ?? undefined,
+  rowCount: r.row_count as number, importedAt: r.imported_at as string, importedBy: r.imported_by as string,
+})
 const toDraft = (r: Row): Draft => ({
   id: r.id as string, donorId: r.donor_id as string, kind: r.kind as DraftKind, channel: r.channel as 'email' | 'text',
   body: r.body as string, createdAt: r.created_at as string, status: r.status as Draft['status'], approvedBy: (r.approved_by as string) ?? undefined,
@@ -177,12 +181,15 @@ async function route(req: Request, env: Env): Promise<Response> {
   if (m === 'GET' && parts[0] === 'bootstrap') {
     const f = ownerFilter(s, 'd.owner_id')
     const members = await listMembers(env)
-    const [events, donors, gifts, interactions, drafts] = await db.batch<Row>([
+    // Import history is admin-only, like the import itself.
+    const importsSql = s.role === 'admin' ? 'SELECT * FROM imports ORDER BY imported_at DESC LIMIT 50' : 'SELECT * FROM imports WHERE 0'
+    const [events, donors, gifts, interactions, drafts, imports] = await db.batch<Row>([
       db.prepare('SELECT * FROM events ORDER BY date'),
       db.prepare(`SELECT d.* FROM donors d WHERE ${f.sql} ORDER BY d.id`).bind(...f.args),
       db.prepare(`SELECT g.* FROM gifts g JOIN donors d ON d.id = g.donor_id WHERE ${f.sql}`).bind(...f.args),
       db.prepare(`SELECT i.* FROM interactions i JOIN donors d ON d.id = i.donor_id WHERE ${f.sql} ORDER BY i.date DESC`).bind(...f.args),
       db.prepare(`SELECT x.* FROM drafts x JOIN donors d ON d.id = x.donor_id WHERE ${f.sql} ORDER BY x.created_at DESC`).bind(...f.args),
+      db.prepare(importsSql),
     ])
     return json({
       session: s,
@@ -193,6 +200,7 @@ async function route(req: Request, env: Env): Promise<Response> {
       gifts: gifts.results.map(toGift),
       interactions: interactions.results.map(toInteraction),
       drafts: drafts.results.map(toDraft),
+      imports: imports.results.map(toImport),
     })
   }
 
@@ -290,11 +298,12 @@ async function route(req: Request, env: Env): Promise<Response> {
     return json({ token })
   }
 
-  // POST /api/import {rows}: match against existing donors first, then
+  // POST /api/import {rows, files?}: match against existing donors first, then
   // round-robin any genuinely new donors. Admin only.
   if (m === 'POST' && parts[0] === 'import') {
     requireAdmin(s)
-    const raw = (await body(req)).rows
+    const b = await body(req)
+    const raw = b.rows
     if (!Array.isArray(raw) || raw.length > 5000) throw new HttpError(400, 'rows must be an array of up to 5000 rows')
     const rows: RawDonorRow[] = raw.map((r, i) => {
       if (!r || typeof r !== 'object') throw new HttpError(400, `rows[${i}] must be an object`)
@@ -353,6 +362,13 @@ async function route(req: Request, env: Env): Promise<Response> {
         writes.push(db.prepare('INSERT INTO gifts (id, donor_id, amount, date, source, program) VALUES (?, ?, ?, ?, ?, ?)')
           .bind(id('g'), donorId, r.amount, r.date, r.source, r.program ?? 'General'))
     }
+    // Log one import per source, in the same transaction, so "last updated"
+    // only moves when the data actually landed. files is {source: fileName}.
+    const files = b.files && typeof b.files === 'object' && !Array.isArray(b.files) ? (b.files as Record<string, unknown>) : {}
+    const now = new Date().toISOString()
+    for (const src of new Set(rows.map((r) => r.source)))
+      writes.push(db.prepare('INSERT INTO imports (id, source, file_name, row_count, imported_at, imported_by) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(id('m'), src, optStr(files[src], `files.${src}`) ?? null, rows.filter((r) => r.source === src).length, now, s.memberId))
     if (writes.length) await db.batch(writes) // one transaction: all or nothing
     return json({ created, merged, clusters: clusters.length, gifts, skippedGifts })
   }

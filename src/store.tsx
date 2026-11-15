@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
-import type { BoardMember, Channel, Donor, CicEvent, Draft, DraftKind, Gift, Interaction, RawDonorRow, Role } from '@/data/types'
+import { reminders } from '@/lib/reminders'
+import type { BoardMember, Channel, Donor, CicEvent, Draft, DraftKind, Gift, ImportRecord, Interaction, RawDonorRow, Role, Source } from '@/data/types'
 
 // Client for the Worker API. The server scopes every read to the caller, so
 // `donors` is already the set this user may see. Actions call one route, then
@@ -17,6 +18,7 @@ interface Bootstrap {
   gifts: Gift[]
   interactions: Interaction[]
   drafts: Draft[]
+  imports: ImportRecord[] // newest first; empty for board members
 }
 
 class ApiError extends Error {}
@@ -96,8 +98,8 @@ function useStoreState(data: Bootstrap, token: GetToken, reload: () => Promise<v
   const reassign = (donorId: string, ownerId: string) =>
     run(() => api(token, `donors/${donorId}/owner`, 'PUT', { ownerId }))
 
-  const importRows = (rows: RawDonorRow[]) =>
-    run(() => api<{ created: number; merged: number; clusters: number; gifts: number; skippedGifts: number }>(token, 'import', 'POST', { rows }))
+  const importRows = (rows: RawDonorRow[], files: Partial<Record<Source, string>> = {}) =>
+    run(() => api<{ created: number; merged: number; clusters: number; gifts: number; skippedGifts: number }>(token, 'import', 'POST', { rows, files }))
 
   // Fetched by the Members widget itself, whenever its token runs out.
   const widgetToken = useCallback(() => api<{ token: string }>(token, 'widget-token', 'POST').then((r) => r.token), [token])
@@ -145,3 +147,9 @@ export function StoreProvider({ token, onSignOut, children }: { token: GetToken;
 }
 
 export const useStore = () => useContext(Ctx)!
+
+// Reminders for the signed-in user; drives the Notifications page and nav badge.
+export function useReminders() {
+  const s = useStore()
+  return reminders({ ...s, role: s.session.role })
+}
