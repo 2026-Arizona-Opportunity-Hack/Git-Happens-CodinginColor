@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { CalendarPlus, Download, MessageSquareText, Gift as GiftIcon, Mail, MessageSquare, Phone, StickyNote, Users } from 'lucide-react'
 import { toast } from 'sonner'
@@ -102,6 +102,8 @@ export default function DonorDetail() {
               </div>
             </CardContent>
           </Card>
+
+          <Notes key={donor.id} donorId={donor.id} saved={donor.notes ?? ''} readOnly={s.sample} save={s.saveNotes} />
 
           <section>
             <SectionTitle>Timeline</SectionTitle>
@@ -236,5 +238,71 @@ export default function DonorDetail() {
         </aside>
       </div>
     </>
+  )
+}
+
+// Saves a second after typing stops, and when the box loses focus. The AI
+// reads these notes when it writes this donor's drafts.
+function Notes({ donorId, saved, readOnly, save }: {
+  donorId: string; saved: string; readOnly: boolean; save: (donorId: string, notes: string) => Promise<unknown>
+}) {
+  const [text, setText] = useState(saved)
+  const [state, setState] = useState<'saved' | 'unsaved' | 'saving' | 'error'>('saved')
+  const timer = useRef<number>(undefined)
+  // Refs, so the timer and the unmount save read current values.
+  const latest = useRef(text)
+  const savedRef = useRef(saved)
+  const saveRef = useRef(save)
+  useEffect(() => {
+    latest.current = text
+    savedRef.current = saved
+    saveRef.current = save
+  })
+
+  const flush = async () => {
+    clearTimeout(timer.current)
+    const value = latest.current
+    if (value.trim() === savedRef.current.trim()) return setState('saved')
+    setState('saving')
+    const ok = await save(donorId, value)
+    setState(ok === undefined ? 'error' : latest.current === value ? 'saved' : 'unsaved')
+  }
+  // Save what's typed when leaving the page.
+  // (The component is keyed by donor, so this runs once, on unmount.)
+  useEffect(() => () => {
+    clearTimeout(timer.current)
+    if (latest.current.trim() !== savedRef.current.trim()) void saveRef.current(donorId, latest.current)
+  }, [donorId])
+
+  const status = { saved: 'Saved', unsaved: 'Not saved yet', saving: 'Saving…', error: "Couldn't save. Keep typing to try again." }[state]
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-3">
+        <CardTitle><label htmlFor="donor-notes">Notes</label></CardTitle>
+        {!readOnly && <span aria-live="polite" className={state === 'error' ? 'text-sm text-red-800' : 'text-sm text-muted-foreground'}>{status}</span>}
+      </CardHeader>
+      <CardContent>
+        <Textarea
+          id="donor-notes"
+          rows={4}
+          value={text}
+          readOnly={readOnly}
+          maxLength={10000}
+          aria-describedby="donor-notes-hint"
+          placeholder="Interests, family, how they like to be contacted, what they asked about…"
+          onChange={(e) => {
+            setText(e.target.value)
+            latest.current = e.target.value
+            setState('unsaved')
+            clearTimeout(timer.current)
+            timer.current = window.setTimeout(flush, 1000)
+          }}
+          onBlur={flush}
+        />
+        <p id="donor-notes-hint" className="mt-2 text-xs text-muted-foreground">
+          {readOnly ? 'Sample data is view-only.' : 'The AI uses these notes when it writes drafts for this donor.'}
+        </p>
+      </CardContent>
+    </Card>
   )
 }

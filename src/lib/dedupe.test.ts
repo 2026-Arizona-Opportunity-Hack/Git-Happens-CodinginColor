@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { RawDonorRow } from '../data/types'
 import { SAMPLE_CSV } from '../data/samples'
-import { autoMapping, csvHeaders, dedupe, matchDonor, NEW_COLUMN, parseAmount, parseDate, rowsFromCsv, sameGift, SKIP, splitGifts } from './dedupe'
+import { autoMapping, csvHeaders, dedupe, matchDonor, mergeNotes, NEW_COLUMN, parseAmount, parseDate, rowsFromCsv, sameGift, SKIP, splitGifts } from './dedupe'
 
 const row = (r: Partial<RawDonorRow>): RawDonorRow => ({ source: 'spreadsheet', name: 'Kevin Tran', ...r })
 
@@ -65,7 +65,7 @@ test('the mapping decides what is read: remapped, skipped and new columns', () =
   const rows = rowsFromCsv(text, 'zeffy', { Who: 'name', Mail: SKIP, Gift: 'amount', Campaign: NEW_COLUMN, Fund: 'program' })
   assert.deepEqual(rows, [{
     source: 'zeffy', name: 'Ada Lovelace', email: undefined, phone: undefined, org: undefined,
-    amount: 50, date: undefined, program: 'AI Academy', extra: { Campaign: 'Giving Tuesday' },
+    amount: 50, date: undefined, program: 'AI Academy', notes: undefined, extra: { Campaign: 'Giving Tuesday' },
     giftIssue: 'no-date', // amount but no date column: flagged so staging can warn
   }])
 })
@@ -141,4 +141,11 @@ test('real export headers map without renaming: Zeffy, Benevity and friends', ()
   assert.deepEqual([benevity['Donor First Name'], benevity['Donor Last Name'], benevity['Donation Date'], benevity['Total Donation to be Acknowledged']], ['firstName', 'lastName', 'date', 'amount'])
   assert.equal(benevity['Match Amount'], SKIP) // amount already taken by the first match
   assert.deepEqual(autoMapping(['Campaign Name', 'Donor Name', 'Gift Amount (USD)', 'E-mail', 'Created At']), { 'Campaign Name': SKIP, 'Donor Name': 'name', 'Gift Amount (USD)': 'amount', 'E-mail': 'email', 'Created At': 'date' })
+})
+
+test('a Notes column maps to notes, and re-imports never repeat a note', () => {
+  assert.equal(autoMapping(['Name', 'Comments']).Comments, 'notes')
+  assert.equal(rowsFromCsv('Name,Notes\nAda,Loves robotics\n', 'spreadsheet')[0].notes, 'Loves robotics')
+  assert.equal(mergeNotes('', [{ notes: 'Loves robotics' }, { notes: ' Loves robotics ' }, {}]), 'Loves robotics')
+  assert.equal(mergeNotes('Met at Day of Compute\nLoves robotics', [{ notes: 'Loves robotics' }, { notes: 'Prefers texts' }]), 'Met at Day of Compute\nLoves robotics\nPrefers texts')
 })

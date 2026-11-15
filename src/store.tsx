@@ -125,8 +125,10 @@ function useStoreState(real: Bootstrap, token: GetToken, reload: () => Promise<v
   const ownerName = (d: Pick<Donor, 'ownerId'>) =>
     d.ownerId ? data.boardMembers.find((m) => m.id === d.ownerId)?.name ?? 'Former board member' : 'Unassigned'
 
-  const createDraft = (donorId: string, kind: DraftKind, channel: 'email' | 'text' = 'email', body?: string) =>
-    change(() => api<Draft>(token, 'drafts', 'POST', { donorId, kind, channel, body }))
+  // Without a body the server writes one (AI, or the template if that fails).
+  // `template` marks a given body as a template's rather than the assistant's.
+  const createDraft = (donorId: string, kind: DraftKind, channel: 'email' | 'text' = 'email', body?: string, template = false) =>
+    change(() => api<Draft>(token, 'drafts', 'POST', { donorId, kind, channel, body, ...(template && { template }) }))
 
   const updateDraft = (id: string, body: string) => {
     if (sample) return void change(async () => {})
@@ -154,6 +156,10 @@ function useStoreState(real: Bootstrap, token: GetToken, reload: () => Promise<v
 
   const setNextStep = (donorId: string, nextStep: Donor['nextStep']) =>
     change(() => api(token, `donors/${donorId}/next-step`, 'PUT', nextStep ?? {}))
+
+  // Replaces the donor's notes ('' clears them).
+  const saveNotes = (donorId: string, notes: string) =>
+    change(() => api(token, `donors/${donorId}/notes`, 'PUT', { notes }))
 
   // Sets the next step "Invite to <event>" and drafts the invitation.
   const invite = (donorId: string, eventId: string) =>
@@ -190,7 +196,7 @@ function useStoreState(real: Bootstrap, token: GetToken, reload: () => Promise<v
 
   return {
     ...data, drafts, member, ownerName, chat, sample, setSample,
-    createDraft, updateDraft, approveDraft, discardDraft, logInteraction, setNextStep, invite, reassign, assignOwners, importRows, clearDonors, widgetToken,
+    createDraft, updateDraft, approveDraft, discardDraft, logInteraction, setNextStep, saveNotes, invite, reassign, assignOwners, importRows, clearDonors, widgetToken,
     listApiKeys, createApiKey, revokeApiKey,
   }
 }

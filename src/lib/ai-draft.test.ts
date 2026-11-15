@@ -27,3 +27,13 @@ test('replies are cleaned, and unusable ones fall back to the template', () => {
   assert.equal(cleanDraft('Hi [Name], thanks', 'email'), null)
   assert.equal(cleanDraft('See https://example.org', 'email'), null)
 })
+
+test('the prompt carries notes, logged outreach and messages already sent', () => {
+  const ctx = { notes: 'Daughter is in 10th grade; loves robotics', interactions: [{ date: '2026-11-01', channel: 'call' as const, summary: 'Asked about summer camp' }], sent: ['Hi Ruth, thanks for the October gift!'] }
+  const [system, user] = draftPrompt('follow-up', 'email', donor, gifts, owner, 'Hi Ruth,', undefined, ctx)
+  assert.match(system.content, /notes and past conversations/)
+  assert.match(user.content, /Daughter is in 10th grade/)
+  assert.match(user.content, /2026-11-01 call: Asked about summer camp/)
+  assert.match(user.content, /thanks for the October gift/)
+  assert.match(draftPrompt('follow-up', 'email', donor, gifts, owner, '')[1].content, /none logged/)
+})
