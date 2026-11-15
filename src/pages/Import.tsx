@@ -150,7 +150,6 @@ export default function Import() {
     <>
       <PageHeader
         title="Update Donors"
-        description="Upload each export, review it in the staging step, then save. New donors are assigned on All Donors."
         actions={<Button variant="outline" onClick={() => { setCsv(SAMPLE_CSV); setMappings({}); setFiles({ spreadsheet: 'sample-spreadsheet.csv', zeffy: 'sample-zeffy.csv', benevity: 'sample-benevity.csv' }) }}>Load sample files</Button>}
       />
 
@@ -198,18 +197,14 @@ export default function Import() {
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <Button onClick={() => setStaging(true)}>Review and map columns</Button>
           <Button variant="ghost" onClick={clear}>Clear</Button>
-          <span className="text-sm text-muted-foreground">Nothing is saved until you confirm in the review step.</span>
         </div>
       )}
 
       {/* Staging: what the files contain and what will happen, before anything is saved. */}
       <Dialog open={staging} onOpenChange={(o) => !saving && setStaging(o)}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
+        <DialogContent aria-describedby={undefined} className="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
           <DialogHeader>
             <DialogTitle>Your import is ready to save</DialogTitle>
-            <DialogDescription>
-              Check how each column maps to the donor database. Unmapped columns aren't saved unless you pick a field for them or create a new column.
-            </DialogDescription>
           </DialogHeader>
 
           <div role="status" className="rounded-md bg-cic-tint p-3 text-cic-dark">
@@ -240,12 +235,12 @@ export default function Import() {
                   <p role="alert" className="rounded-md bg-red-100 p-3 text-red-900">Map a column to Name (or First name / Last name). Without one, no donors can be read from this file.</p>
                 )}
                 <ColumnTable
-                  title="Mapped fields" count={mapped.length} note={`${mapped.length} column${mapped.length === 1 ? '' : 's'} matched to the donor database`}
+                  title="Mapped fields" count={mapped.length}
                   headers={mapped} mapping={mapping} customFields={customFields} onChange={(h, t) => setTarget(src, h, t)} tone="mapped"
                 />
                 {unmapped.length > 0 && (
                   <ColumnTable
-                    title="Unmapped columns" count={unmapped.length} note="Not in the donor database. Choose a field, create a new column, or leave as Do not save."
+                    title="Unmapped columns" count={unmapped.length}
                     headers={unmapped} mapping={mapping} customFields={customFields} onChange={(h, t) => setTarget(src, h, t)} tone="unmapped"
                   />
                 )}
@@ -280,11 +275,7 @@ export default function Import() {
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>New Donors ({created?.length ?? 0})</DialogTitle>
-            <DialogDescription>
-              These donors weren't in the database before. Selected donors open at the bottom of All Donors with a suggested board member (whoever
-              has the fewest donors) that you can change, and nothing is assigned until you click Update or Update all. Unselected donors go to the
-              Unassigned section.
-            </DialogDescription>
+            <DialogDescription>Pick the ones to assign a board member now. The rest stay unassigned.</DialogDescription>
           </DialogHeader>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => setPicked(new Set(created!.map((d) => d.id)))}>Select all</Button>
@@ -314,9 +305,6 @@ export default function Import() {
 
       <section className="mt-8">
         <SectionTitle>Import history</SectionTitle>
-        <p className="mb-4 text-sm text-muted-foreground">
-          Re-import each export at least every {STALE_IMPORT_DAYS} days; older ones show up on the Notifications page.
-        </p>
         {imports.length === 0 ? (
           <p className="text-sm">Nothing imported yet.</p>
         ) : (
@@ -342,18 +330,17 @@ export default function Import() {
 // One block of the staging step: file column -> arrow -> database column.
 // A target can only be used by one column in the file; Do not save and
 // Create a new column are always available.
-function ColumnTable({ title, count, note, headers, mapping, customFields, onChange, tone }: {
-  title: string; count: number; note: string; headers: string[]; mapping: ColumnMapping; customFields: string[]
+function ColumnTable({ title, count, headers, mapping, customFields, onChange, tone }: {
+  title: string; count: number; headers: string[]; mapping: ColumnMapping; customFields: string[]
   onChange: (header: string, target: string) => void; tone: 'mapped' | 'unmapped'
 }) {
   const id = `cols-${title.replace(/\W/g, '')}-${headers.join('').replace(/\W/g, '').slice(0, 20)}`
   return (
     <div className="rounded-lg bg-muted/60 p-4">
-      <div className="flex items-center gap-2">
+      <div className="mb-3 flex items-center gap-2">
         <h4 id={id} className="font-semibold">{title}</h4>
         <Badge className={tone === 'mapped' ? 'bg-cic-green text-cic-dark' : 'bg-amber-100 text-amber-900'}>{count}</Badge>
       </div>
-      <p className="mb-3 text-sm text-muted-foreground">{note}</p>
       <div className="overflow-hidden rounded-md border bg-background">
         <table className="w-full text-sm" aria-labelledby={id}>
           <thead>

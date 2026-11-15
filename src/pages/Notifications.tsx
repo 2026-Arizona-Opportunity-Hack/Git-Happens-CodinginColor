@@ -34,7 +34,6 @@ export default function Notifications() {
     <>
       <PageHeader
         title="Notifications"
-        description="Reminders for donor follow-ups, drafts, upcoming events and stale spreadsheets. Each one clears itself once the work is done."
       />
 
       <div role="group" aria-label="Filter reminders" className="mb-6 flex flex-wrap gap-2">

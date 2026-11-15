@@ -112,9 +112,13 @@ function ChatPanel({ chat: { turns, busy, error, send }, onClose }: { chat: Chat
         className="flex-1 space-y-3 overflow-y-auto p-4 text-sm"
       >
         {turns.length === 0 && (
-          <p className="text-muted-foreground">
-            Ask about your donors, gifts, follow-ups or events, like "Who is overdue for a touch?" I can see what you can see in the app. I'll offer buttons for changes, and nothing happens until you press one.
-          </p>
+          <div className="flex flex-wrap gap-2">
+            {['Who is overdue for a touch?', 'Who lapsed this year?', "What's coming up this month?"].map((q) => (
+              <Button key={q} type="button" size="sm" variant="outline" className="h-auto whitespace-normal py-1.5 text-left" onClick={() => send(q)}>
+                {q}
+              </Button>
+            ))}
+          </div>
         )}
         {turns.map((t, i) => (
           <div
