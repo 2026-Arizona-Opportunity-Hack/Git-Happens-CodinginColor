@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { CalendarPlus, Download, Gift as GiftIcon, Mail, MessageSquare, Phone, StickyNote, Users } from 'lucide-react'
+import { CalendarPlus, Download, MessageSquareText, Gift as GiftIcon, Mail, MessageSquare, Phone, StickyNote, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { PageHeader, SectionTitle, StatusBadge } from '@/components/common'
 import { Badge } from '@/components/ui/badge'
@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import type { Channel, Donor, Gift, ProgramOutcome } from '@/data/types'
 import { funderPacket } from '@/lib/packet'
 import { useStore } from '@/store'
+import { useAsk } from '@/components/ChatWidget'
 import { byDateDesc, calendarLink, fmtDate, money, retentionStatus, totalsByYear, UNASSIGNED, yearOf } from '@/lib/logic'
 
 const CHANNEL_ICON = { email: Mail, text: MessageSquare, call: Phone, 'in-person': Users, note: StickyNote }
@@ -30,6 +31,7 @@ export default function DonorDetail() {
   const { id } = useParams()
   const nav = useNavigate()
   const s = useStore()
+  const ask = useAsk()
   const donor = s.donors.find((d) => d.id === id)
   const [channel, setChannel] = useState<Channel>('text')
   const [note, setNote] = useState('')
@@ -71,9 +73,15 @@ export default function DonorDetail() {
         title={donor.name}
         description={[donor.org, donor.email, donor.phone].filter(Boolean).join(' · ')}
         actions={
-          <Button variant="outline" onClick={() => downloadPacket(donor, gifts, s.outcomes, s.today)}>
-            <Download aria-hidden /> Funder packet
-          </Button>
+          <>
+            {/* The assistant turns what happened into a log, a next step and a draft, as buttons to press. */}
+            <Button variant="outline" onClick={() => ask(`Debrief on ${donor.name}: `)}>
+              <MessageSquareText aria-hidden /> Debrief
+            </Button>
+            <Button variant="outline" onClick={() => downloadPacket(donor, gifts, s.outcomes, s.today)}>
+              <Download aria-hidden /> Funder packet
+            </Button>
+          </>
         }
       />
 
