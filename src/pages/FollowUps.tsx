@@ -1,18 +1,29 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { toast } from 'sonner'
 import { PageHeader, SectionTitle } from '@/components/common'
 import { SendDraft } from '@/components/SendDraft'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import type { DraftKind } from '@/data/types'
+import { DRAFT_SUBJECT, draftBody } from '@/lib/drafts'
 import { useStore } from '@/store'
 import { calendarLink, daysBetween, fmtDate, quarterlyTouchDue, retentionStatus, yearOf } from '@/lib/logic'
 import { cn } from '@/lib/utils'
 
-// The board member's work queue. The system drafts and reminds; a human sends.
+// The board member's work queue. The AI drafts and the system reminds; a
+// human sends. Template emails offers the plain templates instead.
 export default function FollowUps() {
   const { donors, gifts, drafts, today, createDraft, updateDraft } = useStore()
+  // The AI writes the draft, which takes a few seconds.
+  const draft = async (donorId: string, kind: DraftKind) => {
+    const t = toast.loading('Writing the draft…')
+    if (await createDraft(donorId, kind)) toast.success('Draft added to Drafts awaiting approval', { id: t })
+    else toast.dismiss(t)
+  }
   const ids = new Set(donors.map((d) => d.id))
   const name = (id: string) => donors.find((d) => d.id === id)?.name
 
@@ -104,7 +115,7 @@ export default function FollowUps() {
                         {d.lastTouchAt ? `Last contact ${fmtDate(d.lastTouchAt)}` : 'Never contacted'}
                       </div>
                     </div>
-                    <Button size="sm" variant="outline" disabled={hasPending(d.id)} onClick={() => createDraft(d.id, 'quarterly-update')}>
+                    <Button size="sm" variant="outline" disabled={hasPending(d.id)} onClick={() => draft(d.id, 'quarterly-update')}>
                       {hasPending(d.id) ? 'Drafted' : 'Draft update'}
                     </Button>
                   </li>
@@ -122,7 +133,7 @@ export default function FollowUps() {
                     {lapsed.map((d) => (
                       <li key={d.id} className="flex items-center justify-between gap-3 py-3">
                         <Link to={`/donors/${d.id}`} className="font-medium text-cic-dark underline">{d.name}</Link>
-                        <Button size="sm" variant="outline" disabled={hasPending(d.id)} onClick={() => createDraft(d.id, 'lapsed-nudge')}>
+                        <Button size="sm" variant="outline" disabled={hasPending(d.id)} onClick={() => draft(d.id, 'lapsed-nudge')}>
                           {hasPending(d.id) ? 'Drafted' : 'Draft nudge'}
                         </Button>
                       </li>
@@ -134,6 +145,74 @@ export default function FollowUps() {
           )}
         </section>
       </div>
+
+      <TemplateEmails />
     </>
+  )
+}
+
+// The standard messages, filled in for one donor. "Use this template" adds it
+// to Drafts awaiting approval as written, without the AI.
+const TEMPLATES: { kind: DraftKind; label: string }[] = [
+  { kind: 'thank-you', label: 'Thank-you' },
+  { kind: 'quarterly-update', label: 'Quarterly update' },
+  { kind: 'lapsed-nudge', label: 'Lapsed nudge' },
+  { kind: 'follow-up', label: 'Follow-up' },
+]
+
+function TemplateEmails() {
+  const { donors, gifts, events, boardMembers, session, today, createDraft } = useStore()
+  const sorted = [...donors].sort((a, b) => a.name.localeCompare(b.name))
+  const [donorId, setDonorId] = useState(sorted[0]?.id ?? '')
+  const [kind, setKind] = useState<DraftKind>('thank-you')
+  const [saving, setSaving] = useState(false)
+  const donor = donors.find((d) => d.id === donorId)
+  if (!donor) return null
+
+  const owner = boardMembers.find((m) => m.id === donor.ownerId) ?? boardMembers.find((m) => m.id === session.memberId) ?? { id: '', name: 'Coding in Color', email: '' }
+  const channel = donor.email || !donor.phone ? 'email' : 'text'
+  const body = draftBody(kind, donor, gifts.filter((g) => g.donorId === donor.id), owner, events.find((e) => e.date >= today))
+  const use = async () => {
+    setSaving(true)
+    const ok = await createDraft(donor.id, kind, channel, body, true)
+    setSaving(false)
+    if (ok) toast.success(`Template added to Drafts awaiting approval for ${donor.name}`)
+  }
+
+  return (
+    <section className="mt-10" aria-labelledby="templates-heading">
+      <SectionTitle><span id="templates-heading">Template emails</span></SectionTitle>
+      <Card>
+        <CardContent className="grid gap-4 md:grid-cols-[minmax(0,16rem)_1fr]">
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="template-donor" className="mb-1">Donor</Label>
+              <select
+                id="template-donor"
+                className="w-full rounded-md border bg-background px-3 py-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                value={donorId}
+                onChange={(e) => setDonorId(e.target.value)}
+              >
+                {sorted.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </div>
+            <div role="group" aria-label="Template" className="flex flex-wrap gap-1 md:flex-col">
+              {TEMPLATES.map((t) => (
+                <Button key={t.kind} size="sm" aria-pressed={kind === t.kind} variant={kind === t.kind ? 'default' : 'outline'} className="md:justify-start" onClick={() => setKind(t.kind)}>
+                  {t.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {channel === 'email' ? <>Subject: <span className="text-foreground">{DRAFT_SUBJECT[kind]}</span> · to {donor.email}</> : <>Text message to {donor.phone}</>}
+            </p>
+            <pre className="whitespace-pre-wrap rounded-md border bg-muted/40 p-3 font-sans text-sm" aria-label="Template preview">{body}</pre>
+            <Button disabled={saving} onClick={use}>{saving ? 'Adding…' : 'Use this template'}</Button>
+          </div>
+        </CardContent>
+      </Card>
+    </section>
   )
 }
