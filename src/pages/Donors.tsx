@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PageHeader, StatusBadge } from '@/components/common'
-import { Download } from 'lucide-react'
+import { Download, FileSpreadsheet } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useStore } from '@/store'
 import { fmtDate, money, retentionStatus, yearOf } from '@/lib/logic'
-import { donorsCsv, download } from '@/lib/export'
+import { donorsCsv, donorsXlsx, download } from '@/lib/export'
 
 // The signed-in person's own donors. Admins see everyone's on All Donors.
 export default function Donors() {
@@ -34,9 +34,14 @@ export default function Donors() {
       <PageHeader
         title="My Donors"
         actions={
-          <Button variant="outline" disabled={mine.length === 0} onClick={() => download(`my-donors-${today}.csv`, donorsCsv(mine, gifts, ownerName, today))}>
-            <Download aria-hidden /> Export CSV
-          </Button>
+          <>
+            <Button variant="outline" disabled={mine.length === 0} onClick={() => download(`my-donors-${today}.csv`, donorsCsv(mine, gifts, ownerName, today))}>
+              <Download aria-hidden /> Export CSV
+            </Button>
+            <Button variant="outline" disabled={mine.length === 0} onClick={() => download(`my-donors-${today}.xlsx`, donorsXlsx(mine, gifts, ownerName, today))}>
+              <FileSpreadsheet aria-hidden /> Export Excel
+            </Button>
+          </>
         }
         description={`The ${mine.length} donor${mine.length === 1 ? '' : 's'} assigned to you, deduped across the spreadsheet, Zeffy, Benevity, AZ Gives and United Way.`}
       />

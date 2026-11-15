@@ -1,12 +1,12 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom'
 import { AuthKitProvider, useAuth } from '@workos-inc/authkit-react'
-import { BarChart3, Bell, Code2, Contact, Home, ListTodo, LogOut, MessageCircle, ShieldAlert, Upload, UserCog, UserRound, Users } from 'lucide-react'
+import { BarChart3, Bell, Code2, Contact, Home, ListTodo, LogOut, ShieldAlert, Upload, UserCog, UserRound, Users, Wrench } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
 import { StoreProvider, useReminders, useStore } from '@/store'
 import { cn } from '@/lib/utils'
-import { ChatPanel, useChat, useWide } from '@/components/ChatWidget'
+import { Assistant, useChat } from '@/components/ChatWidget'
 import { DonorSearch } from '@/components/DonorSearch'
 import { InstallPrompt } from '@/components/InstallPrompt'
 import Dashboard from '@/pages/Dashboard'
@@ -17,6 +17,7 @@ import FollowUps from '@/pages/FollowUps'
 import Retention from '@/pages/Retention'
 import Import from '@/pages/Import'
 import Notifications from '@/pages/Notifications'
+import DevTools from '@/pages/DevTools'
 const Members = lazy(() => import('@/pages/Members'))
 const Account = lazy(() => import('@/pages/Account'))
 const Api = lazy(() => import('@/pages/Api'))
@@ -28,11 +29,11 @@ const NAV = [
   { to: '/donors', label: 'My Donors', icon: Contact },
   { to: '/all-donors', label: 'All Donors', icon: Users, adminOnly: true },
   { to: '/retention', label: 'Retention', icon: BarChart3, adminOnly: true },
-  // On wide screens the assistant is a column beside every page instead.
-  { to: '/assistant', label: 'Assistant', icon: MessageCircle, narrowOnly: true },
   { to: '/import', label: 'Update Donors', icon: Upload, adminOnly: true },
   { to: '/members', label: 'Board members', icon: UserCog, adminOnly: true },
   { to: '/api', label: 'Read API', icon: Code2, adminOnly: true },
+  // DEVELOPMENT ONLY: shown while DEV_TOOLS is on; remove before launch.
+  { to: '/dev', label: 'Dev tools', icon: Wrench, adminOnly: true, devOnly: true },
   { to: '/account', label: 'My account', icon: UserRound },
 ]
 
@@ -52,15 +53,14 @@ function SignedInAs() {
 }
 
 function Shell() {
-  const { session } = useStore()
+  const { session, devTools } = useStore()
   // Admin pages: the Worker enforces it too; this keeps board members off them.
   const admin = (el: React.ReactNode) => (session.role === 'admin' ? el : <Navigate to="/" replace />)
   // Badge counts what needs action now; "coming up" items don't nag.
   const actionable = useReminders().filter((r) => r.urgency !== 'upcoming').length
   const chat = useChat()
-  const wide = useWide()
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[240px_1fr] lg:grid-cols-[240px_1fr_22rem]">
+    <div className="min-h-screen md:grid md:grid-cols-[240px_1fr]">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:p-2">Skip to content</a>
       <aside className="border-b border-sidebar-border bg-sidebar p-4 md:sticky md:top-0 md:flex md:h-screen md:flex-col md:overflow-y-auto md:border-r md:border-b-0">
         <div className="mb-6 flex items-center gap-2">
@@ -73,7 +73,7 @@ function Shell() {
           </div>
         </div>
         <nav aria-label="Main" className="flex gap-1 overflow-x-auto md:flex-col">
-          {NAV.filter((n) => (!n.adminOnly || session.role === 'admin') && !(n.narrowOnly && wide)).map(({ to, label, icon: Icon }) => (
+          {NAV.filter((n) => (!n.adminOnly || session.role === 'admin') && (!n.devOnly || devTools)).map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
@@ -99,7 +99,7 @@ function Shell() {
           <SignedInAs />
         </div>
       </aside>
-      <main id="main" className="mx-auto w-full max-w-6xl p-4 md:p-8">
+      <main id="main" className="mx-auto w-full max-w-6xl p-4 pb-24 md:p-8 md:pb-24">
         <InstallPrompt />
         <Routes>
           <Route path="/" element={<Dashboard />} />
@@ -112,11 +112,13 @@ function Shell() {
           <Route path="/import" element={admin(<Import />)} />
           <Route path="/members" element={session.role === 'admin' && <Suspense fallback={<p role="status">Loading…</p>}><Members /></Suspense>} />
           <Route path="/api" element={session.role === 'admin' && <Suspense fallback={<p role="status">Loading…</p>}><Api /></Suspense>} />
-          <Route path="/assistant" element={wide ? <Navigate to="/" replace /> : <ChatPanel chat={chat} variant="page" />} />
+          {/* The assistant is the chat bubble now; old links land on the Dashboard. */}
+          <Route path="/assistant" element={<Navigate to="/" replace />} />
+          <Route path="/dev" element={devTools ? admin(<DevTools />) : <Navigate to="/" replace />} />
           <Route path="/account" element={<Suspense fallback={<p role="status">Loading…</p>}><Account /></Suspense>} />
         </Routes>
       </main>
-      {wide && <ChatPanel chat={chat} variant="column" />}
+      <Assistant chat={chat} />
       <Toaster />
     </div>
   )

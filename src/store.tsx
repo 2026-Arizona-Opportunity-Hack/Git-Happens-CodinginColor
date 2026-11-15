@@ -19,6 +19,7 @@ interface Bootstrap {
   interactions: Interaction[]
   drafts: Draft[]
   imports: ImportRecord[] // newest first; empty for board members
+  devTools?: boolean // development-only Dev tools page is enabled
 }
 
 class ApiError extends Error {
@@ -117,6 +118,10 @@ function useStoreState(data: Bootstrap, token: GetToken, reload: () => Promise<v
   const reassign = (donorId: string, ownerId: string | null) =>
     run(() => api(token, `donors/${donorId}/owner`, 'PUT', { ownerId }))
 
+  // DEVELOPMENT ONLY: wipes donor data (see the Dev tools page).
+  const clearDonors = () =>
+    run(() => api<{ donors: number; gifts: number; interactions: number; drafts: number; imports: number }>(token, 'dev/clear-donors', 'POST', { confirm: 'DELETE' }))
+
   // Several assignments in one transaction and one reload.
   const assignOwners = (assignments: { donorId: string; ownerId: string | null }[]) =>
     run(() => api<{ updated: number }>(token, 'assign', 'POST', { assignments }))
@@ -137,7 +142,7 @@ function useStoreState(data: Bootstrap, token: GetToken, reload: () => Promise<v
 
   return {
     ...data, drafts, member, ownerName, chat,
-    createDraft, updateDraft, approveDraft, discardDraft, logInteraction, setNextStep, invite, reassign, assignOwners, importRows, widgetToken,
+    createDraft, updateDraft, approveDraft, discardDraft, logInteraction, setNextStep, invite, reassign, assignOwners, importRows, clearDonors, widgetToken,
     listApiKeys, createApiKey, revokeApiKey,
   }
 }

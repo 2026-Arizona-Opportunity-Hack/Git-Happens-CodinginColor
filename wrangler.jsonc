@@ -21,7 +21,9 @@
   "vars": {
     "WORKOS_CLIENT_ID": "client_01M7E3A3JEVSSQCSM38YCBW0VQ",
     "WORKOS_ORG_ID": "org_01M7E55JADH32FJZXZBGRVWJQS",
-    "CALENDAR_ICS_URL": "https://raw.githubusercontent.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/main/public/demo-calendar.ics"
+    "CALENDAR_ICS_URL": "https://raw.githubusercontent.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/main/public/demo-calendar.ics",
+    // Development only: shows the Dev tools page that can clear all donor data. Set to "false" (or delete) before launch.
+    "DEV_TOOLS": "true"
   },
   "routes": [{ "pattern": "githappens.jurenka.software", "custom_domain": true, "zone_name": "jurenka.software" }]
 }

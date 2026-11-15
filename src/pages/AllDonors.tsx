@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Download } from 'lucide-react'
+import { Download, FileSpreadsheet } from 'lucide-react'
 import { PageHeader, SectionTitle } from '@/components/common'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { Donor } from '@/data/types'
 import { fmtDate, money, UNASSIGNED } from '@/lib/logic'
-import { donorsCsv, download } from '@/lib/export'
+import { donorsCsv, donorsXlsx, download } from '@/lib/export'
+import { Label } from '@/components/ui/label'
 import { useStore } from '@/store'
 
 // Every donor and who looks after them. This is where an admin manages board
@@ -29,7 +30,14 @@ export default function AllDonors() {
   // differs from what D1 holds.
   const [choices, setChoices] = useState<Record<string, string>>(() => ({ ...suggested }))
   const [saving, setSaving] = useState<Set<string>>(new Set())
+  // Filters: name/org/email text, a donation date range (donors with at least
+  // one gift in it), and board member ('' any, UNASSIGNED, or a member id).
   const [q, setQ] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [owner, setOwner] = useState('')
+  const filtering = !!(q || from || to || owner)
+  const clearFilters = () => { setQ(''); setFrom(''); setTo(''); setOwner('') }
 
   const current = (d: Donor) => d.ownerId ?? UNASSIGNED
   const choice = (d: Donor) => choices[d.id] ?? current(d)
@@ -37,7 +45,10 @@ export default function AllDonors() {
   const load = new Map(boardMembers.map((m) => [m.id, donors.filter((d) => d.ownerId === m.id).length]))
   const name = (id: string) => boardMembers.find((m) => m.id === id)?.name ?? 'Unassigned'
 
-  const match = (d: Donor) => `${d.name} ${d.org ?? ''} ${d.email ?? ''}`.toLowerCase().includes(q.toLowerCase())
+  const match = (d: Donor) =>
+    `${d.name} ${d.org ?? ''} ${d.email ?? ''}`.toLowerCase().includes(q.trim().toLowerCase()) &&
+    (!owner || current(d) === owner) &&
+    (!from && !to || gifts.some((g) => g.donorId === d.id && (!from || g.date >= from) && (!to || g.date <= to)))
   const rank = (d: Donor) => recent.indexOf(d.id)
   const inMain = (d: Donor) => !!d.ownerId || recent.includes(d.id)
   const assigned = donors
@@ -45,6 +56,7 @@ export default function AllDonors() {
     .sort((a, b) => (rank(a) === -1 && rank(b) === -1 ? a.name.localeCompare(b.name) : rank(a) === -1 ? -1 : rank(b) === -1 ? 1 : rank(a) - rank(b)))
   const unassigned = donors.filter((d) => !inMain(d) && match(d)).sort((a, b) => a.name.localeCompare(b.name))
   const totalUnassigned = donors.filter((d) => !d.ownerId).length
+  const shown = [...assigned, ...unassigned]
 
   const save = async (list: Donor[]) => {
     const ids = list.map((d) => d.id)
@@ -122,18 +134,56 @@ export default function AllDonors() {
       <PageHeader
         title="All Donors"
         actions={
-          // Exports what's saved (not unsaved dropdown choices), every donor regardless of the search.
-          <Button variant="outline" disabled={donors.length === 0} onClick={() => download(`all-donors-${today}.csv`, donorsCsv(donors, gifts, ownerName, today))}>
-            <Download aria-hidden /> Export CSV
-          </Button>
+          // Exports the donors the filters show, as saved (not unsaved dropdown choices).
+          <>
+            <Button variant="outline" disabled={shown.length === 0} onClick={() => download(`all-donors-${today}.csv`, donorsCsv(shown, gifts, ownerName, today))}>
+              <Download aria-hidden /> Export CSV
+            </Button>
+            <Button variant="outline" disabled={shown.length === 0} onClick={() => download(`all-donors-${today}.xlsx`, donorsXlsx(shown, gifts, ownerName, today))}>
+              <FileSpreadsheet aria-hidden /> Export Excel
+            </Button>
+          </>
         }
         description={`Every donor and the board member responsible for them: ${donors.length} donors, ${totalUnassigned} unassigned. Choose a board member, then click Update for one row or Update all at the bottom.`}
       />
-      <Input className="mb-4 max-w-sm" placeholder="Search name, org or email" aria-label="Search all donors" value={q} onChange={(e) => setQ(e.target.value)} />
+      <section aria-labelledby="filters-heading" className="mb-6 rounded-lg border bg-muted/40 p-4">
+        <h2 id="filters-heading" className="mb-3 text-sm font-semibold text-cic-dark">Filters</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <Label htmlFor="f-name" className="mb-1">Name</Label>
+            <Input id="f-name" placeholder="Name, org or email" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="f-from" className="mb-1">Donated from</Label>
+            <Input id="f-from" type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="f-to" className="mb-1">Donated to</Label>
+            <Input id="f-to" type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="f-owner" className="mb-1">Board member</Label>
+            <select
+              id="f-owner"
+              value={owner}
+              onChange={(e) => setOwner(e.target.value)}
+              className="h-9 w-full rounded-md border bg-background px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <option value="">Any board member</option>
+              <option value={UNASSIGNED}>Unassigned</option>
+              {boardMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center gap-3 text-sm">
+          <span aria-live="polite" className="text-muted-foreground">Showing {shown.length} of {donors.length} donors</span>
+          {filtering && <Button size="sm" variant="ghost" onClick={clearFilters}>Clear filters</Button>}
+        </div>
+      </section>
 
       <section aria-labelledby="assigned-heading">
         <h2 id="assigned-heading" className="sr-only">Assigned donors</h2>
-        {table(assigned, q ? 'No assigned donors match that search.' : 'No donors are assigned yet.')}
+        {table(assigned, filtering ? 'No assigned donors match these filters.' : 'No donors are assigned yet.')}
       </section>
 
       <section className="mt-10">
@@ -141,10 +191,10 @@ export default function AllDonors() {
         <p className="mb-3 text-sm text-muted-foreground">
           Donors without a board member. Choose one and click Update to move the donor up to the list above.
         </p>
-        {table(unassigned, q ? 'No unassigned donors match that search.' : 'Every donor has a board member.')}
+        {table(unassigned, filtering ? 'No unassigned donors match these filters.' : 'Every donor has a board member.')}
       </section>
 
-      <div className="sticky bottom-0 mt-6 flex items-center justify-end gap-3 border-t bg-background py-3">
+      <div className="sticky bottom-0 mt-6 flex flex-wrap items-center justify-end gap-3 border-t bg-background py-3 pr-20">
         <span className="text-sm text-muted-foreground" aria-live="polite">
           {changed.length ? `${changed.length} unsaved change${changed.length === 1 ? '' : 's'}` : 'No unsaved changes'}
         </span>

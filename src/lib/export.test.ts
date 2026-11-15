@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Donor, Gift } from '../data/types'
 import { parseCsv } from './dedupe'
-import { donorsCsv } from './export'
+import { donorsCsv, donorsXlsx } from './export'
+import { crc32 } from './xlsx'
 
 const donors: Donor[] = [
   { id: 'd1', name: 'Smith, "Jo"', email: 'jo@x.org', ownerId: 'u1', sources: ['zeffy', 'benevity'], extra: { Campaign: 'Giving Tuesday' } },
@@ -19,8 +20,8 @@ test('export has every donor column, totals and custom fields, and round-trips t
   assert.equal(a.name, 'Smith, "Jo"')
   assert.equal(a['board member'], 'Ann')
   assert.equal(a.sources, 'zeffy; benevity')
-  assert.equal(a['lifetime giving'], '150.50')
-  assert.equal(a['raised 2026'], '50.50')
+  assert.equal(a['lifetime giving'], '150.5')
+  assert.equal(a['raised 2026'], '50.5')
   assert.equal(a['number of gifts'], '2')
   assert.equal(a['first gift'], '2025-03-01')
   assert.equal(a.campaign, 'Giving Tuesday')
@@ -30,3 +31,30 @@ test('export has every donor column, totals and custom fields, and round-trips t
 test('imported text that looks like a formula is defused', () => {
   assert.equal(b.name, `'=HYPERLINK("http://evil")`)
 })
+
+// Reads back the stored (uncompressed) zip the xlsx writer produces.
+function unzip(bytes: Uint8Array): Map<string, string> {
+  const out = new Map<string, string>()
+  const v = new DataView(bytes.buffer, bytes.byteOffset)
+  let at = 0
+  while (v.getUint32(at, true) === 0x04034b50) {
+    const size = v.getUint32(at + 18, true), nameLen = v.getUint16(at + 26, true), extra = v.getUint16(at + 28, true)
+    const name = new TextDecoder().decode(bytes.subarray(at + 30, at + 30 + nameLen))
+    const data = bytes.subarray(at + 30 + nameLen + extra, at + 30 + nameLen + extra + size)
+    assert.equal(crc32(data), v.getUint32(at + 14, true), `CRC of ${name}`)
+    out.set(name, new TextDecoder().decode(data))
+    at += 30 + nameLen + extra + size
+  }
+  return out
+}
+
+test('the Excel export is a valid workbook with numeric money and escaped, non-formula text', () => {
+  const files = unzip(donorsXlsx(donors, gifts, (d) => (d.ownerId ? 'Ann' : 'Unassigned'), '2026-11-15'))
+  assert.deepEqual([...files.keys()].sort(), ['[Content_Types].xml', '_rels/.rels', 'xl/_rels/workbook.xml.rels', 'xl/styles.xml', 'xl/workbook.xml', 'xl/worksheets/sheet1.xml'])
+  const sheet = files.get('xl/worksheets/sheet1.xml')!
+  assert.match(sheet, /<c r="A1" s="1" t="inlineStr"><is><t xml:space="preserve">Name<\/t>/) // bold header
+  assert.match(sheet, /<c r="G2"><v>150.5<\/v><\/c>/) // lifetime giving as a number
+  assert.match(sheet, /Smith, &quot;Jo&quot;/)
+  assert.ok(!sheet.includes('<f>'), 'no formulas')
+})
+

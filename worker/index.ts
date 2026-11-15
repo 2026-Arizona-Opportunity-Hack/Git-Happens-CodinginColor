@@ -16,6 +16,7 @@ export interface Env {
   WORKOS_API_KEY: string
   AI_API_KEY: string
   CALENDAR_ICS_URL?: string
+  DEV_TOOLS?: string // "true" enables the development-only Dev tools page; remove before launch
 }
 
 interface Session { role: 'admin' | 'board'; memberId: string }
@@ -453,7 +454,7 @@ async function route(req: Request, env: Env): Promise<Response> {
   }
 
   // Everything the UI needs, already scoped to the caller.
-  if (m === 'GET' && parts[0] === 'bootstrap') return json(await loadScoped(env, s))
+  if (m === 'GET' && parts[0] === 'bootstrap') return json({ ...(await loadScoped(env, s)), devTools: env.DEV_TOOLS === 'true' })
 
   // POST /api/chat {messages: [{role: 'user' | 'assistant', content}]}: the
   // whole conversation so far, newest last. Returns {reply}. Read-only.
@@ -569,6 +570,25 @@ async function route(req: Request, env: Env): Promise<Response> {
     if (!res.ok) throw new Error(`WorkOS widgets/token returned ${res.status}`)
     const { token } = await res.json<{ token: string }>()
     return json({ token })
+  }
+
+  // DEVELOPMENT ONLY: POST /api/dev/clear-donors {confirm: "DELETE"} empties the
+  // donor data (donors and their gifts, contacts and drafts, plus import
+  // history) so imports can be tested from scratch. Admin only, and off unless
+  // DEV_TOOLS is "true" in wrangler.jsonc. Remove this route before launch.
+  if (m === 'POST' && parts[0] === 'dev' && parts[1] === 'clear-donors') {
+    requireAdmin(s)
+    if (env.DEV_TOOLS !== 'true') throw new HttpError(404, 'Not found')
+    if ((await body(req)).confirm !== 'DELETE') throw new HttpError(400, 'Type DELETE to confirm')
+    const [drafts, interactions, gifts, donors, imports] = await db.batch([
+      db.prepare('DELETE FROM drafts'),
+      db.prepare('DELETE FROM interactions'),
+      db.prepare('DELETE FROM gifts'),
+      db.prepare('DELETE FROM donors'),
+      db.prepare('DELETE FROM imports'),
+    ])
+    const n = (r: D1Result) => r.meta.changes ?? 0
+    return json({ donors: n(donors), gifts: n(gifts), interactions: n(interactions), drafts: n(drafts), imports: n(imports) })
   }
 
   // POST /api/assign {assignments: [{donorId, ownerId | null}]}: set several
