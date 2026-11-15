@@ -1,17 +1,17 @@
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Download, FileSpreadsheet } from 'lucide-react'
 import { PageHeader, SectionTitle } from '@/components/common'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { DataTable, type ColumnDef } from '@/components/ui/data-table'
+import { DataTable, type ColumnDef, type Filters } from '@/components/ui/data-table'
+import { applyFilters } from '@/components/ui/filters'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { Donor } from '@/data/types'
 import { fmtDate, lastGiftDate, money, UNASSIGNED } from '@/lib/logic'
 import { donorsCsv, donorsXlsx, download } from '@/lib/export'
-import { DonorFilterBar, FilterSelect } from '@/components/DonorFilters'
-import { useDonorFilters } from '@/components/useDonorFilters'
+import { donorTextFilter, giftDateFilter, sourceFilter } from '@/lib/donor-columns'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store'
 
@@ -30,12 +30,9 @@ export default function AllDonors() {
   // differs from what D1 holds.
   const [choices, setChoices] = useState<Record<string, string>>(() => ({ ...suggested }))
   const [saving, setSaving] = useState(false)
-  // Filters: name/org/email, donation dates, and board member ('' any,
-  // UNASSIGNED, or a member id). They apply to both tables.
-  const f = useDonorFilters(gifts)
-  const [owner, setOwner] = useState('')
-  const filtering = f.active || !!owner
-  const clearFilters = () => { f.clear(); setOwner('') }
+  // Column filters (header buttons, as in Excel), shared by both tables.
+  const [filters, setFilters] = useState<Filters>({})
+  const filtering = Object.keys(filters).length > 0
 
   const current = (d: Donor) => d.ownerId ?? UNASSIGNED
   const choice = (d: Donor) => choices[d.id] ?? current(d)
@@ -44,14 +41,12 @@ export default function AllDonors() {
   const load = new Map(boardMembers.map((m) => [m.id, donors.filter((d) => d.ownerId === m.id).length]))
   const name = (id: string) => boardMembers.find((m) => m.id === id)?.name ?? 'Unassigned'
 
-  const match = (d: Donor) => f.match(d) && (!owner || current(d) === owner)
   const rank = (d: Donor) => recent.indexOf(d.id)
   const inMain = (d: Donor) => !!d.ownerId || recent.includes(d.id)
   const assigned = donors
-    .filter((d) => inMain(d) && match(d))
+    .filter(inMain)
     .sort((a, b) => (rank(a) === -1 && rank(b) === -1 ? a.name.localeCompare(b.name) : rank(a) === -1 ? 1 : rank(b) === -1 ? -1 : rank(a) - rank(b)))
-  const unassigned = donors.filter((d) => !inMain(d) && match(d)).sort((a, b) => a.name.localeCompare(b.name))
-  const shown = [...assigned, ...unassigned]
+  const unassigned = donors.filter((d) => !inMain(d)).sort((a, b) => a.name.localeCompare(b.name))
 
   const save = async (list: Donor[]) => {
     setSaving(true)
@@ -76,6 +71,7 @@ export default function AllDonors() {
       id: 'donor',
       header: 'Donor',
       accessorFn: (r) => r.d.name,
+      meta: { filter: donorTextFilter() },
       cell: ({ row: { original: { d } } }) => (
         <>
           <Link to={`/donors/${d.id}`} className="font-medium text-cic-dark underline">{d.name}</Link>
@@ -89,6 +85,7 @@ export default function AllDonors() {
       header: 'Contact',
       accessorFn: (r) => r.d.email,
       sortUndefined: 'last',
+      meta: { filter: { kind: 'text', placeholder: 'Email or phone', text: (r) => `${r.d.email ?? ''} ${r.d.phone ?? ''}` } },
       cell: ({ row: { original: { d } } }) => (
         <>
           <div>{d.email ?? '—'}</div>
@@ -97,19 +94,20 @@ export default function AllDonors() {
       ),
     },
     { id: 'lifetime', header: 'Lifetime', accessorFn: (r) => r.lifetime, cell: ({ getValue }) => money(getValue<number>()) },
-    { id: 'last', header: 'Last gift', accessorFn: (r) => r.last, sortUndefined: 'last', cell: ({ getValue }) => (getValue<string>() ? fmtDate(getValue<string>()) : '—') },
+    { id: 'last', header: 'Last gift', accessorFn: (r) => r.last, sortUndefined: 'last', meta: { filter: giftDateFilter(gifts) }, cell: ({ getValue }) => (getValue<string>() ? fmtDate(getValue<string>()) : '—') },
     {
       id: 'sources',
       header: 'Sources',
       enableSorting: false,
-      meta: { className: 'space-x-1' },
+      meta: { className: 'space-x-1', filter: sourceFilter() },
       cell: ({ row: { original: { d } } }) => d.sources.map((s) => <Badge key={s} variant="outline">{s}</Badge>),
     },
     {
       id: 'owner',
       header: 'Board member',
       accessorFn: (r) => name(current(r.d)),
-      meta: { className: 'min-w-52' },
+      // Filters on the saved board member, not an unsaved choice.
+      meta: { className: 'min-w-52', filter: { kind: 'options', values: (r) => [current(r.d)], order: [UNASSIGNED, ...boardMembers.map((m) => m.id)], label: name } },
       // A changed choice turns amber and says so in words, not only in color.
       cell: ({ row: { original: { d } } }) => {
         const dirty = isChanged(d)
@@ -138,12 +136,20 @@ export default function AllDonors() {
     },
   ]
 
-  const table = (rows: Donor[], caption: string, empty: string, toolbar?: ReactNode) => (
+  const allRows = donors.map(totals)
+  const filtered = (list: Donor[]) => applyFilters(list.map(totals), columns, filters)
+  const shownAssigned = filtered(assigned)
+  const shownUnassigned = filtered(unassigned)
+  const shown = [...shownAssigned, ...shownUnassigned].map((r) => r.d)
+  const table = (rows: ReturnType<typeof totals>[], caption: string, empty: string, first: boolean) => (
     <DataTable
       caption={caption}
-      toolbar={toolbar}
+      filters={filters}
+      onFiltersChange={setFilters}
+      filterRows={allRows}
+      showActiveFilters={first}
       columns={columns}
-      data={rows.map(totals)}
+      data={rows}
       getRowId={(r) => r.d.id}
       rowClassName={(r) => (isChanged(r.original.d) ? 'bg-amber-50! hover:bg-amber-100!' : recent.includes(r.original.d.id) ? 'bg-cic-tint!' : undefined)}
       empty={empty}
@@ -168,27 +174,13 @@ export default function AllDonors() {
       />
       <section aria-labelledby="assigned-heading">
         <h2 id="assigned-heading" className="sr-only">Assigned donors</h2>
-        {table(assigned, 'Assigned donors', filtering ? 'No assigned donors match these filters.' : 'No donors are assigned yet.', (
-          <DonorFilterBar
-            f={f}
-            active={filtering}
-            onClear={clearFilters}
-            summary={`Showing ${shown.length} of ${donors.length} donors: ${assigned.length} assigned, ${unassigned.length} unassigned`}
-            extra={
-              <FilterSelect
-                label="Board member"
-                value={owner}
-                onChange={setOwner}
-                options={[{ value: '', label: 'Any board member' }, { value: UNASSIGNED, label: 'Unassigned' }, ...boardMembers.map((m) => ({ value: m.id, label: m.name }))]}
-              />
-            }
-          />
-        ))}
+        {table(shownAssigned, 'Assigned donors', filtering ? 'No assigned donors match these filters.' : 'No donors are assigned yet.', true)}
       </section>
 
       <section className="mt-10">
-        <SectionTitle>Unassigned donors ({unassigned.length})</SectionTitle>
-        {table(unassigned, 'Unassigned donors', filtering ? 'No unassigned donors match these filters.' : 'There are no unassigned donors.')}
+        <SectionTitle>Unassigned donors ({filtering ? `${shownUnassigned.length} of ${unassigned.length}` : unassigned.length})</SectionTitle>
+        {filtering && <p className="-mt-2 mb-3 text-sm text-muted-foreground">The filters above apply here too.</p>}
+        {table(shownUnassigned, 'Unassigned donors', filtering && unassigned.length ? 'No unassigned donors match these filters.' : 'There are no unassigned donors.', false)}
       </section>
 
       <div className="sticky bottom-0 mt-6 flex flex-wrap items-center justify-end gap-3 border-t bg-background py-3 pr-20">
