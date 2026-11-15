@@ -2,7 +2,7 @@ import type { Donor, Gift } from '../data/types'
 import { inYear, retentionStatus, yearOf } from './logic'
 import { xlsx, type Cell } from './xlsx'
 
-// Exports for My Donors and All Donors: every donor field, giving totals, and
+// Exports for My Donors and All Donors: every donor field, giving totals, notes, and
 // one column per custom field created while importing. One table feeds both
 // the CSV and the Excel file, so they always have the same columns.
 
@@ -14,7 +14,7 @@ export function donorTable(donors: Donor[], gifts: Gift[], ownerName: (d: Donor)
   const header = [
     'Name', 'Email', 'Phone', 'Organization', 'Board member', 'Sources',
     'Lifetime giving', 'Number of gifts', 'First gift', 'Last gift', `Raised ${year}`, `Status ${year}`,
-    'Next step', 'Next step due', 'Last contact', ...custom,
+    'Next step', 'Next step due', 'Last contact', 'Notes', ...custom,
   ]
   const rows: Cell[][] = donors.map((d) => {
     const gs = gifts.filter((g) => g.donorId === d.id)
@@ -23,7 +23,7 @@ export function donorTable(donors: Donor[], gifts: Gift[], ownerName: (d: Donor)
       d.name, d.email, d.phone, d.org, ownerName(d), d.sources.join('; '),
       round2(gs.reduce((s, g) => s + g.amount, 0)), gs.length, dates[0], dates.at(-1),
       round2(gs.filter((g) => inYear(g, year)).reduce((s, g) => s + g.amount, 0)), retentionStatus(gs, year),
-      d.nextStep?.text, d.nextStep?.due, d.lastTouchAt, ...custom.map((k) => d.extra?.[k]),
+      d.nextStep?.text, d.nextStep?.due, d.lastTouchAt, d.notes, ...custom.map((k) => d.extra?.[k]),
     ]
   })
   return { header, rows }
