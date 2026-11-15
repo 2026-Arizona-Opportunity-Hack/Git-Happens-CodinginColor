@@ -115,3 +115,9 @@
 @keyframes shimmer {
   to { transform: translateX(100%); }
 }
+/* WorkOS widgets: Radix's green-9 (#30A46C) under white text is 2.9:1 and
+   fails AA, so solid buttons use the CIC dark green instead. */
+.cic-widgets [data-accent-color] {
+  --accent-9: var(--cic-dark);
+  --accent-10: #006632;
+}
