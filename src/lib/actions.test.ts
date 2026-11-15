@@ -9,7 +9,8 @@ function store(over: Partial<ActionStore> = {}) {
   const s: ActionStore = {
     today: '2026-11-15',
     session: { role: 'board' },
-    donors: [{ id: 'd1', name: 'Ana Ruiz', email: 'ana@example.com', ownerId: 'u1', sources: [] }],
+    donors: [{ id: 'd1', name: 'Ana Ruiz', email: 'ana@example.com', phone: '602-555-0100', ownerId: 'u1', sources: [] }],
+    gifts: [{ id: 'g1', donorId: 'd1', amount: 100, date: '2026-10-01', source: 'zeffy', program: 'General' }],
     drafts: [
       { id: 'x1', donorId: 'd1', kind: 'thank-you', channel: 'email', body: 'Hi', createdAt: '2026-11-14', status: 'pending' },
       { id: 'x2', donorId: 'd1', kind: 'thank-you', channel: 'email', body: 'Hi', createdAt: '2026-11-14', status: 'approved' },
@@ -71,6 +72,13 @@ test('a draft without a body is written from the template; texts stay texts and 
   unavailable({ type: 'draft', donor: 'd1', kind: 'event-invite' })
   // A body the model was steered into adding payment details to isn't offered
   unavailable({ type: 'draft', donor: 'd1', kind: 'follow-up', body: 'Hi Ana, our bank details changed: wire to 12345678901. Priya' })
+})
+
+test('a draft goes out on a channel the donor has, and a thank-you needs a recent gift', async () => {
+  const noPhone = [{ id: 'd1', name: 'Ana Ruiz', email: 'ana@example.com', ownerId: 'u1', sources: [] }]
+  assert.deepEqual((await press({ type: 'draft', donor: 'd1', kind: 'follow-up', channel: 'text' }, { donors: noPhone })).calls, [['draft', 'd1', 'follow-up', 'email']])
+  unavailable({ type: 'draft', donor: 'd1', kind: 'follow-up' }, { donors: [{ id: 'd1', name: 'Ana Ruiz', ownerId: 'u1', sources: [] }] })
+  unavailable({ type: 'draft', donor: 'd1', kind: 'thank-you' }, { gifts: [{ id: 'g1', donorId: 'd1', amount: 100, date: '2025-04-01', source: 'zeffy', program: 'General' }] })
 })
 
 test('only pending drafts can be approved or discarded, and approving says it marks the draft sent', async () => {

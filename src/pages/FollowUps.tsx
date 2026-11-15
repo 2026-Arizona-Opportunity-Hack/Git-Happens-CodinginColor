@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import type { DraftKind } from '@/data/types'
-import { DRAFT_SUBJECT, draftBody } from '@/lib/drafts'
+import { DRAFT_SUBJECT, draftBody, draftChannel, THANK_YOU_DAYS, thankableGift } from '@/lib/drafts'
 import { useStore } from '@/store'
 import { calendarLink, daysBetween, fmtDate, quarterlyTouchDue, retentionStatus, yearOf } from '@/lib/logic'
 import { cn, fmtPhone } from '@/lib/utils'
@@ -178,7 +178,13 @@ function TemplateEmails() {
   if (!donor) return null
 
   const owner = boardMembers.find((m) => m.id === donor.ownerId) ?? boardMembers.find((m) => m.id === session.memberId) ?? { id: '', name: 'Coding in Color', email: '' }
-  const channel = donor.email || !donor.phone ? 'email' : 'text'
+  const channel = draftChannel(donor)
+  // A thank-you is only for a recent gift (see thankableGift).
+  const blocked = !channel
+    ? `${donor.name} has no email or phone number on file.`
+    : kind === 'thank-you' && !thankableGift(gifts.filter((g) => g.donorId === donor.id), today)
+      ? `${donor.name} has no gift in the last ${THANK_YOU_DAYS} days to thank them for.`
+      : undefined
   const body = draftBody(kind, donor, gifts.filter((g) => g.donorId === donor.id), owner, events.find((e) => e.date >= today))
   const use = async () => {
     setSaving(true)
@@ -214,10 +220,11 @@ function TemplateEmails() {
           </div>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              {channel === 'email' ? <>Subject: <span className="text-foreground">{DRAFT_SUBJECT[kind]}</span> · to {donor.email}</> : <>Text message to {donor.phone && fmtPhone(donor.phone)}</>}
+              {channel === 'email' ? <>Subject: <span className="text-foreground">{DRAFT_SUBJECT[kind]}</span> · to {donor.email}</> : channel === 'text' ? <>Text message to {donor.phone && fmtPhone(donor.phone)}</> : 'No contact info'}
             </p>
             <pre className="whitespace-pre-wrap rounded-md border bg-muted/40 p-3 font-sans text-sm" aria-label="Template preview">{body}</pre>
-            <Button disabled={saving} onClick={use}>{saving ? 'Adding…' : 'Use this template'}</Button>
+            {blocked && <p className="text-sm text-muted-foreground">{blocked}</p>}
+            <Button disabled={saving || !!blocked} onClick={use}>{saving ? 'Adding…' : 'Use this template'}</Button>
           </div>
         </CardContent>
       </Card>

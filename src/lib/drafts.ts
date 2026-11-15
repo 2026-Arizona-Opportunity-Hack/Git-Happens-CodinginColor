@@ -1,5 +1,5 @@
 import type { BoardMember, CicEvent, Donor, DraftKind, Gift } from '../data/types'
-import { byDateDesc, fmtDate, money } from './logic'
+import { byDateDesc, daysBetween, fmtDate, money } from './logic'
 import { programTotals } from './packet'
 
 // Template drafts. This is the seam where an LLM-drafted version plugs in
@@ -39,4 +39,22 @@ export function draftBody(kind: DraftKind, donor: Donor, gifts: Gift[], owner: B
         ? `Hi ${hi},\n\nI'd love for you to join us at ${on(event)}. It's a chance to meet the students and see what your support makes possible.\n\nCan I count you in?\n\n${owner.name}`
         : `Hi ${hi},\n\nI'd love for you to join us at our next Coding in Color event. Can I send you the details?\n\n${owner.name}`
   }
+}
+
+// The channel a draft goes out on: the one asked for if the donor can get it,
+// else whichever they have (email first). Undefined when they have neither
+// email nor phone, so no draft is made that can't be sent.
+export function draftChannel(donor: Pick<Donor, 'email' | 'phone'>, wanted?: 'email' | 'text'): 'email' | 'text' | undefined {
+  if (wanted === 'text' && donor.phone) return 'text'
+  return donor.email ? 'email' : donor.phone ? 'text' : undefined
+}
+
+// A thank-you only makes sense for a recent gift: thanking someone for one
+// from last year, when they've since stopped giving, reads as a form letter.
+export const THANK_YOU_DAYS = 60
+
+// The gift a thank-you would be for, or undefined when there is none in the
+// last THANK_YOU_DAYS.
+export function thankableGift(gifts: Pick<Gift, 'date' | 'amount'>[], today: string) {
+  return gifts.filter((g) => g.date && g.date <= today && daysBetween(g.date, today) <= THANK_YOU_DAYS).sort(byDateDesc)[0]
 }
