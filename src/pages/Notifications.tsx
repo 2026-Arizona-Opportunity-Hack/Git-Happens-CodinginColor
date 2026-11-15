@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CalendarDays, FileSpreadsheet, MailCheck, UserRound, type LucideIcon } from 'lucide-react'
-import { PageHeader, SectionTitle } from '@/components/common'
+import { PageHeader, Paged, SectionTitle } from '@/components/common'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -67,9 +67,10 @@ export default function Notifications() {
         return (
           <section key={u.key} className="mb-8">
             <SectionTitle>{u.label} ({items.length})</SectionTitle>
-            <Card className="py-0">
+            <Card className="gap-0 py-0">
+              <Paged items={items} label={u.label} className="px-4 py-3">{(page) => (
               <ul className="divide-y">
-                {items.map((r) => {
+                {page.map((r) => {
                   const cat = CATEGORIES.find((c) => c.key === r.category)!
                   return (
                     <li key={r.id} className="flex items-start gap-3 px-4 py-3">
@@ -85,6 +86,7 @@ export default function Notifications() {
                   )
                 })}
               </ul>
+              )}</Paged>
             </Card>
           </section>
         )
