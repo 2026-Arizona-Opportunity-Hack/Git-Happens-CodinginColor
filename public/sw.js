@@ -1,7 +1,7 @@
 // Makes the app installable and lets it open without a connection. Only the
 // app shell is cached: /api responses hold donor data and auth, so they always
 // go to the network and never touch the cache.
-const CACHE = 'cic-shell-v1'
+const CACHE = 'cic-shell-v2'
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icon-192.png'])))

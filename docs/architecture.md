@@ -59,7 +59,8 @@ Each page's doc in [features/](features/) says where its code is. The pieces eve
 Colors follow the CIC brand guidelines and live as tokens in `src/index.css`:
 
 - Dark green `#007A3D` is the dominant color: headers, table headers and primary buttons.
-- Green `#00A850` is an accent only: focus rings and the logo.
+- Green `#00A850` is an accent only: focus rings.
+- The logo is CIC's own mark from codingincolor.net, in `public/cic-logo.png` (sidebar and loading screen). The favicon and install icons (`public/icon-192.png`, `icon-512.png`, `apple-touch-icon.png`) are the same mark.
 - Tint `#E6F4ED` is for table rows and callouts.
 - Body type is Arial.
 
