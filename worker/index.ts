@@ -2,6 +2,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose'
 import type { BoardMember, Channel, Donor, Draft, DraftKind, Gift, ImportRecord, Interaction, NextStep, Program, RawDonorRow, Source } from '../src/data/types'
 import { dedupe, matchDonor, splitGifts } from '../src/lib/dedupe'
 import { draftBody } from '../src/lib/drafts'
+import { parseIcs } from '../src/lib/ical'
 import { nextOwner } from '../src/lib/logic'
 import { docsPage, openapi } from './openapi'
 
@@ -14,6 +15,7 @@ export interface Env {
   WORKOS_ORG_ID: string
   WORKOS_API_KEY: string
   AI_API_KEY: string
+  CALENDAR_ICS_URL?: string
 }
 
 interface Session { role: 'admin' | 'board'; memberId: string }
@@ -166,12 +168,53 @@ const logInteraction = (env: Env, s: Session, donorId: string, channel: Channel,
   env.DB.prepare('UPDATE donors SET last_touch_at = ? WHERE id = ?').bind(today(), donorId),
 ]
 
+// --- Events calendar --------------------------------------------------------
+
+// CIC's events come from its calendar's iCal address (CALENDAR_ICS_URL), read
+// at most every 10 minutes per isolate. Once it's set, the calendar is the
+// whole list: the seed's events go, and a next step linked to one moves to the
+// calendar event with the same name. Without the URL, the events table is all
+// there is.
+let calendarSyncedAt = 0
+
+async function syncCalendar(env: Env) {
+  if (!env.CALENDAR_ICS_URL || Date.now() - calendarSyncedAt < 600_000) return
+  calendarSyncedAt = Date.now()
+  try {
+    const res = await fetch(env.CALENDAR_ICS_URL)
+    if (!res.ok) throw new Error(`returned ${res.status}`)
+    const from = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
+    const until = new Date(Date.now() + 400 * 86_400_000).toISOString().slice(0, 10)
+    const feed = parseIcs(await res.text()).filter((e) => e.date >= from && e.date <= until)
+    // An empty feed is more likely a broken export than a cleared calendar.
+    if (!feed.length) throw new Error("has no events in the next 400 days")
+    const rows = await Promise.all(feed.map(async (e) => ({ ...e, id: `cal-${(await sha256(e.uid)).slice(0, 12)}` })))
+    const db = env.DB
+    const feedJson = JSON.stringify(rows)
+    const keep = JSON.stringify(rows.map((r) => r.id))
+    await db.batch([
+      ...rows.map((r) => db.prepare('INSERT INTO events (id, name, date) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, date = excluded.date')
+        .bind(r.id, r.name, r.date)),
+      // An event that isn't on the calendar goes. Next steps keep their text and
+      // date, and their link if the calendar has an event with the same name.
+      db.prepare(`UPDATE donors SET next_step_event_id = (
+          SELECT json_extract(j.value, '$.id') FROM json_each(?1) j JOIN events e ON e.id = donors.next_step_event_id
+          WHERE json_extract(j.value, '$.name') = e.name LIMIT 1)
+        WHERE next_step_event_id IS NOT NULL AND next_step_event_id NOT IN (SELECT value FROM json_each(?2))`).bind(feedJson, keep),
+      db.prepare('DELETE FROM events WHERE id NOT IN (SELECT value FROM json_each(?))').bind(keep),
+    ])
+    console.log(`calendar sync: ${rows.length} events`)
+  } catch (e) {
+    console.error('calendar sync failed, keeping the events we have:', e)
+  }
+}
+
 // Everything the caller may see. /api/bootstrap returns it to the UI and the
 // chat assistant reads the same thing, so neither can see more than the other.
 async function loadScoped(env: Env, s: Session) {
   const db = env.DB
   const f = ownerFilter(s, 'd.owner_id')
-  const members = await listMembers(env)
+  const [members] = await Promise.all([listMembers(env), syncCalendar(env)])
   // Import history is admin-only, like the import itself.
   const importsSql = s.role === 'admin' ? 'SELECT * FROM imports ORDER BY imported_at DESC, id LIMIT 50' : 'SELECT * FROM imports WHERE 0'
   const [events, donors, gifts, interactions, drafts, imports] = await db.batch<Row>([
