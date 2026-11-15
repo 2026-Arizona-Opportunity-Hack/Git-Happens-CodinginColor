@@ -12,7 +12,7 @@ export function PageHeader({ title, description, actions }: { title: string; des
         <h1 className="text-2xl">{title}</h1>
         {description && <p className="mt-1 text-muted-foreground">{description}</p>}
       </div>
-      {actions && <div className="flex gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </div>
   )
 }

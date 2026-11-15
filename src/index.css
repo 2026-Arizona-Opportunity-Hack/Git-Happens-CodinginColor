@@ -106,6 +106,10 @@
     }
   body { line-height: 1.5; }
   h1, h2, h3 { color: var(--cic-dark); font-weight: 700; }
+  /* A grid cell won't shrink below its content by default, so a wide table
+     inside one stretched the whole page sideways on phones instead of
+     scrolling in its own box. */
+  .grid > * { min-width: 0; }
 }
 /* Loading shimmer: a light band sweeps across each skeleton block. */
 @keyframes shimmer {
