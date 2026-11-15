@@ -25,7 +25,7 @@
             fileset = pkgs.lib.fileset.unions [
               ./package.json ./bun.lock ./index.html ./components.json ./wrangler.jsonc ./vite.config.ts
               ./tsconfig.json ./tsconfig.app.json ./tsconfig.node.json ./tsconfig.worker.json
-              ./src ./worker
+              ./src ./worker ./public
             ];
           };
 

@@ -63,6 +63,7 @@ Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevi
 | **Board members** (admin) | Invite board members, change their role, remove them (WorkOS Users Management widget) |
 | **My account** | Each user edits their profile, changes password and sets up MFA, and signs out other devices (WorkOS widgets) |
 | **Assistant** (every page) | Bottom-right chat that answers questions about the records you can see, with donor cards, tables and links. It can't change anything itself: it offers buttons (log contact, set a next step, draft, approve or discard a draft, reassign for admins) whose labels the app writes, and nothing happens until you press one. Raw HTML, images and outside links in replies are never rendered |
+| **Installable app** | A PWA: "Install app" in Chrome or Edge, or Share → Add to Home Screen on iPhone, gives board members their own icon and window. The service worker (`public/sw.js`) caches only the app shell so it opens offline; `/api` data is never cached |
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
