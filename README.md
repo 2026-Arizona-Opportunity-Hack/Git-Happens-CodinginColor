@@ -54,7 +54,7 @@ Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevi
 | Page | Brief requirement (P0) |
 |---|---|
 | **Dashboard** | Org health; board-member load; upcoming events; recent activity |
-| **Follow-ups** | Next steps with due dates; quarterly-touch queue; lapsed-donor nudges; **drafts a human must approve** |
+| **Follow-ups** | Next steps with due dates; quarterly-touch queue; lapsed-donor nudges; **drafts a human must approve**. A draft opens in Gmail, Outlook or the default mail app (or Messages, for texts) with the donor, subject and body filled in, so it goes out from the board member's own address; they confirm "Did you send it?" and the touch is logged |
 | **Donors** | One deduped table across all sources; owner, lifetime, status, next step |
 | **Donor detail** | Timeline of gifts and communications; set a next step (one-click "invite to <event>"); log a text/email/call; draft thank-you/update; **one-click funder packet** |
 | **Retention** | Year over year: new, recovered, increased, same, decreased, lapsed, plus retention rate |
@@ -94,7 +94,7 @@ The password is public on purpose because the data is fake. Replace these accoun
 
 1. **Real exports**: get scrubbed Zeffy/Benevity samples from CIC and fix `COLUMN_MAP` in `dedupe.ts`.
 2. **Read API**: a Worker route behind a hashed API key, returning aggregates only (no PII).
-3. **Sending**: email via Resend/Listmonk and SMS via Twilio. Do this only after approval, and log the send to `interactions`.
+3. **Sending**: drafts open pre-filled in the board member's own mail or Messages app today. Saving drafts straight into their mailbox (Gmail API / Microsoft Graph) needs per-user OAuth and, for Gmail, Google's app verification; sending from the app (Resend, Twilio) would come from CIC rather than the board member.
 4. **Pick a P1**: debrief-to-action (a voice note becomes a contact record, a next step and a draft) or events-aware next steps (Google Calendar).
 5. **Brand**: swap the placeholder mark in `App.tsx` for the real CIC logo, and run Lighthouse (target a11y ≥ 95).
 
