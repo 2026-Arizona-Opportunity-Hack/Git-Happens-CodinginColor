@@ -60,7 +60,8 @@ Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevi
 | **Donor detail** | Timeline of gifts and communications; set a next step (one-click "invite to <event>"); log a text/email/call; draft thank-you/update; **one-click funder packet** |
 | **Retention** | Year over year: new, recovered, increased, same, decreased, lapsed, plus retention rate |
 | **Import** | Spreadsheet + Zeffy + Benevity CSVs → dedupe preview → commit; new donors assigned **round-robin to the member with the fewest**. Each source shows when it was last imported (stale after 30 days), plus an import history |
-| **API docs** | Interactive reference for the Worker API at [`/api/docs`](https://githappens.jurenka.software/api/docs), rendered by [Scalar](https://scalar.com) from the OpenAPI spec at `/api/openapi.json` (`worker/openapi.ts`). Paste a WorkOS access token to try requests |
+| **Read API** | `GET /api/v1/summary?period=2026-Q4[&program=][&board_member=]` gives CIC's org dashboard totals and the 25 latest gifts and contacts, already grouped by quarter, program and board member, with **no donor names, emails or IDs**. It takes an API key (`Authorization: Bearer cic_live_…`) that an admin creates, copies once and revokes on the app's **Read API** page; D1 keeps only a SHA-256 of each key |
+| **API docs** | Interactive reference for the Worker API at [`/api/docs`](https://githappens.jurenka.software/api/docs), rendered by [Scalar](https://scalar.com) from the OpenAPI spec at `/api/openapi.json` (`worker/openapi.ts`). Paste a WorkOS access token, or a read API key for `/api/v1`, to try requests |
 | **Board members** (admin) | Invite board members, change their role, remove them (WorkOS Users Management widget) |
 | **My account** | Each user edits their profile, changes password and sets up MFA, and signs out other devices (WorkOS widgets) |
 | **Assistant** (every page) | A column on the right of every page on wide screens, and its own Assistant tab on phones and tablets. It answers questions about the records you can see, with donor cards, tables and links. It can't change anything itself: it offers buttons (log contact, set a next step, draft, approve or discard a draft, reassign for admins) whose labels the app writes, and nothing happens until you press one. Raw HTML, images and outside links in replies are never rendered |
@@ -76,7 +77,7 @@ Sign in with any of these. They're fake accounts, and every one uses the passwor
 
 | Email | Role |
 |---|---|
-| `alex@example.org`, `diana@example.org`, `mauricio@example.org`, `dominick@example.org`, `melissa@example.org` | CIC admin: every donor, plus Import and the API docs link |
+| `alex@example.org`, `diana@example.org`, `mauricio@example.org`, `dominick@example.org`, `melissa@example.org` | CIC admin: every donor, plus Import, Board members and Read API keys |
 | `priya@example.org`, `jordan@example.org`, `sam@example.org`, `greg@example.org`, `genevieve@example.org`, `frank@example.org`, `landon@example.org`, `nicole@example.org`, `adrian@example.org`, `amber@example.org` | Board member: only their own donors |
 
 The password is public on purpose because the data is fake. Replace these accounts before CIC loads real donors.
@@ -96,10 +97,9 @@ The password is public on purpose because the data is fake. Replace these accoun
 ### Next steps
 
 1. **Real exports**: get scrubbed Zeffy/Benevity samples from CIC and fix `COLUMN_MAP` in `dedupe.ts`.
-2. **Read API**: a Worker route behind a hashed API key, returning aggregates only (no PII).
-3. **Sending**: drafts open pre-filled in the board member's own mail or Messages app today. Saving drafts straight into their mailbox (Gmail API / Microsoft Graph) needs per-user OAuth and, for Gmail, Google's app verification; sending from the app (Resend, Twilio) would come from CIC rather than the board member.
-4. **Pick a P1**: debrief-to-action (a voice note becomes a contact record, a next step and a draft) or events-aware next steps (Google Calendar).
-5. **Brand**: swap the placeholder mark in `App.tsx` for the real CIC logo, and run Lighthouse (target a11y ≥ 95).
+2. **Sending**: drafts open pre-filled in the board member's own mail or Messages app today. Saving drafts straight into their mailbox (Gmail API / Microsoft Graph) needs per-user OAuth and, for Gmail, Google's app verification; sending from the app (Resend, Twilio) would come from CIC rather than the board member.
+3. **Pick a P1**: debrief-to-action (a voice note becomes a contact record, a next step and a draft) or events-aware next steps (Google Calendar).
+4. **Brand**: swap the placeholder mark in `App.tsx` for the real CIC logo, and run Lighthouse (target a11y ≥ 95).
 
 ## Tech stack
 

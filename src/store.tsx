@@ -29,6 +29,9 @@ class ApiError extends Error {
   }
 }
 
+// A read API key as the server lists it; `key` is only there right after creation.
+export interface ApiKey { id: string; name: string; prefix: string; createdAt: string; lastUsedAt?: string; revokedAt?: string; key?: string }
+
 export interface ChatTurn { role: 'user' | 'assistant'; content: string }
 
 // Returns a current WorkOS access token (AuthKit refreshes it as needed).
@@ -112,12 +115,18 @@ function useStoreState(data: Bootstrap, token: GetToken, reload: () => Promise<v
   // Fetched by the Members widget itself, whenever its token runs out.
   const widgetToken = useCallback(() => api<{ token: string }>(token, 'widget-token', 'POST').then((r) => r.token), [token])
 
+  // API keys aren't in the bootstrap; the API page loads and refreshes its own list.
+  const listApiKeys = useCallback(() => api<ApiKey[]>(token, 'keys'), [token])
+  const createApiKey = (name: string) => run(() => api<ApiKey>(token, 'keys', 'POST', { name }))
+  const revokeApiKey = (id: string) => run(() => api(token, `keys/${id}`, 'DELETE'))
+
   // The assistant only reads, so there's nothing to reload afterwards.
   const chat = (messages: ChatTurn[]) => api<{ reply: string }>(token, 'chat', 'POST', { messages }).then((r) => r.reply)
 
   return {
     ...data, drafts, member, chat,
     createDraft, updateDraft, approveDraft, discardDraft, logInteraction, setNextStep, reassign, importRows, widgetToken,
+    listApiKeys, createApiKey, revokeApiKey,
   }
 }
 

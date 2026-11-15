@@ -195,6 +195,80 @@ async function loadScoped(env: Env, s: Session) {
   }
 }
 
+// --- Read API (/api/v1) ----------------------------------------------------
+
+// CIC's org dashboard reads aggregates with an API key instead of a WorkOS
+// session. Keys are `cic_live_` plus 32 random hex chars; D1 holds only their
+// SHA-256, so a database leak doesn't leak working keys.
+const hex = (b: ArrayBuffer | Uint8Array) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('')
+const sha256 = async (key: string) => hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key)))
+const toApiKey = (r: Row) => ({
+  id: r.id as string, name: r.name as string, prefix: r.prefix as string, createdAt: r.created_at as string,
+  createdBy: r.created_by as string, lastUsedAt: (r.last_used_at as string) ?? undefined, revokedAt: (r.revoked_at as string) ?? undefined,
+})
+
+async function checkApiKey(req: Request, env: Env) {
+  const key = req.headers.get('Authorization')?.match(/^Bearer (cic_live_[0-9a-f]{32})$/)?.[1]
+  if (!key) throw new HttpError(401, 'Send an API key as Authorization: Bearer cic_live_…')
+  const hash = await sha256(key)
+  const r = await env.DB.prepare('SELECT id FROM api_keys WHERE hash = ? AND revoked_at IS NULL').bind(hash).first()
+  if (!r) throw new HttpError(401, 'Unknown or revoked API key')
+  await env.DB.prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?').bind(new Date().toISOString(), r.id).run()
+}
+
+// period is a year (2026) or a quarter (2026-Q4); returns [start, end).
+function periodRange(v: string | null): { period: string; start: string; end: string } {
+  const p = v ?? today().slice(0, 4)
+  const m = p.match(/^(\d{4})(?:-Q([1-4]))?$/)
+  if (!m) throw new HttpError(400, 'period must be a year (2026) or a quarter (2026-Q4)')
+  const y = Number(m[1])
+  if (!m[2]) return { period: p, start: `${y}-01-01`, end: `${y + 1}-01-01` }
+  const q = Number(m[2])
+  const month = (n: number) => String(n).padStart(2, '0')
+  return { period: p, start: `${y}-${month(q * 3 - 2)}-01`, end: q === 4 ? `${y + 1}-01-01` : `${y}-${month(q * 3 + 1)}-01` }
+}
+
+// GET /api/v1/summary: totals and recent activity for a period, already
+// grouped by quarter, program and board member. No donor names, emails or
+// IDs leave through here, only counts, sums and who on the board did what.
+async function summary(url: URL, env: Env) {
+  const { period, start, end } = periodRange(url.searchParams.get('period'))
+  const program = url.searchParams.get('program')
+  const memberId = url.searchParams.get('board_member')
+  const members = await listMembers(env)
+  if (program !== null) oneOf(program, PROGRAMS, 'program')
+  if (memberId !== null && !members.some((mb) => mb.id === memberId)) throw new HttpError(400, 'Unknown board_member')
+  const name = (mid: string) => members.find((mb) => mb.id === mid)?.name ?? 'Former board member'
+
+  const db = env.DB
+  const [gifts, contacts] = await db.batch<Row>([
+    db.prepare(`SELECT g.amount, g.date, g.program, g.donor_id, d.owner_id FROM gifts g JOIN donors d ON d.id = g.donor_id
+      WHERE g.date >= ? AND g.date < ? AND (?3 IS NULL OR g.program = ?3) AND (?4 IS NULL OR d.owner_id = ?4) ORDER BY g.date DESC, g.id`)
+      .bind(start, end, program, memberId),
+    // Contacts aren't tied to a program, so the program filter doesn't apply.
+    db.prepare('SELECT by_id, channel, date FROM interactions WHERE date >= ? AND date < ? AND (?3 IS NULL OR by_id = ?3) ORDER BY date DESC, id LIMIT 25')
+      .bind(start, end, memberId),
+  ])
+  const sum = (key: (g: Row) => string) =>
+    gifts.results.reduce<Record<string, number>>((acc, g) => ({ ...acc, [key(g)]: (acc[key(g)] ?? 0) + (g.amount as number) }), {})
+  const byMember = sum((g) => g.owner_id as string)
+  return {
+    period, from: start, to: end, filters: { program, board_member: memberId },
+    totals: {
+      raised: gifts.results.reduce((t, g) => t + (g.amount as number), 0),
+      gifts: gifts.results.length,
+      donors: new Set(gifts.results.map((g) => g.donor_id)).size,
+      by_quarter: Object.fromEntries(Object.entries(sum((g) => `Q${Math.floor((Number((g.date as string).slice(5, 7)) - 1) / 3) + 1}`)).sort()),
+      by_program: sum((g) => g.program as string),
+      by_board_member: Object.keys(byMember).map((mid) => ({ id: mid, name: name(mid), raised: byMember[mid] })),
+    },
+    recent_activity: [
+      ...gifts.results.slice(0, 25).map((g) => ({ date: g.date, type: 'gift', amount: g.amount, program: g.program, board_member: name(g.owner_id as string) })),
+      ...contacts.results.map((i) => ({ date: i.date, type: 'contact', channel: i.channel, board_member: name(i.by_id as string) })),
+    ].sort((a, b) => (b.date as string).localeCompare(a.date as string)).slice(0, 25),
+  }
+}
+
 // --- Chat assistant (OHack AI gateway, OpenAI-compatible) -------------------
 
 const AI_URL = 'https://ai.ohack.dev/v1/chat/completions'
@@ -267,8 +341,38 @@ async function route(req: Request, env: Env): Promise<Response> {
   if (m === 'GET' && parts[0] === 'openapi.json') return json(openapi({ channels: CHANNELS, kinds: KINDS, sources: SOURCES, programs: PROGRAMS }))
   if (m === 'GET' && parts[0] === 'docs') return new Response(docsPage, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
 
+  // Key-authenticated read API, checked before the WorkOS session because an
+  // API key isn't a JWT.
+  if (parts[0] === 'v1') {
+    await checkApiKey(req, env)
+    if (m === 'GET' && parts[1] === 'summary' && !parts[2]) return json(await summary(url, env))
+    throw new HttpError(404, 'Not found')
+  }
+
   const s = await getSession(req, env)
   const db = env.DB
+
+  // API keys (admin only). The full key is only ever in the POST response.
+  if (parts[0] === 'keys') {
+    requireAdmin(s)
+    if (m === 'GET' && !parts[1]) {
+      const r = await db.prepare('SELECT * FROM api_keys ORDER BY revoked_at IS NOT NULL, created_at DESC').all()
+      return json(r.results.map(toApiKey))
+    }
+    if (m === 'POST' && !parts[1]) {
+      const name = str((await body(req)).name, 'name', 100)
+      const key = `cic_live_${hex(crypto.getRandomValues(new Uint8Array(16)))}`
+      const row = { id: id('k'), name, prefix: key.slice(0, 13), created_at: new Date().toISOString(), created_by: s.memberId }
+      await db.prepare('INSERT INTO api_keys (id, name, prefix, hash, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(row.id, name, row.prefix, await sha256(key), row.created_at, row.created_by).run()
+      return json({ ...toApiKey(row), key }, 201)
+    }
+    if (m === 'DELETE' && parts[1] && !parts[2]) {
+      const r = await db.prepare('UPDATE api_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL').bind(new Date().toISOString(), parts[1]).run()
+      if (!r.meta.changes) throw new HttpError(404, 'Key not found or already revoked')
+      return json({ ok: true })
+    }
+  }
 
   // Everything the UI needs, already scoped to the caller.
   if (m === 'GET' && parts[0] === 'bootstrap') return json(await loadScoped(env, s))
