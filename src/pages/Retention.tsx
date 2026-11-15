@@ -1,15 +1,24 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { PageHeader, SectionTitle, StatusBadge } from '@/components/common'
+import { ChevronRight } from 'lucide-react'
+import { PageHeader, Stat, StatusBadge } from '@/components/common'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { sampleDonors, sampleGifts } from '@/data/retention-sample'
+import type { Donor } from '@/data/types'
 import { useStore } from '@/store'
-import { money, periodLabel, periodOf, retentionStatus, totalsByPeriod, type Period, type RetentionStatus } from '@/lib/logic'
+import { fmtDate, money, periodLabel, periodOf, retentionStatus, totalsByPeriod, type Period, type RetentionStatus } from '@/lib/logic'
 
-const ORDER: RetentionStatus[] = ['new', 'recovered', 'increased', 'same', 'decreased', 'lapsed']
 const SHOWN = { year: 3, quarter: 4 } // how many periods get a tab
+
+// The six statuses, grouped by what the board does next.
+const GROUPS: { title: string; statuses: RetentionStatus[]; empty: string }[] = [
+  { title: 'Gave again', statuses: ['increased', 'same', 'decreased'], empty: 'No one gave in both periods.' },
+  { title: 'New or back', statuses: ['new', 'recovered'], empty: 'No new or returning donors.' },
+  { title: 'Stopped giving', statuses: ['lapsed'], empty: 'No one stopped giving.' },
+]
 
 export default function Retention() {
   const store = useStore()
@@ -20,6 +29,7 @@ export default function Retention() {
   const periods = Array.from({ length: SHOWN[unit] }, (_, i) => current - SHOWN[unit] + 1 + i)
   const [picked, setPicked] = useState<number | null>(null)
   const period = picked !== null && periods.includes(picked) ? picked : current
+  const [opened, setOpened] = useState<Donor | null>(null) // sample donors have no page, so they open here
   const label = (n: number) => periodLabel(n, unit)
   const noun = unit === 'year' ? 'year' : 'quarter'
 
@@ -29,11 +39,28 @@ export default function Retention() {
     return { d, status: retentionStatus(gs, period, unit), cur: t.get(period) ?? 0, prev: t.get(period - 1) ?? 0 }
   })
   const prevDonors = rows.filter((r) => r.prev > 0).length
+  const curDonors = rows.filter((r) => r.cur > 0).length
   const retained = rows.filter((r) => r.prev > 0 && r.cur > 0).length
-  const active = rows.some((r) => r.prev > 0 || r.cur > 0)
+  const gained = rows.filter((r) => r.status === 'new' || r.status === 'recovered').length
+  const lost = rows.filter((r) => r.status === 'lapsed').length
+  const curTotal = rows.reduce((s, r) => s + r.cur, 0)
+  const prevTotal = rows.reduce((s, r) => s + r.prev, 0)
+  const active = prevDonors > 0 || curDonors > 0
 
   const sampleToggle = (
     <Button variant="outline" onClick={() => setSample(!sample)}>{sample ? 'Use real data' : 'Use sample data'}</Button>
+  )
+  const rowClass = 'flex items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-muted focus-visible:bg-muted focus-visible:outline-none'
+  const rowBody = (r: (typeof rows)[number]) => (
+    <>
+      <span className="min-w-0 flex-1">
+        <span className="block font-medium text-cic-dark">{r.d.name}</span>
+        <span className="mt-1 flex flex-wrap items-center gap-2 text-muted-foreground tabular-nums">
+          <StatusBadge status={r.status} /> {money(r.prev)} → {money(r.cur)}
+        </span>
+      </span>
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+    </>
   )
 
   return (
@@ -46,7 +73,7 @@ export default function Retention() {
 
       {sample && (
         <p className="mb-4 rounded-md border border-cic-dark bg-cic-tint px-3 py-2 text-sm text-cic-dark" role="status">
-          Showing made-up sample donors. Nothing here is saved, and your real donors aren't changed.
+          Showing made-up sample donors. Nothing here is saved.
         </p>
       )}
 
@@ -54,10 +81,7 @@ export default function Retention() {
         <Card>
           <CardContent className="py-10 text-center">
             <h2 className="text-lg font-semibold">No gifts recorded yet</h2>
-            <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-              Retention compares what each donor gave in one period with the period before, so it needs some gift history.
-              Import your donor spreadsheets or platform exports to get started, or preview the page with sample data.
-            </p>
+            <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">Import donors to see who keeps giving, or try the page with sample data.</p>
             <div className="mt-6 flex flex-wrap justify-center gap-2">
               <Link to="/import" className={buttonVariants()}>Import donors</Link>
               {sampleToggle}
@@ -89,46 +113,43 @@ export default function Retention() {
             </Card>
           ) : (
             <>
-              <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-7">
-                <Card className="col-span-2 sm:col-span-3 lg:col-span-1">
-                  <CardContent>
-                    <div className="text-sm text-muted-foreground">Retention rate</div>
-                    <div className="text-3xl font-bold text-cic-dark">{prevDonors ? `${Math.round((retained / prevDonors) * 100)}%` : '—'}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {prevDonors ? `${retained} of ${prevDonors} gave again` : `No one gave in ${label(period - 1)}`}
-                    </div>
-                  </CardContent>
-                </Card>
-                {ORDER.map((s) => (
-                  <Card key={s}>
-                    <CardContent>
-                      <StatusBadge status={s} />
-                      <div className="mt-2 text-2xl font-bold">{rows.filter((r) => r.status === s).length}</div>
-                    </CardContent>
-                  </Card>
-                ))}
+              <div className="mb-8 grid gap-4 sm:grid-cols-3">
+                <Stat
+                  label="Retention rate"
+                  value={prevDonors ? `${Math.round((retained / prevDonors) * 100)}%` : '—'}
+                  hint={prevDonors ? `${retained} of ${prevDonors} ${label(period - 1)} donors gave again` : `No one gave in ${label(period - 1)}`}
+                />
+                <Stat label={`Donors in ${label(period)}`} value={curDonors} hint={`${prevDonors} in ${label(period - 1)} · ${gained} new or back · ${lost} stopped`} />
+                <Stat
+                  label={`Given in ${label(period)}`}
+                  value={money(curTotal)}
+                  hint={`${money(prevTotal)} in ${label(period - 1)}${prevTotal ? ` (${curTotal >= prevTotal ? '+' : '−'}${Math.round((Math.abs(curTotal - prevTotal) / prevTotal) * 100)}%)` : ''}`}
+                />
               </div>
 
-              <div className="grid gap-6 md:grid-cols-2">
-                {ORDER.map((s) => {
-                  const list = rows.filter((r) => r.status === s)
-                  if (!list.length) return null
+              <div className="grid items-start gap-6 lg:grid-cols-3">
+                {GROUPS.map((g) => {
+                  const list = rows.filter((r) => g.statuses.includes(r.status))
+                    .sort((a, b) => g.statuses.indexOf(a.status) - g.statuses.indexOf(b.status) || Math.max(b.cur, b.prev) - Math.max(a.cur, a.prev))
                   return (
-                    <section key={s}>
-                      <SectionTitle><span className="capitalize">{s}</span></SectionTitle>
-                      <Card>
-                        <CardContent>
-                          <ul className="divide-y text-sm">
-                            {list.map(({ d, cur, prev }) => (
-                              <li key={d.id} className="flex justify-between gap-2 py-2">
+                    <section key={g.title} aria-labelledby={`group-${g.title}`}>
+                      <h2 id={`group-${g.title}`} className="mb-2 flex items-baseline gap-2 text-lg font-semibold text-cic-dark">
+                        {g.title} <span className="text-sm font-normal text-muted-foreground">{list.length}</span>
+                      </h2>
+                      <Card className="py-0">
+                        {list.length ? (
+                          <ul className="divide-y">
+                            {list.map((r) => (
+                              <li key={r.d.id}>
                                 {sample
-                                  ? <span className="font-medium">{d.name}</span>
-                                  : <Link to={`/donors/${d.id}`} className="font-medium text-cic-dark underline">{d.name}</Link>}
-                                <span className="text-muted-foreground">{money(prev)} → {money(cur)}</span>
+                                  ? <button type="button" className={`${rowClass} w-full`} onClick={() => setOpened(r.d)}>{rowBody(r)}</button>
+                                  : <Link to={`/donors/${r.d.id}`} className={rowClass}>{rowBody(r)}</Link>}
                               </li>
                             ))}
                           </ul>
-                        </CardContent>
+                        ) : (
+                          <p className="px-4 py-3 text-sm text-muted-foreground">{g.empty}</p>
+                        )}
                       </Card>
                     </section>
                   )
@@ -138,6 +159,20 @@ export default function Retention() {
           )}
         </>
       )}
+
+      <Dialog open={!!opened} onOpenChange={(o) => !o && setOpened(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{opened?.name}</DialogTitle>
+          </DialogHeader>
+          <p className="text-muted-foreground">A sample donor, so there's no donor page. Their gifts:</p>
+          <ul className="divide-y">
+            {gifts.filter((g) => g.donorId === opened?.id).sort((a, b) => b.date.localeCompare(a.date)).map((g) => (
+              <li key={g.id} className="flex justify-between py-1.5"><span>{fmtDate(g.date)}</span><span className="tabular-nums">{money(g.amount)}</span></li>
+            ))}
+          </ul>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
