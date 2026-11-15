@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import type { Channel, Donor, Gift, ProgramOutcome } from '@/data/types'
+import type { Channel, Donor, Gift } from '@/data/types'
 import { funderPacket } from '@/lib/packet'
 import { useStore } from '@/store'
 import { useAsk } from '@/components/ChatWidget'
@@ -18,9 +18,9 @@ import { byDateDesc, calendarLink, fmtDate, money, retentionStatus, totalsByYear
 
 const CHANNEL_ICON = { email: Mail, text: MessageSquare, call: Phone, 'in-person': Users, note: StickyNote }
 
-// Funder packet: gift history + the outcomes admins enter on Program outcomes.
-function downloadPacket(d: Donor, gifts: Gift[], outcomes: ProgramOutcome[], today: string) {
-  const blob = new Blob([funderPacket(d, gifts, outcomes, today)], { type: 'text/markdown' })
+// Funder packet: giving totals and gift history.
+function downloadPacket(d: Donor, gifts: Gift[], today: string) {
+  const blob = new Blob([funderPacket(d, gifts, today)], { type: 'text/markdown' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
   a.download = `CIC_FunderPacket_${d.name.replace(/\W+/g, '')}_${today.slice(0, 4)}.md`
@@ -78,7 +78,7 @@ export default function DonorDetail() {
             <Button variant="outline" onClick={() => ask(`Debrief on ${donor.name}: `)}>
               <MessageSquareText aria-hidden /> Debrief
             </Button>
-            <Button variant="outline" onClick={() => downloadPacket(donor, gifts, s.outcomes, s.today)}>
+            <Button variant="outline" onClick={() => downloadPacket(donor, gifts, s.today)}>
               <Download aria-hidden /> Funder packet
             </Button>
           </>

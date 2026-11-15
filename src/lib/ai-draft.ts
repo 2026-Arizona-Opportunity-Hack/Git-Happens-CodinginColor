@@ -1,6 +1,5 @@
-import type { BoardMember, CicEvent, Donor, DraftKind, Gift, ProgramOutcome } from '../data/types'
+import type { BoardMember, CicEvent, Donor, DraftKind, Gift } from '../data/types'
 import { byDateDesc, money } from './logic'
-import { fundedOutcomes, outcomeText } from './packet'
 
 // AI-written drafts: the template body (drafts.ts) plus the donor's history go
 // to the AI gateway, which rewrites it for this donor. The worker falls back to
@@ -15,14 +14,13 @@ export const MAX_CHARS = { email: 1500, text: 320 }
 
 const PURPOSE: Partial<Record<DraftKind, string>> = {
   'thank-you': 'thank them for their most recent gift',
-  'quarterly-update': 'give them a short quarterly update on what the programs they funded achieved',
+  'quarterly-update': 'give them a short, warm quarterly update on Coding in Color and the programs they funded',
   'lapsed-nudge': 'warmly reconnect: they gave before but not this year, so invite them back without guilt',
 }
 
-export function draftPrompt(kind: DraftKind, channel: 'email' | 'text', donor: Donor, gifts: Gift[], owner: BoardMember, template: string, event?: CicEvent, outcomes: ProgramOutcome[] = []) {
+export function draftPrompt(kind: DraftKind, channel: 'email' | 'text', donor: Donor, gifts: Gift[], owner: BoardMember, template: string, event?: CicEvent) {
   const history = [...gifts].sort(byDateDesc).slice(0, 10)
     .map((g) => `- ${g.date ?? 'date unknown'}: ${money(g.amount)} to ${g.program}`)
-  const funded = fundedOutcomes(gifts, outcomes).map((o) => `- ${o.program}: ${outcomeText(o)}`)
   const system = [
     'You write short donor messages for Coding in Color, a Phoenix nonprofit that teaches computer science and AI to Arizona high schoolers whose schools do not offer it.',
     'A board member will read, edit and send your draft themselves.',
@@ -39,7 +37,6 @@ export function draftPrompt(kind: DraftKind, channel: 'email' | 'text', donor: D
     `Purpose: ${PURPOSE[kind] ?? 'follow up'}.`,
     `Donor: ${donor.name}${donor.org ? ` (${donor.org})` : ''}`,
     `Gifts, newest first:\n${history.join('\n') || '- none recorded'}`,
-    `Outcomes of programs they funded:\n${funded.join('\n') || '- none entered'}`,
     `Next CIC event: ${event ? `${event.name} on ${event.date}` : 'none scheduled'}`,
     `Template to improve on (keep its facts, make it personal):\n${template}`,
   ].join('\n\n')

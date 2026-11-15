@@ -13,11 +13,10 @@ test('an invitation names the event and its date', () => {
   assert.match(body, /Priya Shah$/)
 })
 
-test('a quarterly update quotes outcomes for the programs the donor funded', () => {
-  const gifts = [{ id: 'g1', donorId: 'd1', amount: 100, date: '2026-03-01', source: 'zeffy' as const, program: 'Day of Compute' as const }]
-  const outcomes = [{ program: 'Day of Compute' as const, studentsServed: 140, summary: 'Students built their first app.' }]
-  assert.match(draftBody('quarterly-update', donor, gifts, owner, undefined, outcomes), /- Day of Compute: Students built their first app\. \(140 students served\)/)
-  assert.doesNotMatch(draftBody('quarterly-update', donor, gifts, owner), /\[|funded/)
+test('a quarterly update names the programs the donor funded, but not General', () => {
+  const g = (program: 'Day of Compute' | 'General') => ({ id: program, donorId: 'd1', amount: 100, date: '2026-03-01', source: 'zeffy' as const, program })
+  assert.match(draftBody('quarterly-update', donor, [g('Day of Compute'), g('General')], owner), /Your support went to Day of Compute\. /)
+  assert.doesNotMatch(draftBody('quarterly-update', donor, [g('General')], owner), /\[|support went/)
 })
 
 test('updates and nudges mention the next event only when there is one', () => {
