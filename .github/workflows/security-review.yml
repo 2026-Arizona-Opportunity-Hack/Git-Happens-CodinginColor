@@ -1,61 +1,75 @@
 name: AI security review
 
-# Runs only when asked, so it doesn't spend the subscription or the gateway
-# credits on every push. Add a label to a PR to run it once:
+# Two ways this runs:
+#
+# Check: every PR gets one muse-wonder review as a comment when it's opened,
+# reopened or marked ready (not on every push, to save the gateway credits).
+#
+# Audit: when asked, a review is saved as a report in audits/ and opened as
+# its own PR. Add a label to a PR, or run it from the Actions tab:
 #
 #   ai-review              Claude, on the CLAUDE_CODE_OAUTH_TOKEN subscription
 #   ai-review:kimi-k3      kimi-k3 on the OHack gateway (OHACK_REVIEW_KEY)
-#   ai-review:muse-wonder  muse-wonder on the OHack gateway; pricey, use sparingly
+#   ai-review:muse-wonder  muse-wonder on the OHack gateway (OHACK_REVIEW_KEY)
 #
-# The label is removed when the review is posted, so adding it again re-runs
-# it. You can also run it from the Actions tab with a PR number and a model.
+# The label is removed afterwards, so adding it again re-runs the audit.
 
 on:
   pull_request:
-    types: [labeled]
+    types: [opened, reopened, ready_for_review, labeled]
   workflow_dispatch:
     inputs:
       pr:
         description: PR number
         required: true
       model:
-        description: Model to review with
+        description: Model to audit with
         type: choice
         options: [claude, kimi-k3, muse-wonder]
         default: claude
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
   review:
-    # Only our labels, and only PRs from this repo (forks don't get secrets)
+    # Our labels or a new non-draft PR, and only PRs from this repo (forks
+    # don't get secrets)
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (startsWith(github.event.label.name, 'ai-review') &&
-       github.event.pull_request.head.repo.full_name == github.repository)
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       (startsWith(github.event.label.name, 'ai-review') ||
+        (github.event.action != 'labeled' && !github.event.pull_request.draft)))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
-      group: security-review-${{ github.event.pull_request.number || inputs.pr }}-${{ github.event.label.name || inputs.model }}
+      group: security-review-${{ github.event.pull_request.number || inputs.pr }}-${{ github.event.label.name || inputs.model || 'check' }}
       cancel-in-progress: true
     env:
       GH_TOKEN: ${{ github.token }}
       PR: ${{ github.event.pull_request.number || inputs.pr }}
     steps:
-      - name: Pick the model
+      - name: Pick the mode and model
         id: model
         env:
+          ACTION: ${{ github.event.action }}
           LABEL: ${{ github.event.label.name }}
           INPUT: ${{ inputs.model }}
         run: |
-          case "${LABEL:-ai-review:$INPUT}" in
+          if [ -n "$INPUT" ]; then LABEL="ai-review:$INPUT"; fi
+          if [ -z "$LABEL" ]; then
+            echo "mode=check" >> "$GITHUB_OUTPUT"
+            echo "name=muse-wonder" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          case "$LABEL" in
             ai-review|ai-review:claude) model=claude ;;
             ai-review:kimi-k3) model=kimi-k3 ;;
             ai-review:muse-wonder) model=muse-wonder ;;
             *) echo "Unknown label '$LABEL'"; exit 1 ;;
           esac
+          echo "mode=audit" >> "$GITHUB_OUTPUT"
           echo "name=$model" >> "$GITHUB_OUTPUT"
 
       # No saved credentials, so the model can't read a GitHub token from .git
@@ -70,12 +84,13 @@ jobs:
           base=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json baseRefName -q .baseRefName)
           git fetch --no-tags "https://github.com/$GITHUB_REPOSITORY" "$base"
           git diff FETCH_HEAD...HEAD > pr.diff
+          echo "SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
           wc -l pr.diff
 
       - run: npm install -g @anthropic-ai/claude-code@2.1.305
 
       # Read-only tools and a turn cap; the model gets the AI credentials and
-      # nothing else, and the comment is posted by the next step
+      # nothing else, and the later steps post what it wrote
       - name: Review
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ steps.model.outputs.name == 'claude' && secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}
@@ -84,6 +99,8 @@ jobs:
           ANTHROPIC_MODEL: ${{ steps.model.outputs.name != 'claude' && steps.model.outputs.name || '' }}
           ANTHROPIC_SMALL_FAST_MODEL: ${{ steps.model.outputs.name != 'claude' && steps.model.outputs.name || '' }}
           ANTHROPIC_DEFAULT_HAIKU_MODEL: ${{ steps.model.outputs.name != 'claude' && steps.model.outputs.name || '' }}
+          # The every-PR check gets fewer turns than an audit someone asked for
+          MAX_TURNS: ${{ steps.model.outputs.mode == 'check' && 20 || 40 }}
           GH_TOKEN: ''
         run: |
           for v in CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_MODEL ANTHROPIC_SMALL_FAST_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL; do
@@ -92,25 +109,77 @@ jobs:
           claude -p "$(cat .github/prompts/security-review.md)" \
             --allowedTools "Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*)" \
             --disallowedTools "Edit,Write,NotebookEdit,WebFetch,WebSearch" \
-            --max-turns 40 \
-            > review.md
-          test -s review.md
+            --max-turns "$MAX_TURNS" \
+            > "$RUNNER_TEMP/review.md"
+          test -s "$RUNNER_TEMP/review.md"
 
-      - name: Post the review
-        if: always()
+      # The report goes on a fresh branch off the default branch, so the audit
+      # PR holds only the report and not the reviewed PR's changes
+      - name: Open the audit PR
+        id: audit
+        if: steps.model.outputs.mode == 'audit'
         env:
           MODEL: ${{ steps.model.outputs.name }}
+          DEFAULT: ${{ github.event.repository.default_branch }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          sha=$SHA
+          title=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title -q .title)
+          file="audits/$(date -u +%F)-pr-$PR-$MODEL-$sha.md"
+          branch="audit/pr-$PR-$MODEL-$sha"
+          remote="https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY"
+
+          git fetch --no-tags "$remote" "$DEFAULT"
+          git switch -c "$branch" FETCH_HEAD
+          mkdir -p audits
+          {
+            echo "# Security audit: PR #$PR"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| PR | #$PR — $title |"
+            echo "| Commit | \`$sha\` |"
+            echo "| Model | $MODEL |"
+            echo "| Date | $(date -u +%F) |"
+            echo "| Run | $RUN_URL |"
+            echo
+            cat "$RUNNER_TEMP/review.md"
+          } > "$file"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898+github-actions[bot]@users.noreply.github.com"
+          git add "$file"
+          git commit -q -m "Add $MODEL security audit of #$PR"
+          git push -q "$remote" "$branch"
+
+          # Needs "Allow GitHub Actions to create pull requests" in the repo's
+          # Actions settings; without it, the branch is still there to open by hand
+          if url=$(gh pr create --repo "$GITHUB_REPOSITORY" --base "$DEFAULT" --head "$branch" \
+              --title "Add $MODEL security audit of #$PR" \
+              --body "Security audit of #$PR at \`$sha\` by $MODEL, saved as \`$file\`. Advisory only. [Run]($RUN_URL)"); then
+            echo "link=[audit PR]($url)" >> "$GITHUB_OUTPUT"
+          else
+            echo "link=[audit branch](${{ github.server_url }}/$GITHUB_REPOSITORY/compare/$DEFAULT...$branch?expand=1)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment on the PR
+        if: always() && steps.model.outputs.name
+        env:
+          MODE: ${{ steps.model.outputs.mode }}
+          MODEL: ${{ steps.model.outputs.name }}
+          LINK: ${{ steps.audit.outputs.link }}
           LABEL: ${{ github.event.label.name }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          marker="<!-- ai-security-review:$MODEL -->"
+          marker="<!-- ai-security-review:$MODE:$MODEL -->"
           {
             echo "$marker"
-            echo "## 🔒 AI security review ($MODEL)"
+            echo "## 🔒 AI security $MODE ($MODEL)"
             echo
-            if [ -s review.md ]; then cat review.md; else echo "The review didn't finish; see the [run log]($RUN_URL)."; fi
+            if [ -n "$LINK" ]; then echo "Report saved in $LINK."; echo; fi
+            if [ -s "$RUNNER_TEMP/review.md" ]; then cat "$RUNNER_TEMP/review.md"; else echo "The review didn't finish; see the [run log]($RUN_URL)."; fi
             echo
-            echo "<sub>Commit $(git rev-parse --short HEAD) · [run]($RUN_URL) · advisory only; a human still reviews the PR</sub>"
+            echo "<sub>Commit $SHA · [run]($RUN_URL) · advisory only; a human still reviews the PR</sub>"
           } > comment.md
           id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
             -q ".[] | select(.body | contains(\"$marker\")) | .id" | head -1)
