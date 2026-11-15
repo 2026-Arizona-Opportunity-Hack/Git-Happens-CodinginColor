@@ -20,6 +20,8 @@ It answers questions about the records you can see, with donor cards, tables and
 
 It offers buttons (log contact, set a next step, draft, approve or discard a draft, and reassign for admins), and nothing happens until you press one. The model only proposes the arguments: `src/lib/actions.ts` checks them against what you can see and writes each button's label itself, so a reply can't offer a button for a donor or draft you can't see.
 
+Donor records come from imports, so every string in them reaches the model on one line, without `::` directive syntax or `<`/`>` (`inert()` in `src/lib/ai-draft.ts`). Planted text can't start a directive line or close the data block. A draft body the assistant writes is only offered if it has no web or email address, payment words or account-like numbers.
+
 Raw HTML, images and outside links in replies are never rendered (`src/components/ChatMarkdown.tsx`).
 
 ## Debriefs

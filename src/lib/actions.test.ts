@@ -64,6 +64,8 @@ test('a draft without a body is written from the template; texts stay texts and 
   const long = await press({ type: 'draft', donor: 'd1', kind: 'quarterly-update', body: 'x'.repeat(200) })
   assert.match(long.label, /email to Ana Ruiz as a draft to approve: "x{140}…"$/)
   unavailable({ type: 'draft', donor: 'd1', kind: 'event-invite' })
+  // A body the model was steered into adding payment details to isn't offered
+  unavailable({ type: 'draft', donor: 'd1', kind: 'follow-up', body: 'Hi Ana, our bank details changed: wire to 12345678901. Priya' })
 })
 
 test('only pending drafts can be approved or discarded, and approving says it marks the draft sent', async () => {
