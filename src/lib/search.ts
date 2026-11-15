@@ -23,3 +23,20 @@ export function searchDonors(donors: Donor[], query: string): Donor[] {
     .slice(0, MAX_RESULTS)
     .map((x) => x.d)
 }
+
+// Pages whose name or keywords cover every word typed, so "api key" finds
+// Read API. A word matches the start of a page word, and "keys" matches
+// "key", so plurals and half-typed words both work. Name matches first.
+export function searchPages<P extends { label: string; keywords?: string }>(pages: P[], query: string): P[] {
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  if (!words.length) return []
+  const covers = (text: string) => {
+    const have = text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+    return words.every((w) => have.some((h) => h.startsWith(w) || (h.length >= 3 && w.startsWith(h))))
+  }
+  return pages
+    .map((p) => ({ p, r: covers(p.label) ? 0 : covers(`${p.label} ${p.keywords ?? ''}`) ? 1 : -1 }))
+    .filter((x) => x.r >= 0)
+    .sort((a, b) => a.r - b.r)
+    .map((x) => x.p)
+}

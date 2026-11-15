@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { StoreProvider, useReminders, useStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { Assistant, useChat } from '@/components/ChatWidget'
-import { DonorSearch } from '@/components/DonorSearch'
+import { SiteSearch } from '@/components/SiteSearch'
 import { InstallPrompt } from '@/components/InstallPrompt'
 import Dashboard from '@/pages/Dashboard'
 import Donors from '@/pages/Donors'
@@ -22,35 +22,36 @@ const Members = lazy(() => import('@/pages/Members'))
 const Account = lazy(() => import('@/pages/Account'))
 const Api = lazy(() => import('@/pages/Api'))
 
-type NavItem = { to: string; label: string; icon: LucideIcon; adminOnly?: boolean; devOnly?: boolean }
+// `keywords` are other words people might search for to find the page.
+type NavItem = { to: string; label: string; icon: LucideIcon; keywords?: string; adminOnly?: boolean; devOnly?: boolean }
 
 // Similar pages sit together; group headings show on wide screens only.
 const NAV: { heading: string; items: NavItem[] }[] = [
   {
     heading: 'Overview',
     items: [
-      { to: '/', label: 'Dashboard', icon: Home },
-      { to: '/notifications', label: 'Notifications', icon: Bell },
-      { to: '/follow-ups', label: 'Follow-ups', icon: ListTodo },
+      { to: '/', label: 'Dashboard', icon: Home, keywords: 'home overview stats totals raised board member load upcoming events calendar recent activity' },
+      { to: '/notifications', label: 'Notifications', icon: Bell, keywords: 'reminders alerts overdue stale imports coming up' },
+      { to: '/follow-ups', label: 'Follow-ups', icon: ListTodo, keywords: 'drafts approve messages emails next steps tasks to-do quarterly updates thank-you' },
     ],
   },
   {
     heading: 'Donors',
     items: [
-      { to: '/donors', label: 'My Donors', icon: Contact },
-      { to: '/all-donors', label: 'All Donors', icon: Users, adminOnly: true },
-      { to: '/retention', label: 'Retention', icon: BarChart3, adminOnly: true },
-      { to: '/import', label: 'Update Donors', icon: Upload, adminOnly: true },
+      { to: '/donors', label: 'My Donors', icon: Contact, keywords: 'my assigned donors list' },
+      { to: '/all-donors', label: 'All Donors', icon: Users, keywords: 'every donor assign reassign unassigned board member export csv excel download filter', adminOnly: true },
+      { to: '/retention', label: 'Retention', icon: BarChart3, keywords: 'lapsed lost renewed upgraded downgraded churn report quarter year compare', adminOnly: true },
+      { to: '/import', label: 'Update Donors', icon: Upload, keywords: 'import upload csv file zeffy benevity spreadsheet import history map columns', adminOnly: true },
     ],
   },
   {
     heading: 'Settings',
     items: [
-      { to: '/members', label: 'Board members', icon: UserCog, adminOnly: true },
-      { to: '/api', label: 'Read API', icon: Code2, adminOnly: true },
+      { to: '/members', label: 'Board members', icon: UserCog, keywords: 'invite users people team roles admin permissions remove', adminOnly: true },
+      { to: '/api', label: 'Read API', icon: Code2, keywords: 'api keys tokens integration developer org dashboard revoke', adminOnly: true },
       // DEVELOPMENT ONLY: shown while DEV_TOOLS is on; remove before launch.
-      { to: '/dev', label: 'Dev tools', icon: Wrench, adminOnly: true, devOnly: true },
-      { to: '/account', label: 'My account', icon: UserRound },
+      { to: '/dev', label: 'Dev tools', icon: Wrench, keywords: 'clear reset delete database', adminOnly: true, devOnly: true },
+      { to: '/account', label: 'My account', icon: UserRound, keywords: 'profile name photo password two-factor 2fa mfa security sessions signed in' },
     ],
   },
 ]
@@ -102,6 +103,7 @@ function Shell() {
   // Badge counts what needs action now; "coming up" items don't nag.
   const actionable = useReminders().filter((r) => r.urgency !== 'upcoming').length
   const chat = useChat()
+  const canSee = (n: NavItem) => (!n.adminOnly || session.role === 'admin') && (!n.devOnly || devTools)
   return (
     <div className="min-h-screen md:grid md:grid-cols-[240px_1fr] lg:grid-cols-[240px_1fr_auto]">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:p-2">Skip to content</a>
@@ -117,7 +119,7 @@ function Shell() {
         </div>
         <nav aria-label="Main" className="flex gap-1 overflow-x-auto md:flex-col md:gap-4">
           {NAV.map(({ heading, items }) => {
-            const shown = items.filter((n) => (!n.adminOnly || session.role === 'admin') && (!n.devOnly || devTools))
+            const shown = items.filter(canSee)
             if (!shown.length) return null
             const id = `nav-${heading.toLowerCase()}`
             // `contents` keeps the phone layout one scrolling row of links.
@@ -152,7 +154,7 @@ function Shell() {
         </nav>
         <div className="mt-6 md:mt-auto md:pt-6">
           <SampleToggle />
-          <DonorSearch />
+          <SiteSearch pages={NAV.flatMap((g) => g.items).filter(canSee)} />
           <SignedInAs />
         </div>
       </aside>
