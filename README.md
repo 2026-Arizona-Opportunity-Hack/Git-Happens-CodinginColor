@@ -107,6 +107,7 @@ The password is public on purpose because the data is fake. Replace these accoun
 | [Security](docs/security.md) | Who can see what, how keys and secrets are kept, known gaps |
 | [Testing](docs/testing.md) | Running the tests, the coverage gate, what tests which feature |
 | [Decisions](docs/decisions/) | Why it's built this way |
+| [How these docs work](docs/README.md) | Where to write what, and the check that keeps docs in step with code |
 
 Agents: start with [AGENTS.md](AGENTS.md).
 
