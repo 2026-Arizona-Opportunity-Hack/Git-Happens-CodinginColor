@@ -103,7 +103,7 @@ function Shell() {
   const actionable = useReminders().filter((r) => r.urgency !== 'upcoming').length
   const chat = useChat()
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[240px_1fr]">
+    <div className="min-h-screen md:grid md:grid-cols-[240px_1fr] lg:grid-cols-[240px_1fr_auto]">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:p-2">Skip to content</a>
       <aside className="border-b border-sidebar-border bg-sidebar p-4 md:sticky md:top-0 md:flex md:h-screen md:flex-col md:overflow-y-auto md:border-r md:border-b-0">
         <div className="mb-6 flex items-center gap-2">
@@ -156,7 +156,7 @@ function Shell() {
           <SignedInAs />
         </div>
       </aside>
-      <main id="main" className="mx-auto w-full max-w-6xl p-4 pb-24 md:p-8 md:pb-24">
+      <main id="main" className="mx-auto w-full max-w-6xl min-w-0 p-4 pb-24 md:p-8 md:pb-24 lg:pb-8">
         <InstallPrompt />
         <SampleBanner />
         <Routes>
@@ -170,7 +170,7 @@ function Shell() {
           <Route path="/import" element={admin(<Import />)} />
           <Route path="/members" element={session.role === 'admin' && <Suspense fallback={<p role="status">Loading…</p>}><Members /></Suspense>} />
           <Route path="/api" element={session.role === 'admin' && <Suspense fallback={<p role="status">Loading…</p>}><Api /></Suspense>} />
-          {/* The assistant is the chat bubble now; old links land on the Dashboard. */}
+          {/* The assistant sits beside every page now; old links land on the Dashboard. */}
           <Route path="/assistant" element={<Navigate to="/" replace />} />
           <Route path="/dev" element={devTools ? admin(<DevTools />) : <Navigate to="/" replace />} />
           <Route path="/account" element={<Suspense fallback={<p role="status">Loading…</p>}><Account /></Suspense>} />
