@@ -21,7 +21,13 @@ interface Bootstrap {
   imports: ImportRecord[] // newest first; empty for board members
 }
 
-class ApiError extends Error {}
+class ApiError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
 
 export interface ChatTurn { role: 'user' | 'assistant'; content: string }
 
@@ -35,7 +41,7 @@ async function api<T>(token: GetToken, path: string, method = 'GET', body?: unkn
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new ApiError(data.error ?? `Request failed (${res.status})`)
+  if (!res.ok) throw new ApiError(res.status, data.error ?? `Request failed (${res.status})`)
   return data as T
 }
 
@@ -124,15 +130,20 @@ function Loaded({ data, token, reload, children }: {
   return <Ctx.Provider value={useStoreState(data, token, reload)}>{children}</Ctx.Provider>
 }
 
-export function StoreProvider({ token, onSignOut, children }: { token: GetToken; onSignOut: () => void; children: ReactNode }) {
+// `denied` shows when the account signed in but isn't a board member (403).
+export function StoreProvider({ token, onSignOut, denied, children }: {
+  token: GetToken; onSignOut: () => void; denied: ReactNode; children: ReactNode
+}) {
   const [data, setData] = useState<Bootstrap | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [forbidden, setForbidden] = useState(false)
 
   const reload = useCallback(async () => {
     try {
       setData(await api<Bootstrap>(token, 'bootstrap'))
       setError(null)
     } catch (e) {
+      setForbidden(e instanceof ApiError && e.status === 403)
       setError(e instanceof ApiError ? e.message : 'Could not reach the server')
     }
   }, [token])
@@ -141,6 +152,7 @@ export function StoreProvider({ token, onSignOut, children }: { token: GetToken;
     reload()
   }, [reload])
 
+  if (!data && forbidden) return denied
   if (!data)
     return (
       <div role="status" className="space-y-3 p-8 text-muted-foreground">
