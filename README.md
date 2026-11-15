@@ -195,7 +195,7 @@ The Worker also needs the WorkOS secret key. Set it once (or whenever the key is
 - **Check**: every PR gets one `muse-wonder` review, posted as a comment, when it's opened, reopened or marked ready for review. Pushing more commits doesn't re-run it, which keeps the gateway credits for real use. Drafts are skipped until they're ready. **Off for now**: turn it on with `gh variable set AI_CHECK_ALL_PRS --body true` and off again with `gh variable delete AI_CHECK_ALL_PRS`.
 - **Audit**: when you ask, the review is saved as a report in [`audits/`](audits/) and opened as its own PR, with a comment on the reviewed PR linking to it. Add a label to the PR (it comes off afterwards, so add it again to re-run), or run it from the Actions tab with a PR number and model.
 
-Audit PRs need **Settings → Actions → General → Allow GitHub Actions to create and approve pull requests**; without it the report is still pushed to an `audit/…` branch and the comment links to it.
+The OHack org doesn't let GitHub Actions open PRs (the repo setting is greyed out), so audit PRs are opened with a token in the `AUDIT_PR_TOKEN` secret: a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) with resource owner `2026-Arizona-Opportunity-Hack`, only this repository, and **Pull requests: Read and write**. The PRs show as opened by whoever made the token. Without it, the report is still pushed to an `audit/…` branch and the comment links to a page to open the PR in one click.
 
 | Label | Model | Secret it needs |
 |---|---|---|

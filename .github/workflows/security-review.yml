@@ -123,6 +123,7 @@ jobs:
         env:
           MODEL: ${{ steps.model.outputs.name }}
           DEFAULT: ${{ github.event.repository.default_branch }}
+          AUDIT_PR_TOKEN: ${{ secrets.AUDIT_PR_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           sha=$SHA
@@ -154,9 +155,10 @@ jobs:
           git commit -q -m "Add $MODEL security audit of #$PR"
           git push -q "$remote" "$branch"
 
-          # Needs "Allow GitHub Actions to create pull requests" in the repo's
-          # Actions settings; without it, the branch is still there to open by hand
-          if url=$(gh pr create --repo "$GITHUB_REPOSITORY" --base "$DEFAULT" --head "$branch" \
+          # GITHUB_TOKEN can only open PRs if the org allows it (ours does not),
+          # so AUDIT_PR_TOKEN, a teammate's fine-grained token, opens it when set.
+          # Without either, the branch is still there to open by hand
+          if url=$(GH_TOKEN="${AUDIT_PR_TOKEN:-$GH_TOKEN}" gh pr create --repo "$GITHUB_REPOSITORY" --base "$DEFAULT" --head "$branch" \
               --title "Add $MODEL security audit of #$PR" \
               --body "Security audit of #$PR at \`$sha\` by $MODEL, saved as \`$file\`. Advisory only. [Run]($RUN_URL)"); then
             echo "link=[audit PR]($url)" >> "$GITHUB_OUTPUT"
