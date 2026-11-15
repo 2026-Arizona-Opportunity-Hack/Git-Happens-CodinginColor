@@ -114,6 +114,13 @@ export function inviteDue(eventDate: string, today: string) {
   return due < today ? today : due
 }
 
+// The events a donor can be invited to: the next few upcoming ones. The donor
+// page offers these and the assistant may only pick from them, so the two agree.
+export const OFFERED_EVENTS = 3
+
+export const offeredEvents = <E extends { date: string }>(events: E[], today: string) =>
+  events.filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date)).slice(0, OFFERED_EVENTS)
+
 // A Google Calendar "new event" link for a next step: an all-day event on its
 // due date, so the board member can put it on their own calendar.
 export function calendarLink(step: NextStep, donor: Pick<Donor, 'id' | 'name'>, origin: string) {
