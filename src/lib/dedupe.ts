@@ -93,21 +93,25 @@ export function matchDonor<D extends Pick<Donor, 'name' | 'email' | 'phone'>>(c:
 // collapse into one, so skipped gifts are shown in the preview.
 export const SAME_GIFT_DAYS = 3
 
-interface GiftLike { amount: number; date: string }
+interface GiftLike { amount: number; date?: string | null }
 
 const dayNumber = (iso: string) => Math.round(new Date(iso.slice(0, 10) + 'T12:00:00Z').getTime() / 86_400_000)
 
+// Undated gifts only match other undated gifts of the same amount, so
+// re-importing a file without dates still adds nothing.
 export const sameGift = (a: GiftLike, b: GiftLike) =>
-  Math.abs(a.amount - b.amount) < 0.005 && Math.abs(dayNumber(a.date) - dayNumber(b.date)) <= SAME_GIFT_DAYS
+  Math.abs(a.amount - b.amount) < 0.005 &&
+  (a.date && b.date ? Math.abs(dayNumber(a.date) - dayNumber(b.date)) <= SAME_GIFT_DAYS : !a.date && !b.date)
 
 // Splits one donor's incoming rows into gifts to record and duplicates to skip.
-// Rows without an amount and date are neither: they carry contact info only.
+// Rows without an amount are neither: they carry contact info only. A gift
+// without a date is still recorded (date unknown).
 export function splitGifts(rows: RawDonorRow[], existing: GiftLike[]) {
   const seen: GiftLike[] = [...existing]
   const keep: (RawDonorRow & GiftLike)[] = []
   const skipped: (RawDonorRow & GiftLike)[] = []
   for (const r of rows) {
-    if (!r.amount || !r.date) continue
+    if (!r.amount) continue
     const g = r as RawDonorRow & GiftLike
     if (seen.some((s) => sameGift(s, g))) skipped.push(g)
     else { keep.push(g); seen.push(g) }

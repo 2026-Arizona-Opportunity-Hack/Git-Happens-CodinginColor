@@ -9,7 +9,7 @@ import { DataTable, type ColumnDef } from '@/components/ui/data-table'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { Donor } from '@/data/types'
-import { fmtDate, money, UNASSIGNED } from '@/lib/logic'
+import { fmtDate, lastGiftDate, money, UNASSIGNED } from '@/lib/logic'
 import { donorsCsv, donorsXlsx, download } from '@/lib/export'
 import { Label } from '@/components/ui/label'
 import { useStore } from '@/store'
@@ -47,7 +47,7 @@ export default function AllDonors() {
   const match = (d: Donor) =>
     `${d.name} ${d.org ?? ''} ${d.email ?? ''}`.toLowerCase().includes(q.trim().toLowerCase()) &&
     (!owner || current(d) === owner) &&
-    (!from && !to || gifts.some((g) => g.donorId === d.id && (!from || g.date >= from) && (!to || g.date <= to)))
+    (!from && !to || gifts.some((g) => g.donorId === d.id && !!g.date && (!from || g.date >= from) && (!to || g.date <= to)))
   const rank = (d: Donor) => recent.indexOf(d.id)
   const inMain = (d: Donor) => !!d.ownerId || recent.includes(d.id)
   const assigned = donors
@@ -74,7 +74,7 @@ export default function AllDonors() {
   const items = [{ value: UNASSIGNED, label: 'Unassigned' }, ...boardMembers.map((m) => ({ value: m.id, label: `${m.name} (${load.get(m.id) ?? 0})` }))]
   const totals = (d: Donor) => {
     const gs = gifts.filter((g) => g.donorId === d.id)
-    return { d, lifetime: gs.reduce((s, g) => s + g.amount, 0), last: gs.map((g) => g.date).sort().at(-1) }
+    return { d, lifetime: gs.reduce((s, g) => s + g.amount, 0), last: lastGiftDate(gs) }
   }
   const columns: ColumnDef<ReturnType<typeof totals>>[] = [
     {

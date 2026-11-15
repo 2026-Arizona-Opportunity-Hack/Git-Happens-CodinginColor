@@ -51,7 +51,7 @@ export default function Import() {
   const dupes = clusters.filter((c) => c.rows.length > 1)
   // Same matching the server runs on commit (admins have every donor and gift
   // loaded), so the preview shows exactly which gifts will be skipped.
-  const known = new Map<string, { amount: number; date: string }[]>()
+  const known = new Map<string, { amount: number; date?: string | null }[]>()
   const plan = clusters.map((c, i) => {
     const match = matchDonor(c, donors)
     const key = match?.id ?? `new-${i}`
@@ -214,15 +214,21 @@ export default function Import() {
 
           <div role="status" className="rounded-md bg-cic-tint p-3 text-cic-dark">
             <strong>{newGifts} gift{newGifts === 1 ? '' : 's'} totaling {money(newTotal)}</strong> will be recorded
-            {dupGifts > 0 && <> ({dupGifts} skipped: already recorded for that donor, same amount within {SAME_GIFT_DAYS} days)</>}.
+            {dupGifts > 0 && <> ({dupGifts} skipped: already recorded for that donor, same amount within {SAME_GIFT_DAYS} days, or both undated)</>}.
             {' '}{plan.filter((p) => !p.match).length} new donor{plan.filter((p) => !p.match).length === 1 ? '' : 's'}, {plan.filter((p) => p.match).length} already in the database.
           </div>
+          {/* Undated gifts are saved with the date unknown; only unreadable amounts are dropped. */}
           {(['no-date', 'bad-date', 'bad-amount'] as const).filter((k) => issues[k].length).map((k) => (
-            <p key={k} role="alert" className="rounded-md bg-amber-100 p-3 text-amber-950">
-              <strong>{issues[k].length} gift{issues[k].length === 1 ? '' : 's'} won't be saved: </strong>
-              {k === 'no-date' && 'they have an amount but no date. Map the file\'s date column to Gift date below.'}
-              {k === 'bad-date' && 'their date couldn\'t be read (use a format like 2026-11-14, 11/14/2026 or Nov 14, 2026).'}
-              {k === 'bad-amount' && 'their amount couldn\'t be read as a positive number.'}
+            <p key={k} role={k === 'bad-amount' ? 'alert' : 'note'} className={k === 'bad-amount' ? 'rounded-md bg-amber-100 p-3 text-amber-950' : 'rounded-md bg-muted p-3'}>
+              <strong>
+                {issues[k].length} gift{issues[k].length === 1 ? '' : 's'}{' '}
+                {k === 'no-date' && 'have no date'}
+                {k === 'bad-date' && 'have a date that couldn\'t be read'}
+                {k === 'bad-amount' && 'won\'t be saved'}
+              </strong>
+              {k === 'bad-amount'
+                ? ': their amount couldn\'t be read as a positive number.'
+                : '. They\'ll be saved with the date unknown: they count toward lifetime giving, but not toward any year\'s totals like Raised YTD. To date them, map the file\'s date column to Gift date below (formats like 2026-11-14, 11/14/2026 and Nov 14, 2026 work).'}
               {' '}For example: {issues[k].slice(0, 3).map((r) => r.name).join(', ')}.
             </p>
           ))}

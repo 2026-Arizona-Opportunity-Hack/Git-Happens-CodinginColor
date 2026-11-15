@@ -27,3 +27,13 @@ test('the calendar link is an all-day event on the due date', () => {
   assert.equal(url.searchParams.get('text'), 'Invite to Day of Compute (Verizon Foundation)')
   assert.match(url.searchParams.get('details')!, /https:\/\/app\.test\/donors\/d4$/)
 })
+
+test('undated gifts count toward lifetime giving but no year, and sort after dated ones', async () => {
+  const { totalsByYear, inYear, byDateDesc, lastGiftDate, fmtDate } = await import('./logic')
+  const gifts = [{ amount: 10, date: null }, { amount: 20, date: '2026-03-01' }, { amount: 5, date: '2025-01-01' }]
+  assert.deepEqual([...totalsByYear(gifts as never).entries()].sort(), [[2025, 5], [2026, 20]])
+  assert.equal(gifts.filter((g) => inYear(g, 2026)).length, 1)
+  assert.deepEqual([...gifts].sort(byDateDesc).map((g) => g.date), ['2026-03-01', '2025-01-01', null])
+  assert.equal(lastGiftDate(gifts), '2026-03-01')
+  assert.equal(fmtDate(null), 'Date unknown')
+})
