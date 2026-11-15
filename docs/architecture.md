@@ -18,14 +18,36 @@ covers:
 
 One Cloudflare Worker serves both the React app and a JSON API under `/api/*`. Donor data is in Cloudflare D1 (SQLite). WorkOS AuthKit signs people in and is the source of truth for who is on the board. The AI gateway writes drafts and answers the assistant.
 
-```
-browser (React SPA, PWA)
-   │  WorkOS access token
-   ▼
-Cloudflare Worker  worker/index.ts ──► WorkOS     who is on the board, their role
-   │                                ├─► AI gateway  drafts, assistant
-   ▼                                └─► CIC's iCal  events, every 10 minutes at most
-D1 (SQLite)  migrations/
+```mermaid
+flowchart LR
+  subgraph Clients
+    B["Board member / admin<br/>React SPA + PWA (src/)"]
+    O["CIC org dashboard<br/>API key cic_live_…"]
+  end
+
+  subgraph CF["Cloudflare (githappens.jurenka.software)"]
+    A["Static assets<br/>dist/, sw.js"]
+    subgraph W["Worker"]
+      AU["/auth/*<br/>worker/auth.ts<br/>sign-in, HttpOnly session cookie"]
+      API["/api/*<br/>worker/index.ts<br/>resolve caller → scope to owned donors"]
+      DOC["/api/docs<br/>worker/openapi.ts"]
+    end
+    D1[("D1 (SQLite)<br/>migrations/")]
+  end
+
+  WO["WorkOS AuthKit<br/>JWKS, users, CIC org roles"]
+  AI["OHack AI gateway<br/>drafts: gpt-oss-120b<br/>assistant: muse-spark"]
+  ICS["CIC events calendar (.ics)"]
+
+  B -- "pages" --> A
+  B -- "sign in / access token" --> AU
+  B -- "Bearer access token" --> API
+  O -- "GET /api/v1/summary" --> API
+  AU <--> WO
+  API -- "verify token, look up role" --> WO
+  API <--> D1
+  API -- "POST /api/drafts, /api/chat" --> AI
+  API -- "fetch, cached ≤10 min" --> ICS
 ```
 
 Every request resolves the caller first: the Worker verifies the token, then looks the user up in the CIC organization in WorkOS. A board member can only read or write donors they own; admins see every donor. The browser loads `/api/bootstrap` once, and each action calls one route and reloads, so the UI always shows what D1 holds.
