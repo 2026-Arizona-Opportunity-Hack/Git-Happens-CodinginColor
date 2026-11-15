@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
-import { toast } from 'sonner'
 import { PageHeader, SectionTitle } from '@/components/common'
+import { SendDraft } from '@/components/SendDraft'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,7 +10,7 @@ import { daysBetween, fmtDate, quarterlyTouchDue, retentionStatus, yearOf } from
 
 // The board member's work queue. The system drafts and reminds; a human sends.
 export default function FollowUps() {
-  const { donors, gifts, drafts, today, createDraft, updateDraft, approveDraft, discardDraft } = useStore()
+  const { donors, gifts, drafts, today, createDraft, updateDraft } = useStore()
   const ids = new Set(donors.map((d) => d.id))
   const name = (id: string) => donors.find((d) => d.id === id)?.name
 
@@ -37,11 +37,8 @@ export default function FollowUps() {
                 <CardContent>
                   <Textarea aria-label={`Draft to ${name(d.donorId)}`} rows={7} value={d.body} onChange={(e) => updateDraft(d.id, e.target.value)} />
                 </CardContent>
-                <CardFooter className="gap-2">
-                  <Button onClick={async () => { if (await approveDraft(d.id)) toast.success(`Approved and logged for ${name(d.donorId)}`) }}>
-                    Approve &amp; send
-                  </Button>
-                  <Button variant="ghost" onClick={() => discardDraft(d.id)}>Discard</Button>
+                <CardFooter>
+                  <SendDraft draft={d} donor={donors.find((x) => x.id === d.donorId)!} />
                 </CardFooter>
               </Card>
             ))}
