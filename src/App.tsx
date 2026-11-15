@@ -1,10 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
 import { AuthKitProvider, useAuth } from '@workos-inc/authkit-react'
-import { BarChart3, Code2, Home, ListTodo, LogOut, Upload, UserCog, UserRound, Users } from 'lucide-react'
+import { BarChart3, Bell, Code2, Home, ListTodo, LogOut, Upload, UserCog, UserRound, Users } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
-import { StoreProvider, useStore } from '@/store'
+import { StoreProvider, useReminders, useStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { ChatWidget } from '@/components/ChatWidget'
 import Dashboard from '@/pages/Dashboard'
@@ -14,11 +14,13 @@ import FollowUps from '@/pages/FollowUps'
 import Retention from '@/pages/Retention'
 import Import from '@/pages/Import'
 import ApiDocs from '@/pages/ApiDocs'
+import Notifications from '@/pages/Notifications'
 const Members = lazy(() => import('@/pages/Members'))
 const Account = lazy(() => import('@/pages/Account'))
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: Home },
+  { to: '/notifications', label: 'Notifications', icon: Bell },
   { to: '/follow-ups', label: 'Follow-ups', icon: ListTodo },
   { to: '/donors', label: 'Donors', icon: Users },
   { to: '/retention', label: 'Retention', icon: BarChart3 },
@@ -45,6 +47,8 @@ function SignedInAs() {
 
 function Shell() {
   const { session } = useStore()
+  // Badge counts what needs action now; "coming up" items don't nag.
+  const actionable = useReminders().filter((r) => r.urgency !== 'upcoming').length
   return (
     <div className="min-h-screen md:grid md:grid-cols-[240px_1fr]">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:p-2">Skip to content</a>
@@ -72,6 +76,11 @@ function Shell() {
               }
             >
               <Icon className="size-4" aria-hidden /> {label}
+              {to === '/notifications' && actionable > 0 && (
+                <span className="ml-auto rounded-full bg-cic-dark px-1.5 text-xs font-semibold text-white">
+                  {actionable}<span className="sr-only"> need action</span>
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
@@ -82,6 +91,7 @@ function Shell() {
       <main id="main" className="mx-auto w-full max-w-6xl p-4 md:p-8">
         <Routes>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/notifications" element={<Notifications />} />
           <Route path="/follow-ups" element={<FollowUps />} />
           <Route path="/donors" element={<Donors />} />
           <Route path="/donors/:id" element={<DonorDetail />} />

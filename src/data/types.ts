@@ -69,6 +69,16 @@ export interface CicEvent {
   date: string
 }
 
+// One committed import of one source file.
+export interface ImportRecord {
+  id: string
+  source: Source
+  fileName?: string
+  rowCount: number
+  importedAt: string // ISO timestamp
+  importedBy: string
+}
+
 // A row as it arrives from any import source, before dedupe.
 export interface RawDonorRow {
   source: Source
