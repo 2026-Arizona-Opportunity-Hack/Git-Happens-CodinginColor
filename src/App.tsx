@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { StoreProvider, useReminders, useStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { ChatPanel, useChat, useWide } from '@/components/ChatWidget'
+import { DonorSearch } from '@/components/DonorSearch'
 import { InstallPrompt } from '@/components/InstallPrompt'
 import Dashboard from '@/pages/Dashboard'
 import Donors from '@/pages/Donors'
@@ -94,6 +95,7 @@ function Shell() {
           ))}
         </nav>
         <div className="mt-6 md:mt-auto md:pt-6">
+          <DonorSearch />
           <SignedInAs />
         </div>
       </aside>
