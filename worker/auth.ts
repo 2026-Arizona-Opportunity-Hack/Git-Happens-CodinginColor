@@ -38,7 +38,11 @@ function readCookie(req: Request, name: string) {
   return c.split(/;\s*/).find((p) => p.startsWith(`${name}=`))?.slice(name.length + 1)
 }
 
-const key = async (env: Env) => new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(env.WORKOS_COOKIE_PASSWORD)))
+// A missing or short password would make the cookie forgeable, so refuse to run without a real one.
+async function key(env: Env) {
+  if ((env.WORKOS_COOKIE_PASSWORD ?? '').length < 32) throw new Error('WORKOS_COOKIE_PASSWORD must be at least 32 characters')
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(env.WORKOS_COOKIE_PASSWORD)))
+}
 
 async function seal(env: Env, s: Sealed) {
   return new EncryptJWT({ ...s }).setProtectedHeader({ alg: 'dir', enc: 'A256GCM' }).setIssuedAt().encrypt(await key(env))
