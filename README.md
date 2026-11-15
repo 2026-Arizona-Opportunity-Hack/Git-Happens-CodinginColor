@@ -192,7 +192,7 @@ The Worker also needs the WorkOS secret key. Set it once (or whenever the key is
 
 `.github/workflows/security-review.yml` asks a model to review a PR's diff for security problems. It runs two ways:
 
-- **Check**: every PR gets one `muse-wonder` review, posted as a comment, when it's opened, reopened or marked ready for review. Pushing more commits doesn't re-run it, which keeps the gateway credits for real use. Drafts are skipped until they're ready.
+- **Check**: every PR gets one `muse-wonder` review, posted as a comment, when it's opened, reopened or marked ready for review. Pushing more commits doesn't re-run it, which keeps the gateway credits for real use. Drafts are skipped until they're ready. **Off for now**: turn it on with `gh variable set AI_CHECK_ALL_PRS --body true` and off again with `gh variable delete AI_CHECK_ALL_PRS`.
 - **Audit**: when you ask, the review is saved as a report in [`audits/`](audits/) and opened as its own PR, with a comment on the reviewed PR linking to it. Add a label to the PR (it comes off afterwards, so add it again to re-run), or run it from the Actions tab with a PR number and model.
 
 Audit PRs need **Settings → Actions → General → Allow GitHub Actions to create and approve pull requests**; without it the report is still pushed to an `audit/…` branch and the comment links to it.
