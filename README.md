@@ -151,9 +151,9 @@ bun run test         # unit tests for src/lib, failing under 95% coverage (docs/
 
 ## Links
 
-- Live demo: https://githappens.jurenka.software
+- Live demo: [https://githappens.jurenka.software](https://githappens.jurenka.software)
 - Demo video:
-- Docs: [docs/](docs/)
+- Docs: [https://githappens.jurenka.software/api/docs](https://githappens.jurenka.software/api/docs)
 
 ## After the hackathon
 
