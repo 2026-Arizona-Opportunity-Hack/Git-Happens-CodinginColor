@@ -10,6 +10,7 @@ covers:
 
 One donor's page:
 
+- **Notes:** free text about the donor, under Giving by year. It saves as you type (a second after you stop, or when you leave the box), and the AI reads it when it writes their [drafts](follow-ups.md). Notes can also be imported from a Notes column on [Update Donors](update-donors.md).
 - **Timeline** of gifts and communications.
 - **Next step:** set one, add it to Google Calendar, or invite the donor to an upcoming event in **one click**. That sets the next step "Invite to <event>", due a week before it, plus a draft invitation to approve in [Follow-ups](follow-ups.md).
 - **Log** a text, email or call.

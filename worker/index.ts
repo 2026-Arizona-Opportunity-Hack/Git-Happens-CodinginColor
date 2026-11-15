@@ -1,7 +1,7 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import type { BoardMember, Channel, CicEvent, Donor, Draft, DraftKind, Gift, ImportRecord, Interaction, NextStep, Program, RawDonorRow, Source } from '../src/data/types'
-import { dedupe, matchDonor, splitGifts } from '../src/lib/dedupe'
-import { AI_KINDS, cleanDraft, draftPrompt, inert } from '../src/lib/ai-draft'
+import { dedupe, matchDonor, mergeNotes, splitGifts } from '../src/lib/dedupe'
+import { cleanDraft, draftPrompt, inert } from '../src/lib/ai-draft'
 import { draftBody } from '../src/lib/drafts'
 import { parseIcs } from '../src/lib/ical'
 import { inviteDue } from '../src/lib/logic'
@@ -62,6 +62,7 @@ const toDonor = (r: Row): Donor => ({
     : undefined,
   lastTouchAt: (r.last_touch_at as string) ?? undefined,
   extra: r.extra && r.extra !== '{}' ? JSON.parse(r.extra as string) : undefined,
+  notes: (r.notes as string) || undefined, // '' = none
 })
 const toGift = (r: Row): Gift => ({ id: r.id as string, donorId: r.donor_id as string, amount: r.amount as number, date: (r.date as string) || null, source: r.source as Source, program: r.program as Program }) // date NOT NULL in D1: '' = unknown
 const toInteraction = (r: Row): Interaction => ({ id: r.id as string, donorId: r.donor_id as string, byId: r.by_id as string, channel: r.channel as Channel, date: r.date as string, summary: r.summary as string })
@@ -160,22 +161,30 @@ const logInteraction = (env: Env, s: Session, donorId: string, channel: Channel,
   env.DB.prepare('UPDATE donors SET last_touch_at = ? WHERE id = ?').bind(today(), donorId),
 ]
 
-// A pending draft, written from the template, signed as the donor's owner (or
+// A pending draft, written by the AI from the template and what's known about
+// the donor (the template itself if the AI is unavailable), signed as the donor's owner (or
 // as the caller if the owner has left the board). Returns the draft and the
 // statement that saves it, so a caller can batch it with other writes.
-// A `body` the assistant already wrote (from a debrief) is used as is.
-async function newDraft(env: Env, s: Session, donor: Donor, kind: DraftKind, channel: 'email' | 'text', event?: CicEvent, body?: string) {
+// A `body` given is used as is: the assistant's (from a debrief, so `ai`), or
+// a template someone picked on Follow-ups (`ai` false).
+async function newDraft(env: Env, s: Session, donor: Donor, kind: DraftKind, channel: 'email' | 'text', event?: CicEvent, body?: string, bodyByAi = true) {
   const db = env.DB
-  const draft: Draft = { id: id('x'), donorId: donor.id, kind, channel, status: 'pending', createdAt: today(), body: body ?? '', ai: body !== undefined }
+  const draft: Draft = { id: id('x'), donorId: donor.id, kind, channel, status: 'pending', createdAt: today(), body: body ?? '', ai: body !== undefined && bodyByAi }
   if (body === undefined) {
-    const gifts = await db.prepare('SELECT * FROM gifts WHERE donor_id = ?').bind(donor.id).all<Row>()
+    // The donor's gifts, logged outreach and sent messages: what the AI writes from.
+    const [gifts, touches, sent] = await db.batch<Row>([
+      db.prepare('SELECT * FROM gifts WHERE donor_id = ?').bind(donor.id),
+      db.prepare('SELECT * FROM interactions WHERE donor_id = ? ORDER BY date DESC, id DESC LIMIT 10').bind(donor.id),
+      db.prepare("SELECT body FROM drafts WHERE donor_id = ? AND status = 'approved' ORDER BY created_at DESC, id DESC LIMIT 3").bind(donor.id),
+    ])
     // Updates and nudges mention the next event on the calendar.
     event ??= (await db.prepare('SELECT * FROM events WHERE date >= ? ORDER BY date, id LIMIT 1').bind(today()).first<CicEvent>()) ?? undefined
     const members = await listMembers(env)
     const owner = toMember(members.find((mb) => mb.id === donor.ownerId) ?? members.find((mb) => mb.id === s.memberId)!)
     const gs = gifts.results.map(toGift)
     draft.body = draftBody(kind, donor, gs, owner, event)
-    const written = AI_KINDS.includes(kind) ? await aiDraft(env, draftPrompt(kind, channel, donor, gs, owner, draft.body, event), channel) : null
+    const ctx = { notes: donor.notes, interactions: touches.results.map(toInteraction), sent: sent.results.map((r) => r.body as string) }
+    const written = await aiDraft(env, draftPrompt(kind, channel, donor, gs, owner, draft.body, event, ctx), channel)
     if (written) { draft.body = written; draft.ai = true }
   }
   const save = db.prepare('INSERT INTO drafts (id, donor_id, kind, channel, body, created_at, status, ai) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
@@ -482,6 +491,14 @@ async function route(req: Request, env: Env): Promise<Response> {
       return json({ nextStep: step, draft }, 201)
     }
 
+    // PUT /api/donors/:id/notes {notes}: replaces the donor's notes; '' clears them.
+    if (m === 'PUT' && parts[2] === 'notes') {
+      const notes = (await body(req)).notes
+      if (typeof notes !== 'string' || notes.length > 10000) throw new HttpError(400, 'notes must be a string up to 10000 chars')
+      await db.prepare('UPDATE donors SET notes = ? WHERE id = ?').bind(notes.trim(), donor.id).run()
+      return json({ ok: true })
+    }
+
     // PUT /api/donors/:id/owner {ownerId} (admin); ownerId null unassigns
     if (m === 'PUT' && parts[2] === 'owner') {
       requireAdmin(s)
@@ -493,7 +510,8 @@ async function route(req: Request, env: Env): Promise<Response> {
     }
   }
 
-  // POST /api/drafts {donorId, kind, channel?}: the server writes the draft body.
+  // POST /api/drafts {donorId, kind, channel?, body?, template?}: the server
+  // writes the draft body (the AI, or the template if it's unavailable).
   if (m === 'POST' && parts[0] === 'drafts' && !parts[1]) {
     const b = await body(req)
     const donor = await loadDonor(env, s, str(b.donorId, 'donorId', 50))
@@ -501,7 +519,8 @@ async function route(req: Request, env: Env): Promise<Response> {
     const channel = b.channel === undefined ? 'email' : oneOf(b.channel, ['email', 'text'] as const, 'channel')
     // A body the caller wrote (the assistant's follow-up from a debrief) is
     // used as is, without the gateway; it's still pending until a human approves it.
-    const { draft, save } = await newDraft(env, s, donor, kind, channel, undefined, b.body === undefined ? undefined : str(b.body, 'body', 4000))
+    // template: true marks a body as a template's (Follow-ups' Template emails), not the AI's.
+    const { draft, save } = await newDraft(env, s, donor, kind, channel, undefined, b.body === undefined ? undefined : str(b.body, 'body', 4000), b.template !== true)
     await save.run()
     return json(draft, 201)
   }
@@ -608,6 +627,7 @@ async function route(req: Request, env: Env): Promise<Response> {
         amount: r.amount === undefined || r.amount === null ? undefined : Number(r.amount) > 0 ? Number(r.amount) : undefined,
         date: r.date ? date(r.date, `rows[${i}].date`) : undefined,
         program: r.program ? oneOf(r.program, PROGRAMS, `rows[${i}].program`) : undefined,
+        notes: optStr(r.notes, `rows[${i}].notes`, 2000),
         extra: extraFields(r.extra, `rows[${i}].extra`),
       }
     })
@@ -636,16 +656,17 @@ async function route(req: Request, env: Env): Promise<Response> {
         match.phone ??= c.phone
         match.sources = [...new Set([...match.sources, ...c.sources])]
         match.extra = { ...match.extra, ...clusterExtra(c.rows) } // newest import wins per field
-        writes.push(db.prepare('UPDATE donors SET email = ?, phone = ?, sources = ?, extra = ? WHERE id = ?')
-          .bind(match.email ?? null, match.phone ?? null, JSON.stringify(match.sources), JSON.stringify(match.extra), match.id))
+        match.notes = mergeNotes(match.notes, c.rows)
+        writes.push(db.prepare('UPDATE donors SET email = ?, phone = ?, sources = ?, extra = ?, notes = ? WHERE id = ?')
+          .bind(match.email ?? null, match.phone ?? null, JSON.stringify(match.sources), JSON.stringify(match.extra), match.notes, match.id))
       } else {
         created++
-        const d: Donor = { id: id('d'), name: c.name, email: c.email, phone: c.phone, org: c.org, sources: c.sources, ownerId: null, extra: clusterExtra(c.rows) }
+        const d: Donor = { id: id('d'), name: c.name, email: c.email, phone: c.phone, org: c.org, sources: c.sources, ownerId: null, extra: clusterExtra(c.rows), notes: mergeNotes('', c.rows) }
         donors.push(d)
         createdDonors.push({ id: d.id, name: d.name })
         donorId = d.id
-        writes.push(db.prepare('INSERT INTO donors (id, name, email, phone, org, owner_id, sources, extra) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-          .bind(d.id, d.name, d.email ?? null, d.phone ?? null, d.org ?? null, '', JSON.stringify(d.sources), JSON.stringify(d.extra)))
+        writes.push(db.prepare('INSERT INTO donors (id, name, email, phone, org, owner_id, sources, extra, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+          .bind(d.id, d.name, d.email ?? null, d.phone ?? null, d.org ?? null, '', JSON.stringify(d.sources), JSON.stringify(d.extra), d.notes))
       }
       // Skip gifts this donor already has (same amount, near-same date), so
       // re-imports and donations reported by two sources aren't double counted.

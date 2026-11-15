@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Download, FileSpreadsheet } from 'lucide-react'
+import { Download, FileSpreadsheet, Sparkles } from 'lucide-react'
 import { PageHeader, SectionTitle } from '@/components/common'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,15 +9,16 @@ import { DataTable, type ColumnDef, type Filters } from '@/components/ui/data-ta
 import { applyFilters } from '@/components/ui/filters'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { Donor } from '@/data/types'
-import { fmtDate, lastGiftDate, money, UNASSIGNED } from '@/lib/logic'
+import { fmtDate, lastGiftDate, money, suggestOwners, UNASSIGNED } from '@/lib/logic'
 import { donorsCsv, donorsXlsx, download } from '@/lib/export'
 import { donorTextFilter, giftDateFilter, sourceFilter } from '@/lib/donor-columns'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store'
 
 // Every donor and who looks after them. This is where an admin manages board
-// member responsibilities: pick board members in the rows (changed rows turn
-// amber), then Save at the bottom. Nothing is saved until then.
+// member responsibilities: pick board members in the rows, or let Suggest
+// assignment fill the unassigned ones (changed rows turn amber), then Save at
+// the bottom. Nothing is saved until then.
 export default function AllDonors() {
   const { donors, gifts, boardMembers, assignOwners, ownerName, today } = useStore()
   const location = useLocation()
@@ -59,6 +60,18 @@ export default function AllDonors() {
     toast.success(list.length === 1
       ? `${list[0].name}: ${name(choice(list[0]))}`
       : `Saved ${list.length} donors`)
+  }
+
+  // Fills in a board member for each unassigned donor the filters show that
+  // has no choice yet: whoever has the fewest, counting unsaved choices, spread
+  // as it goes. Nothing is saved until Save.
+  const suggest = (list: Donor[]) => {
+    const todo = list.filter((d) => !isChanged(d)).map((d) => d.id)
+    if (!todo.length || !boardMembers.length) return
+    const load = donors.map((d) => ({ ownerId: choice(d) === UNASSIGNED ? null : choice(d) }))
+    const picks = suggestOwners(boardMembers, load, todo)
+    setChoices((c) => ({ ...c, ...Object.fromEntries(picks) }))
+    toast.info(`Suggested a board member for ${todo.length} donor${todo.length === 1 ? '' : 's'}. Check them, then Save.`)
   }
 
   const items = [{ value: UNASSIGNED, label: 'Unassigned' }, ...boardMembers.map((m) => ({ value: m.id, label: `${m.name} (${load.get(m.id) ?? 0})` }))]
@@ -178,7 +191,16 @@ export default function AllDonors() {
       </section>
 
       <section className="mt-10">
-        <SectionTitle>Unassigned donors ({filtering ? `${shownUnassigned.length} of ${unassigned.length}` : unassigned.length})</SectionTitle>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 [&>h2]:mb-0">
+          <SectionTitle>Unassigned donors ({filtering ? `${shownUnassigned.length} of ${unassigned.length}` : unassigned.length})</SectionTitle>
+          <Button
+            variant="outline"
+            disabled={!boardMembers.length || !shownUnassigned.some((r) => !isChanged(r.d))}
+            onClick={() => suggest(shownUnassigned.map((r) => r.d))}
+          >
+            <Sparkles aria-hidden /> Suggest assignment
+          </Button>
+        </div>
         {filtering && <p className="-mt-2 mb-3 text-sm text-muted-foreground">The filters above apply here too.</p>}
         {table(shownUnassigned, 'Unassigned donors', filtering && unassigned.length ? 'No unassigned donors match these filters.' : 'There are no unassigned donors.', false)}
       </section>

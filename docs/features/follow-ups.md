@@ -19,7 +19,9 @@ A board member's work queue:
 
 ## Drafts
 
-Thank-yous, quarterly updates and lapsed nudges are written by AI from the donor's gifts and the programs they funded. They're marked **Drafted by AI: check before sending**. If the AI fails or takes over 12 seconds, the template is used instead.
+Every draft (thank-you, quarterly update, lapsed nudge, follow-up, invitation) is written by AI from the donor's **notes**, gifts, next step, logged outreach and the last messages sent to them. They're marked **Drafted by AI: check before sending**. If the AI fails or takes over 12 seconds, the template is used instead.
+
+**Template emails** at the bottom shows the standard thank-you, update, nudge and follow-up filled in for any donor. **Use this template** adds it to the drafts as written, without the AI.
 
 ## Sending
 
@@ -28,7 +30,7 @@ A draft opens in Gmail, Outlook or the default mail app (or Messages, for texts)
 ## Where the code is
 
 - `src/lib/drafts.ts`: the message templates. Invitations, updates and nudges name a real event from the calendar. They're the fallback, and the starting point the AI rewrites.
-- `src/lib/ai-draft.ts`: the prompt for AI drafts (which kinds, the rules, the donor's facts), and the check that throws out a reply that is empty, too long, or contains links, web or email addresses other than codingincolor.org, payment or bank words, account-like numbers or `[placeholders]`. Donor, org and event names go into the prompt on one line with directive syntax stripped (`inert()`).
+- `src/lib/ai-draft.ts`: the prompt for AI drafts (the rules, the donor's facts, notes, outreach and sent messages), and the check that throws out a reply that is empty, too long, or contains links, web or email addresses other than codingincolor.org, payment or bank words, account-like numbers or `[placeholders]`. Donor, org and event names, notes, next steps, outreach and sent messages go into the prompt on one line each with directive syntax stripped (`inert()`).
 - `src/components/SendDraft.tsx`: the mail-app links and the "Did you send it?" step.
 - The Worker route is `POST /api/drafts`; which model it uses and why is in [the AI model decision](../decisions/001-ai-model.md).
 

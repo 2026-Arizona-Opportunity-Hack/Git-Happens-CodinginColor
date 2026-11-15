@@ -79,6 +79,14 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
           responses: { 201: { description: 'The new next step and draft', content: { 'application/json': { schema: { type: 'object', properties: { nextStep: ref('NextStep'), draft: ref('Draft') } } } } }, ...errors(400, 401, 403, 404) },
         },
       },
+      '/api/donors/{id}/notes': {
+        put: {
+          tags: ['Donors'], summary: "Replace a donor's notes", description: 'Send `""` to clear them. The AI reads them when it writes a draft.',
+          parameters: [idParam('id', 'Donor ID')],
+          requestBody: jsonBody({ type: 'object', required: ['notes'], properties: { notes: { type: 'string', maxLength: 10000 } } }),
+          responses: { 200: ok, ...errors(400, 401, 403, 404) },
+        },
+      },
       '/api/donors/{id}/owner': {
         put: {
           tags: ['Donors'], summary: 'Reassign a donor (admin only)',
@@ -102,7 +110,7 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
           tags: ['Drafts'], summary: 'Draft a message', description: 'The server writes the body from the donor\'s history and the programs they funded, signed by the donor\'s owner. Thank-yous, quarterly updates and lapsed nudges are written by the AI gateway (`ai: true`), falling back to a template if it fails or is slow. It starts as `pending`.',
           requestBody: jsonBody({
             type: 'object', required: ['donorId', 'kind'],
-            properties: { donorId: { type: 'string' }, kind: { enum: enums.kinds.filter((k) => k !== 'event-invite'), description: 'Invitations come from POST /api/donors/{id}/invite' }, channel: { enum: ['email', 'text'], default: 'email' }, body: { type: 'string', maxLength: 4000, description: 'Use this body instead of writing one, e.g. a follow-up the assistant wrote from a debrief. Still starts as `pending`.' } },
+            properties: { donorId: { type: 'string' }, kind: { enum: enums.kinds.filter((k) => k !== 'event-invite'), description: 'Invitations come from POST /api/donors/{id}/invite' }, channel: { enum: ['email', 'text'], default: 'email' }, body: { type: 'string', maxLength: 4000, description: 'Use this body instead of writing one, e.g. a follow-up the assistant wrote from a debrief. Still starts as `pending`.' }, template: { type: 'boolean', default: false, description: 'The body is a template someone picked, so the draft is not marked as written by AI' } },
           }),
           responses: { 201: jsonResponse('The new draft', ref('Draft')), ...errors(400, 401, 403, 404) },
         },
@@ -223,7 +231,7 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
           properties: {
             id: { type: 'string' }, name: { type: 'string' }, email: { type: 'string' }, phone: { type: 'string' }, org: { type: 'string' },
             ownerId: { type: ['string', 'null'], description: 'null until an admin assigns a board member' },
-            extra: { type: 'object', additionalProperties: { type: 'string' }, description: 'Custom fields created while importing' }, sources: { type: 'array', items: { enum: enums.sources } }, nextStep: ref('NextStep'), lastTouchAt: isoDate,
+            extra: { type: 'object', additionalProperties: { type: 'string' }, description: 'Custom fields created while importing' }, notes: { type: 'string', description: 'Free text from the donor profile or an imported Notes column' }, sources: { type: 'array', items: { enum: enums.sources } }, nextStep: ref('NextStep'), lastTouchAt: isoDate,
           },
         },
         Gift: {

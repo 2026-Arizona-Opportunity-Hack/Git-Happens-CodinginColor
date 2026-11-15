@@ -10,13 +10,14 @@ covers:
 
 # Update Donors (admin)
 
-Upload the spreadsheet, Zeffy and Benevity CSVs, then map their columns in a staging popup.
+Choosing a spreadsheet, Zeffy or Benevity CSV opens the review popup straight away to map its columns. **Review and map columns** reopens it after Back.
 
 ## Mapping columns
 
 - **Mapped fields** shows each file column and the donor-database column it goes to. You can change any of them.
 - **Unmapped columns** default to *Do not save*. Set one to any database column no other column uses, or to **Create a new column** with a name you type. That makes a custom field shown on the [donor page](donor-detail.md).
-- The popup totals the gifts it will record.
+- The popup sums it up, e.g. *320 gifts totaling $54,479. 87 new donors, 0 already in the database.*
+- A file's **Notes** column maps to the donor's [notes](donor-detail.md). A re-import adds only lines not already there.
 
 ## Gifts and dates
 
@@ -27,7 +28,7 @@ Upload the spreadsheet, Zeffy and Benevity CSVs, then map their columns in a sta
 
 ## After saving
 
-A **New Donors** popup lists donors that weren't in the database. Selected ones open on [All Donors](all-donors.md) with the board member with the fewest donors suggested.
+A **New Donors** popup lists donors that weren't in the database, 10 per page. Selected ones open on [All Donors](all-donors.md) with the board member with the fewest donors suggested.
 
 Each source shows when it was last imported (stale after 30 days), plus an import history.
 

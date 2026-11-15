@@ -13,13 +13,15 @@ import { DataTable, type ColumnDef } from '@/components/ui/data-table'
 import { SAMPLE_CSV } from '@/data/samples'
 import { IMPORT_SOURCES as SOURCES, STALE_IMPORT_DAYS } from '@/data/sources'
 import type { Source } from '@/data/types'
-import { autoMapping, CUSTOM, csvHeaders, DB_FIELDS, dedupe, matchDonor, NEW_COLUMN, rowsFromCsv, SAME_GIFT_DAYS, SKIP, splitGifts, targetLabel, type ColumnMapping } from '@/lib/dedupe'
+import { autoMapping, CUSTOM, csvHeaders, DB_FIELDS, dedupe, matchDonor, NEW_COLUMN, rowsFromCsv, SKIP, splitGifts, targetLabel, type ColumnMapping } from '@/lib/dedupe'
 import { daysBetween, fmtDate, money, suggestOwners } from '@/lib/logic'
 import { latestImport } from '@/lib/reminders'
 import { useStore } from '@/store'
 
 const fmtWhen = (iso: string) =>
   new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+
+const NEW_PAGE = 10 // New Donors popup: donors per page
 
 const label = (src: Source) => SOURCES.find((s) => s.key === src)?.label ?? src
 
@@ -36,6 +38,7 @@ export default function Import() {
   const [saving, setSaving] = useState(false)
   const [created, setCreated] = useState<{ id: string; name: string }[] | null>(null)
   const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [newPage, setNewPage] = useState(0)
   const who = (id: string) => boardMembers.find((m) => m.id === id)?.name ?? 'a former board member'
   const clear = () => { setCsv({}); setFiles({}); setMappings({}) }
   // Custom fields earlier imports created; offered as targets and auto-matched by name.
@@ -62,7 +65,7 @@ export default function Import() {
   })
   const newGifts = plan.reduce((n, p) => n + p.keep.length, 0)
   const newTotal = plan.reduce((n, p) => n + p.keep.reduce((t, g) => t + g.amount, 0), 0)
-  const dupGifts = plan.reduce((n, p) => n + p.skipped.length, 0)
+  const newDonors = plan.filter((p) => !p.match).length
   const previewColumns: ColumnDef<(typeof plan)[number]>[] = [
     {
       id: 'donor',
@@ -133,12 +136,13 @@ export default function Import() {
     if (r.createdDonors.length) {
       setCreated(r.createdDonors)
       setPicked(new Set(r.createdDonors.map((d) => d.id)))
+      setNewPage(0)
     }
   }
 
   // Selected donors open on All Donors with a suggested board member (fewest
   // donors, spread as we go) filled in but not saved: the admin confirms with
-  // Update or Update all. Unselected ones stay under Unassigned.
+  // Save. Unselected ones stay under Unassigned.
   const assign = () => {
     const ids = created!.filter((d) => picked.has(d.id)).map((d) => d.id)
     const suggested = ids.length ? Object.fromEntries(suggestOwners(boardMembers, donors, ids)) : {}
@@ -150,7 +154,7 @@ export default function Import() {
     <>
       <PageHeader
         title="Update Donors"
-        actions={<Button variant="outline" onClick={() => { setCsv(SAMPLE_CSV); setMappings({}); setFiles({ spreadsheet: 'sample-spreadsheet.csv', zeffy: 'sample-zeffy.csv', benevity: 'sample-benevity.csv' }) }}>Load sample files</Button>}
+        actions={<Button variant="outline" onClick={() => { setCsv(SAMPLE_CSV); setMappings({}); setFiles({ spreadsheet: 'sample-spreadsheet.csv', zeffy: 'sample-zeffy.csv', benevity: 'sample-benevity.csv' }); setStaging(true) }}>Load sample files</Button>}
       />
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -183,6 +187,8 @@ export default function Import() {
                     setCsv((c) => ({ ...c, [s.key]: text }))
                     setFiles((f) => ({ ...f, [s.key]: file.name }))
                     setMappings((m) => { const next = { ...m }; delete next[s.key]; return next }) // new file: re-detect its columns
+                    setStaging(true) // straight to Review and map columns
+                    e.target.value = '' // so choosing the same file again opens it again
                   }}
                 />
                 {csv[s.key] && <p className="mt-2 text-sm text-cic-dark">{rowsFromCsv(csv[s.key]!, s.key, mappingFor(s.key)).length} rows loaded</p>}
@@ -192,7 +198,8 @@ export default function Import() {
         })}
       </div>
 
-      {/* Shown even at 0 rows: a file whose name column wasn't recognized needs mapping first. */}
+      {/* Choosing a file opens the review; this reopens it after Back. Shown even
+          at 0 rows: a file whose name column wasn't recognized needs mapping first. */}
       {loaded.length > 0 && (
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <Button onClick={() => setStaging(true)}>Review and map columns</Button>
@@ -208,9 +215,8 @@ export default function Import() {
           </DialogHeader>
 
           <div role="status" className="rounded-md bg-cic-tint p-3 text-cic-dark">
-            <strong>{newGifts} gift{newGifts === 1 ? '' : 's'} totaling {money(newTotal)}</strong> will be recorded
-            {dupGifts > 0 && <> ({dupGifts} skipped: already recorded for that donor, same amount within {SAME_GIFT_DAYS} days, or both undated)</>}.
-            {' '}{plan.filter((p) => !p.match).length} new donor{plan.filter((p) => !p.match).length === 1 ? '' : 's'}, {plan.filter((p) => p.match).length} already in the database.
+            <strong>{newGifts} gift{newGifts === 1 ? '' : 's'} totaling {money(newTotal)}.</strong>
+            {' '}{newDonors} new donor{newDonors === 1 ? '' : 's'}, {plan.length - newDonors} already in the database.
           </div>
           {/* Undated gifts are saved with the date unknown; only unreadable amounts are dropped. */}
           {(['no-date', 'bad-date', 'bad-amount'] as const).filter((k) => issues[k].length).map((k) => (
@@ -289,7 +295,7 @@ export default function Import() {
             <span className="ml-auto self-center text-muted-foreground">{picked.size} selected</span>
           </div>
           <ul className="divide-y rounded-md border">
-            {created?.map((d) => (
+            {created?.slice(newPage * NEW_PAGE, (newPage + 1) * NEW_PAGE).map((d) => (
               <li key={d.id}>
                 <label className="flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-muted">
                   <input
@@ -303,6 +309,15 @@ export default function Import() {
               </li>
             ))}
           </ul>
+          {created && created.length > NEW_PAGE && (
+            <nav aria-label="New donors pages" className="flex items-center justify-between text-sm">
+              <Button size="sm" variant="outline" disabled={newPage === 0} onClick={() => setNewPage((p) => p - 1)}>Previous</Button>
+              <span aria-live="polite">
+                {newPage * NEW_PAGE + 1}–{Math.min((newPage + 1) * NEW_PAGE, created.length)} of {created.length}
+              </span>
+              <Button size="sm" variant="outline" disabled={(newPage + 1) * NEW_PAGE >= created.length} onClick={() => setNewPage((p) => p + 1)}>Next</Button>
+            </nav>
+          )}
           <DialogFooter>
             <Button onClick={assign}>{picked.size ? `Assign ${picked.size} donor${picked.size === 1 ? '' : 's'}` : 'Continue to All Donors'}</Button>
           </DialogFooter>

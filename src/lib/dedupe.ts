@@ -72,6 +72,17 @@ export function dedupe(rows: RawDonorRow[]): DonorCluster[] {
   }))
 }
 
+// A donor's notes after an import: the saved notes, plus any line from the
+// file that isn't in them yet, so re-importing a file never repeats a note.
+export function mergeNotes(saved: string | undefined, rows: Pick<RawDonorRow, 'notes'>[]): string {
+  const lines = (saved ?? '').split('\n').map((l) => l.trim()).filter(Boolean)
+  for (const r of rows) {
+    const n = r.notes?.trim()
+    if (n && !lines.some((l) => l.includes(n))) lines.push(n)
+  }
+  return lines.join('\n')
+}
+
 // An existing donor this cluster belongs to, using the same keys as dedupe().
 // Shared by the server (on commit) and the Import preview, so they agree.
 export function matchDonor<D extends Pick<Donor, 'name' | 'email' | 'phone'>>(c: DonorCluster, donors: D[]): D | undefined {
@@ -177,6 +188,7 @@ export const DB_FIELDS = [
   { key: 'amount', label: 'Gift amount' },
   { key: 'date', label: 'Gift date' },
   { key: 'program', label: 'Gift program' },
+  { key: 'notes', label: 'Notes' },
 ] as const
 
 // Header spellings recognized automatically (normalized: see headerKey).
@@ -190,6 +202,7 @@ const KNOWN_HEADERS: Record<string, string[]> = {
   amount: ['amount', 'total amount', 'donation amount', 'gift amount'],
   date: ['date', 'payment date', 'donation date', 'gift date', 'transaction date'],
   program: ['program', 'designation', 'fund'],
+  notes: ['notes', 'note', 'comments', 'comment', 'donor notes'],
 }
 
 // Lowercase, without a trailing "(America/Phoenix)" or "(USD)" and punctuation:
@@ -338,6 +351,7 @@ export function rowsFromCsv(text: string, source: Source, mapping: ColumnMapping
         amount,
         date,
         program,
+        notes: val(rec, 'notes'),
         extra: Object.keys(extra).length ? extra : undefined,
         ...(giftIssue && { giftIssue }),
       }

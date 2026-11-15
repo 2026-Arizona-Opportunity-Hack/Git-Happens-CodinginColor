@@ -21,6 +21,7 @@ export interface Donor {
   ownerId: string | null // null: not assigned to a board member yet
   sources: Source[]
   extra?: Record<string, string> // custom fields created while importing
+  notes?: string // free text, edited on the donor's profile
   nextStep?: NextStep
   lastTouchAt?: string
 }
@@ -92,6 +93,7 @@ export interface RawDonorRow {
   amount?: number
   date?: string
   program?: Program
+  notes?: string
   extra?: Record<string, string> // custom columns chosen while staging
   // Why this row's gift can't be saved, for the staging warning (client only).
   giftIssue?: 'no-date' | 'bad-date' | 'bad-amount'
