@@ -14,6 +14,8 @@ name: AI security review
 #   ai-review:muse-wonder  muse-wonder on the OHack gateway (OHACK_REVIEW_KEY)
 #
 # The label is removed afterwards, so adding it again re-runs the audit.
+# Running it from the Actions tab with no PR number audits the whole repo
+# as it is on the chosen branch instead.
 
 on:
   pull_request:
@@ -21,8 +23,8 @@ on:
   workflow_dispatch:
     inputs:
       pr:
-        description: PR number
-        required: true
+        description: PR number (leave empty to audit the whole repo)
+        required: false
       model:
         description: Model to audit with
         type: choice
@@ -44,9 +46,9 @@ jobs:
         (vars.AI_CHECK_ALL_PRS == 'true' &&
          github.event.action != 'labeled' && !github.event.pull_request.draft)))
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     concurrency:
-      group: security-review-${{ github.event.pull_request.number || inputs.pr }}-${{ github.event.label.name || inputs.model || 'check' }}
+      group: security-review-${{ github.event.pull_request.number || inputs.pr || 'repo' }}-${{ github.event.label.name || inputs.model || 'check' }}
       cancel-in-progress: true
     env:
       GH_TOKEN: ${{ github.token }}
@@ -77,20 +79,24 @@ jobs:
       # No saved credentials, so the model can't read a GitHub token from .git
       - uses: actions/checkout@v4
         with:
-          ref: refs/pull/${{ env.PR }}/head
+          ref: ${{ env.PR && format('refs/pull/{0}/head', env.PR) || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
       # The prompt comes from the workflow's own commit, not the reviewed PR's
       # head, so an older PR still has one and a PR can't rewrite its own review
-      - name: Write the diff and prompt
+      - name: Write the prompt and diff
         run: |
           git fetch --no-tags "https://github.com/$GITHUB_REPOSITORY" "$GITHUB_SHA"
+          echo "SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          if [ -z "$PR" ]; then
+            git show FETCH_HEAD:.github/prompts/security-audit-repo.md > "$RUNNER_TEMP/prompt.md"
+            exit 0
+          fi
           git show FETCH_HEAD:.github/prompts/security-review.md > "$RUNNER_TEMP/prompt.md"
           base=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json baseRefName -q .baseRefName)
           git fetch --no-tags "https://github.com/$GITHUB_REPOSITORY" "$base"
           git diff FETCH_HEAD...HEAD > pr.diff
-          echo "SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
           wc -l pr.diff
 
       - run: npm install -g @anthropic-ai/claude-code@2.1.305
@@ -105,8 +111,8 @@ jobs:
           ANTHROPIC_MODEL: ${{ steps.model.outputs.name != 'claude' && steps.model.outputs.name || '' }}
           ANTHROPIC_SMALL_FAST_MODEL: ${{ steps.model.outputs.name != 'claude' && steps.model.outputs.name || '' }}
           ANTHROPIC_DEFAULT_HAIKU_MODEL: ${{ steps.model.outputs.name != 'claude' && steps.model.outputs.name || '' }}
-          # The every-PR check gets fewer turns than an audit someone asked for
-          MAX_TURNS: ${{ steps.model.outputs.mode == 'check' && 20 || 40 }}
+          # The every-PR check gets the fewest turns and a whole-repo audit the most
+          MAX_TURNS: ${{ steps.model.outputs.mode == 'check' && 20 || (env.PR && 40 || 100) }}
           GH_TOKEN: ''
         run: |
           for v in CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_MODEL ANTHROPIC_SMALL_FAST_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL; do
@@ -131,20 +137,26 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           sha=$SHA
-          title=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title -q .title)
-          file="audits/$(date -u +%F)-pr-$PR-$MODEL-$sha.md"
-          branch="audit/pr-$PR-$MODEL-$sha"
+          if [ -n "$PR" ]; then
+            subject="#$PR"; slug="pr-$PR"; heading="PR #$PR"
+            row="| PR | #$PR — $(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title -q .title) |"
+          else
+            subject="the whole repo"; slug="repo"; heading="whole repo"
+            row="| Scope | Whole repo on \`$GITHUB_REF_NAME\` |"
+          fi
+          file="audits/$(date -u +%F)-$slug-$MODEL-$sha.md"
+          branch="audit/$slug-$MODEL-$sha"
           remote="https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY"
 
           git fetch --no-tags "$remote" "$DEFAULT"
           git switch -c "$branch" FETCH_HEAD
           mkdir -p audits
           {
-            echo "# Security audit: PR #$PR"
+            echo "# Security audit: $heading"
             echo
             echo "| | |"
             echo "|---|---|"
-            echo "| PR | #$PR — $title |"
+            echo "$row"
             echo "| Commit | \`$sha\` |"
             echo "| Model | $MODEL |"
             echo "| Date | $(date -u +%F) |"
@@ -156,22 +168,22 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898+github-actions[bot]@users.noreply.github.com"
           git add "$file"
-          git commit -q -m "Add $MODEL security audit of #$PR"
+          git commit -q -m "Add $MODEL security audit of $subject"
           git push -q "$remote" "$branch"
 
           # GITHUB_TOKEN can only open PRs if the org allows it (ours does not),
           # so AUDIT_PR_TOKEN, a collaborator's classic token, opens it when set.
           # Without either, the branch is still there to open by hand
           if url=$(GH_TOKEN="${AUDIT_PR_TOKEN:-$GH_TOKEN}" gh pr create --repo "$GITHUB_REPOSITORY" --base "$DEFAULT" --head "$branch" \
-              --title "Add $MODEL security audit of #$PR" \
-              --body "Security audit of #$PR at \`$sha\` by $MODEL, saved as \`$file\`. Advisory only. [Run]($RUN_URL)"); then
+              --title "Add $MODEL security audit of $subject" \
+              --body "Security audit of $subject at \`$sha\` by $MODEL, saved as \`$file\`. Advisory only. [Run]($RUN_URL)"); then
             echo "link=[audit PR]($url)" >> "$GITHUB_OUTPUT"
           else
             echo "link=[audit branch](${{ github.server_url }}/$GITHUB_REPOSITORY/compare/$DEFAULT...$branch?expand=1)" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Comment on the PR
-        if: always() && steps.model.outputs.name
+        if: always() && steps.model.outputs.name && env.PR
         env:
           MODE: ${{ steps.model.outputs.mode }}
           MODEL: ${{ steps.model.outputs.name }}
