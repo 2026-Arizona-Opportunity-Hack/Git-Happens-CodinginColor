@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
 import { AuthKitProvider, useAuth } from '@workos-inc/authkit-react'
-import { BarChart3, Code2, Home, ListTodo, LogOut, Upload, Users } from 'lucide-react'
+import { BarChart3, Code2, Home, ListTodo, LogOut, Upload, UserCog, UserRound, Users } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
 import { StoreProvider, useStore } from '@/store'
@@ -13,6 +13,8 @@ import FollowUps from '@/pages/FollowUps'
 import Retention from '@/pages/Retention'
 import Import from '@/pages/Import'
 import ApiDocs from '@/pages/ApiDocs'
+const Members = lazy(() => import('@/pages/Members'))
+const Account = lazy(() => import('@/pages/Account'))
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: Home },
@@ -21,6 +23,8 @@ const NAV = [
   { to: '/retention', label: 'Retention', icon: BarChart3 },
   { to: '/import', label: 'Import', icon: Upload, adminOnly: true },
   { to: '/api', label: 'Read API', icon: Code2, adminOnly: true },
+  { to: '/members', label: 'Board members', icon: UserCog, adminOnly: true },
+  { to: '/account', label: 'My account', icon: UserRound },
 ]
 
 function SignedInAs() {
@@ -83,6 +87,8 @@ function Shell() {
           <Route path="/retention" element={<Retention />} />
           <Route path="/import" element={<Import />} />
           <Route path="/api" element={<ApiDocs />} />
+          <Route path="/members" element={session.role === 'admin' && <Suspense fallback={<p role="status">Loading…</p>}><Members /></Suspense>} />
+          <Route path="/account" element={<Suspense fallback={<p role="status">Loading…</p>}><Account /></Suspense>} />
         </Routes>
       </main>
       <Toaster />

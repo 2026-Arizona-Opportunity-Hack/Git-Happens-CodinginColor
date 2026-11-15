@@ -60,6 +60,8 @@ Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevi
 | **Retention** | Year over year: new, recovered, increased, same, decreased, lapsed, plus retention rate |
 | **Import** | Spreadsheet + Zeffy + Benevity CSVs → dedupe preview → commit; new donors assigned **round-robin to the member with the fewest** |
 | **Read API** | Contract for `GET /api/v1/donor-summary`, aggregated by period / program / board member, with a live sample response |
+| **Board members** (admin) | Invite board members, change their role, remove them (WorkOS Users Management widget) |
+| **My account** | Each user edits their profile, changes password and sets up MFA, and signs out other devices (WorkOS widgets) |
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
@@ -104,17 +106,20 @@ The password is public on purpose because the data is fake. Replace these accoun
 
 ## Run it locally
 
-Needs [Bun](https://bun.sh).
+Needs [Nix](https://nixos.org/download) with flakes enabled. `flake.nix` pins Bun and Node, so everyone builds with the same toolchain.
 
 ```bash
 git clone https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor.git
 cd Git-Happens-CodinginColor
+nix develop          # shell with bun + node; run everything below inside it
 bun install
 bun run db:migrate   # create the local D1 database
 bun run db:seed      # load the fake demo data (re-run any time to reset)
 bun dev              # http://localhost:5173, app + API
-bun run build        # typecheck + production build
+nix build            # typecheck + production build, output in ./result
 ```
+
+`nix build` installs dependencies from `bun.lock` in a sandbox, checked against a hash in `flake.nix`. After changing dependencies, set that hash (`x86_64-linux = "…"`) to `""`, run `nix build`, and paste the `got:` hash it prints. Other platforms need their own hash added the same way.
 
 `bun dev` runs the Worker and a local D1 database inside Vite, through `@cloudflare/vite-plugin`. Both the Worker and `bun run db:seed` need the WorkOS Staging secret key, so copy `.env.example` to `.env` and set `WORKOS_API_KEY` before running them. `.env` is gitignored.
 
@@ -127,7 +132,7 @@ The app uses the **Staging** environment of the "Coding in Color" WorkOS workspa
 
 - **An organization, "Coding in Color"** (`WORKOS_ORG_ID` in `wrangler.jsonc`). Its members are the board.
 
-WorkOS is the source of truth for board members; D1 only stores donor data, keyed by WorkOS user ID. To add a board member, create the user in WorkOS (Users → Create user), then add them to the "Coding in Color" organization with the **admin** role (sees every donor, can import) or the **member** role (only their own donors). To remove someone, remove their membership. The Worker caches the member list for 60 seconds, so changes show up within a minute. Someone who can sign in to WorkOS but isn't in the organization gets a 403.
+WorkOS is the source of truth for board members; D1 only stores donor data, keyed by WorkOS user ID. Admins manage the board on the app's **Board members** page: invite someone by email, set their role to **Admin** (sees every donor, can import) or **Member** (only their own donors), or remove them. The page is WorkOS's [Users Management widget](https://workos.com/docs/widgets/user-management). The Worker mints its token at `POST /api/widget-token`, and the widget only works for roles with the `widgets:users-table:manage` permission, which the Staging Admin role has. The WorkOS dashboard still works too: add a user to the "Coding in Color" organization with the same roles. The Worker caches the member list for 60 seconds, so changes show up within a minute. Someone who can sign in to WorkOS but isn't in the organization gets a 403.
 
 AuthKit runs in `devMode`, which keeps the session in localStorage. That's required without a WorkOS custom domain, which costs $99/month.
 
@@ -139,7 +144,7 @@ AuthKit runs in `devMode`, which keeps the session in localStorage. That's requi
 git push origin origin/main:develop
 ```
 
-Every push to `develop` deploys to **https://githappens.jurenka.software** through `.github/workflows/deploy.yml` (a Cloudflare Worker with static assets and a D1 database, configured in `wrangler.jsonc`). Each deploy applies any new `migrations/` to the production database first. You can also run it by hand from the Actions tab.
+Every push to `develop` deploys to **https://githappens.jurenka.software** through `.github/workflows/deploy.yml`, which builds with `nix build` and runs wrangler inside `nix develop` (a Cloudflare Worker with static assets and a D1 database, configured in `wrangler.jsonc`). Each deploy applies any new `migrations/` to the production database first. You can also run it by hand from the Actions tab.
 
 The repo needs two Actions secrets:
 
@@ -150,7 +155,7 @@ The repo needs two Actions secrets:
 
 The Worker also needs the WorkOS secret key. Set it once (or whenever the key is rotated) with `bunx wrangler secret put WORKOS_API_KEY` and paste the Staging `sk_test_…` key. Without it every API call fails.
 
-To deploy by hand, run `bun run deploy` (it uses wrangler, so log in with `wrangler login` first). To reset the live demo to the fake seed data, run `bun run db:seed:remote` (with `WORKOS_API_KEY` in `.env`; it maps the seed's donor owners to WorkOS users by email).
+To deploy by hand, run `bun run deploy` inside `nix develop` (it builds with `nix build` and uses wrangler, so log in with `wrangler login` first). To reset the live demo to the fake seed data, run `bun run db:seed:remote` (with `WORKOS_API_KEY` in `.env`; it maps the seed's donor owners to WorkOS users by email).
 
 ### Brand
 
