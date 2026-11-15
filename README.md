@@ -78,9 +78,10 @@ Here is what's still unfinished. More detail is in [Security → Known gaps](doc
 1. **Real exports.** Get scrubbed Zeffy and Benevity samples from CIC and adjust `COLUMN_MAP` in `src/lib/dedupe.ts`.
 2. **Replace the demo accounts** before real donors are loaded. The password is public on purpose.
 3. **Real calendar.** Set `CALENDAR_ICS_URL` to CIC's Google Calendar ([Events calendar](docs/operations.md#events-calendar)).
-4. **Sending from the app.** Today drafts open pre-filled in the board member's own mail or Messages app. Saving them straight to Gmail or Outlook needs per-user OAuth, and for Gmail, Google's app verification.
-5. **Classroom outcomes.** Once the curriculum platform (Problem 1) has a read API, add students served and learning gains to funder packets.
-6. **Brand.** Swap the placeholder logo in `App.tsx` for CIC's.
+4. **Sessions in an HttpOnly cookie.** The sign-in session sits in localStorage today, because keeping it in a cookie through AuthKit's browser SDK needs a $99/month WorkOS custom domain. We'll move sign-in to the Worker, so the session lives in an HttpOnly cookie on our own domain for free ([#179](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/issues/179)).
+5. **Sending from the app.** Today drafts open pre-filled in the board member's own mail or Messages app. Saving them straight to Gmail or Outlook needs per-user OAuth, and for Gmail, Google's app verification.
+6. **Classroom outcomes.** Once the curriculum platform (Problem 1) has a read API, add students served and learning gains to funder packets.
+7. **Brand.** Swap the placeholder logo in `App.tsx` for CIC's.
 
 ## Security: who can see what
 
@@ -99,7 +100,7 @@ Here is what's still unfinished. More detail is in [Security → Known gaps](doc
 
 - **Two roles, set in WorkOS.** *Admin* sees every donor and can import, assign donors, manage the board and issue API keys. *Member* sees only the donors assigned to them.
 - **Enforced on the server, not just hidden in the UI.** Every donor route filters by `owner_id` for members, and admin routes call `requireAdmin` (`worker/index.ts`). A member's browser never receives another member's donors.
-- **Known gaps** are listed in [Security](docs/security.md#known-gaps): no rate limit on the AI routes yet, the session is kept in localStorage (AuthKit dev mode), and the AI gateway sees donor data.
+- **Known gaps** are listed in [Security](docs/security.md#known-gaps): no rate limit on the AI routes yet, the session is kept in localStorage (AuthKit dev mode, moving to an HttpOnly cookie in [#179](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/issues/179)), and the AI gateway sees donor data.
 
 ## Accessibility
 
