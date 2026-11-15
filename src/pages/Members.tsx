@@ -11,10 +11,7 @@ export default function Members() {
   const { widgetToken } = useStore()
   return (
     <>
-      <PageHeader
-        title="Board members"
-        description="Invite board members and choose their role. Admin sees every donor and can import; Member sees only their own donors. Changes take up to a minute to reach the rest of the app."
-      />
+      <PageHeader title="Board members" />
       <Widgets>
         <UsersManagement authToken={widgetToken} />
       </Widgets>

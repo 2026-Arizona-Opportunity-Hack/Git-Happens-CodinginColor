@@ -198,7 +198,6 @@ export default function DonorDetail() {
                       </li>
                     ))}
                   </ul>
-                  <p className="mt-2 text-xs text-muted-foreground">One click sets the next step for a week before the event and drafts the invitation. Nothing is sent until you approve it.</p>
                 </div>
               )}
             </CardContent>
@@ -236,7 +235,6 @@ export default function DonorDetail() {
               <Button variant="outline" onClick={() => draft('thank-you')}>Thank-you</Button>
               <Button variant="outline" onClick={() => draft('quarterly-update')}>Quarterly update</Button>
               <Button variant="outline" onClick={() => draft('follow-up')}>Follow-up</Button>
-              <p className="text-xs text-muted-foreground">Drafts are never sent automatically. You approve each one.</p>
             </CardContent>
           </Card>
         </aside>

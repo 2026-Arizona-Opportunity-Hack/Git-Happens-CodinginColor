@@ -207,9 +207,6 @@ export default function AllDonors() {
 
       <section className="mt-10">
         <SectionTitle>Unassigned donors ({unassigned.length})</SectionTitle>
-        <p className="mb-3 text-sm text-muted-foreground">
-          Donors without a board member. Choose one and click Update to move the donor to the top of the list above.
-        </p>
         {table(unassigned, 'Unassigned donors', filtering ? 'No unassigned donors match these filters.' : 'Every donor has a board member.')}
       </section>
 

@@ -19,12 +19,11 @@ export default function Dashboard() {
     <>
       <PageHeader
         title={session.role === 'admin' ? 'Organization overview' : `Welcome, ${member(session.memberId).name.split(' ')[0]}`}
-        description={session.role === 'admin' ? 'Donor health across every board member.' : 'Your donors and what needs doing this week.'}
       />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat label={`Raised ${year} YTD`} value={money(ytd)} />
         <Stat label="Donors" value={donors.length} />
-        <Stat label="Overdue next steps" value={overdue.length} hint="Past their due date" />
+        <Stat label="Overdue next steps" value={overdue.length} />
         <Stat label="Lapsed this year" value={lapsed.length} hint={`Gave in ${year - 1}, not ${year}`} />
       </div>
 

@@ -10,7 +10,7 @@ export default function Account() {
   const { getAccessToken } = useAuth()
   return (
     <>
-      <PageHeader title="My account" description="Your name and photo, password and two-factor sign-in, and where you're signed in." />
+      <PageHeader title="My account" />
       <Widgets>
         <div className="space-y-8">
           <section>
