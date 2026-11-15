@@ -7,8 +7,6 @@ covers:
   - .github/workflows/security-review.yml
   - .github/prompts
   - scripts/seed-sql.ts
-  - flake.nix
-  - package.json
 ---
 
 # Operations

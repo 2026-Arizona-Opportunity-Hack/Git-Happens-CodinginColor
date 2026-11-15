@@ -74,5 +74,24 @@ disappears. When planning, offer to write the issues.
 
 ## Documentation
 
-Keep `README.md` current as you go: what it does, how to run it, live link,
-demo link. The README is part of the submission.
+Docs are part of the change, not a follow-up. `docs/README.md` explains the
+layout; the short version:
+
+- **Before changing a file, read its doc.** `bun run docs:which <file>` names
+  it. Each doc's frontmatter `covers` lists the code it describes, so that
+  doc (not the whole README) is the context you need.
+- **Update the doc in the same PR.** The Docs workflow fails a PR that changes
+  covered code without touching one of its docs. If nothing a reader relies on
+  changed, write `Docs: not needed — <reason>` in the PR description instead.
+  Don't use that to skip a real update.
+- **New page or module:** add it to the `covers` of the doc that describes
+  it, or write `docs/features/<page>.md`. Uncovered code fails the check.
+- **New setting or secret:** add it to the table in `docs/operations.md`, and
+  to `.env.example` if it's needed locally.
+- **A choice between real options** (a library, a service, a data shape):
+  write `docs/decisions/NNN-title.md`. Ask the user for the reasoning
+  rather than inventing it.
+- **Don't duplicate what code generates.** The API reference comes from
+  `worker/openapi.ts`; update the spec, not prose.
+- Keep `README.md` the front door: what it does, live link, demo link, how to
+  run it. Details go in `docs/`. The README is part of the submission.
