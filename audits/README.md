@@ -1,8 +1,10 @@
 # Security audits
 
-AI security reviews of pull requests, one Markdown report per audit. Each file
-is named `<date>-pr-<number>-<model>-<commit>.md` and starts with which PR,
-commit and model it covers.
+AI security reviews, one Markdown report per audit. Each file is named
+`<date>-pr-<number>-<model>-<commit>.md` for a PR or
+`<date>-repo-<model>-<commit>.md` for the whole repo, and starts with what,
+which commit and which model it covers. What each one found and how it was
+fixed is in [docs/security.md](../docs/security.md#ai-security-audits).
 
 `.github/workflows/security-review.yml` writes them when someone asks for an
 audit (an `ai-review` label on a PR, or a run from the Actions tab) and opens a

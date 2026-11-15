@@ -11,6 +11,7 @@ Built at [ASU Fall Hackathon 2026 | Phoenix Hackathon for Nonprofits: Nov 14-15]
 | | |
 |---|---|
 | **Nonprofit** | [Coding in Color](https://www.ohack.dev/nonprofit/YIXYdYCoxIZC08uQ5DL3) |
+| **Live site** | [githappens.jurenka.software](https://githappens.jurenka.software) (sign in as a board member; the data is fake) |
 | **Problem statement** | [Donor & Funder Relationship Platform (CIC Problem 2)](https://www.ohack.dev/project/e26932c0df1b11f189a8dead68f07eb5) |
 | **Team page** | [Git Happens](https://www.ohack.dev/hack/fall-2026/team/28a0f23ce05c11f1bd10deadfb009123) · [Team Dashboard](https://www.ohack.dev/hack/fall-2026/manageteam) (story, demo video, submit) |
 | **Slack** | team: [#githappens](https://opportunity-hack.slack.com/app_redirect?channel=githappens) · nonprofit: [#npo-coding-in-color](https://opportunity-hack.slack.com/app_redirect?channel=npo-coding-in-color) · help: [#ask-a-mentor](https://opportunity-hack.slack.com/archives/C01E5CGDQ74) |
@@ -32,11 +33,11 @@ Start recording your demo video by **Sun Nov 15, 12:00 PM MST** — hacking ends
 
 Everything is submitted from your [Team Dashboard](https://www.ohack.dev/hack/fall-2026/manageteam); judges read the dashboard, this README and your demo video.
 
-- [ ] **Code pushed** to this repo, in small PRs (see `AGENTS.md`) — judges and future recruiters read the history
+- [x] **Code pushed** to this repo, in small PRs (see `AGENTS.md`) — judges and future recruiters read the history
 - [ ] **Project story** written on the dashboard (`#project`): the problem, who it helps, what you built, what's next
 - [ ] **Demo video** (4 minutes or less) on YouTube, Vimeo, Loom or Google Drive, linked on the dashboard (`#demo`) — show it working, not slides
 - [ ] **Submit** on the dashboard (you can keep editing until the close)
-- [ ] This README filled in below: team, tech stack, how to run it, live link if you have one
+- [x] This README filled in below: team, tech stack, how to run it, live link if you have one
 - Optional: a [DevPost entry](https://opportunity-hack-2026-arizona.devpost.com/) — the dashboard is the submission of record.
 
 Judges score **Scope, Documentation, Polish and Security**, plus a separate **Accessibility** prize — the rubric is at [ohack.dev/hackathon-judging-criteria](https://www.ohack.dev/hackathon-judging-criteria). Document your work as GitHub Issues as you go: that's how you get public credit for it.
@@ -96,6 +97,20 @@ The password is public on purpose because the data is fake. Replace these accoun
 4. **Outcomes from the classroom**: once the curriculum platform (Problem 1) has its read API, add each program's students served and learning gains to funder packets and quarterly updates. (A hand-edited Program outcomes page was removed for now; its unused `program_outcomes` table is still in D1, from migration 0006.)
 5. **Brand**: swap the placeholder mark in `App.tsx` for the real CIC logo, and run Lighthouse (target a11y ≥ 95).
 
+## Security and testing
+
+Judges score Security, so here's what checks this repo. Details and every finding are in [Security](docs/security.md#how-its-checked).
+
+- **AI security audits in CI.** Adding a label to a PR (`ai-review`, `ai-review:kimi-k3` or `ai-review:muse-wonder`) has Claude, kimi-k3 or muse-wonder review it, and leaving the PR number empty audits the whole repo. Each report is saved in [`audits/`](audits/) through its own PR. The model gets read-only tools and no GitHub token.
+- **What they found, and what we fixed.** Four audits ran on Nov 15. Two PR audits and Claude's whole-repo audit found nothing. muse-wonder's whole-repo audit found two issues:
+  - Donor text could steer the AI (prompt injection). Mostly fixed in [#95](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/pull/95); the last part is [#93](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/issues/93).
+  - Dev tools are switched on. That's on purpose for the demo, and listed as a gap to close before launch.
+- **95% coverage gate.** Every PR runs the typecheck and unit tests, and the PR fails if tests cover under 95% of lines or functions in `src/`. Every module counts, tested or not. Coverage is 100% today, and each P0–P2 feature in CIC's brief maps to its tests ([Testing](docs/testing.md)).
+- **Fuzz tests.** Each run throws 4,500 seeded random inputs at the import pipeline, dedupe, the Excel export, the API input checks, the calendar parser, AI drafts and the assistant's buttons. The fuzz tests found two real bugs, both fixed with regression tests:
+  - impossible calendar dates got through ([#84](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/pull/84))
+  - characters that broke the Excel export got through ([#128](https://github.com/2026-Arizona-Opportunity-Hack/Git-Happens-CodinginColor/pull/128))
+- **Access and secrets.** Ownership is checked on the server for every donor route, every query uses bound parameters, nothing is sent without a human, and a hook blocks commits that contain keys or `.env` files.
+
 ## Docs
 
 | Doc | For |
@@ -103,7 +118,7 @@ The password is public on purpose because the data is fake. Replace these accoun
 | [docs/features/](docs/features/) | What each page does and where its code is |
 | [Architecture](docs/architecture.md) | How the Worker, D1, WorkOS and the AI gateway fit together; the stack |
 | [Operations](docs/operations.md) | Settings and secrets, deploying, sign-in setup, the calendar, resetting the demo |
-| [Security](docs/security.md) | Who can see what, how keys and secrets are kept, known gaps |
+| [Security](docs/security.md) | Who can see what, how keys and secrets are kept, every audit finding and its fix, known gaps |
 | [Testing](docs/testing.md) | Running the tests, the coverage gate, what tests which feature |
 | [Decisions](docs/decisions/) | Why it's built this way |
 | [How these docs work](docs/README.md) | Where to write what, and the check that keeps docs in step with code |
@@ -138,7 +153,7 @@ bun run test         # unit tests for src/lib, failing under 95% coverage (docs/
 
 - Live demo: https://githappens.jurenka.software
 - Demo video:
-- Design / docs:
+- Docs: [docs/](docs/)
 
 ## After the hackathon
 
