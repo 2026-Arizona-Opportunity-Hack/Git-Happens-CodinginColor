@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, type ComponentType, useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/auth'
 import { BarChart3, Bell, Code2, Contact, Home, ListTodo, LogOut, Menu, ShieldAlert, Upload, UserCog, UserRound, Users, X, type LucideIcon } from 'lucide-react'
@@ -11,17 +11,29 @@ import { SiteSearch } from '@/components/SiteSearch'
 import { InstallPrompt } from '@/components/InstallPrompt'
 import { AppSkeleton, Logo, PageSkeleton } from '@/components/Loading'
 import Dashboard from '@/pages/Dashboard'
-// Other pages load when first opened; PageSkeleton shows meanwhile.
-const Donors = lazy(() => import('@/pages/Donors'))
-const AllDonors = lazy(() => import('@/pages/AllDonors'))
-const DonorDetail = lazy(() => import('@/pages/DonorDetail'))
-const FollowUps = lazy(() => import('@/pages/FollowUps'))
-const Retention = lazy(() => import('@/pages/Retention'))
-const Import = lazy(() => import('@/pages/Import'))
-const Notifications = lazy(() => import('@/pages/Notifications'))
-const Members = lazy(() => import('@/pages/Members'))
-const Account = lazy(() => import('@/pages/Account'))
-const Api = lazy(() => import('@/pages/Api'))
+// Other pages load when first opened; PageSkeleton shows meanwhile. A deploy
+// replaces those files, so a tab opened before it would fail to load one and
+// go blank; reload once to pick up the new build instead.
+function page<T extends ComponentType<any>>(load: () => Promise<{ default: T }>) {
+  return lazy(() => load().catch((err) => {
+    let last = 0
+    try { last = Number(sessionStorage.getItem('page-reload')) } catch { /* no storage */ }
+    if (Date.now() - last < 10_000) throw err
+    try { sessionStorage.setItem('page-reload', String(Date.now())) } catch { /* no storage */ }
+    location.reload()
+    return new Promise<never>(() => {})
+  }))
+}
+const Donors = page(() => import('@/pages/Donors'))
+const AllDonors = page(() => import('@/pages/AllDonors'))
+const DonorDetail = page(() => import('@/pages/DonorDetail'))
+const FollowUps = page(() => import('@/pages/FollowUps'))
+const Retention = page(() => import('@/pages/Retention'))
+const Import = page(() => import('@/pages/Import'))
+const Notifications = page(() => import('@/pages/Notifications'))
+const Members = page(() => import('@/pages/Members'))
+const Account = page(() => import('@/pages/Account'))
+const Api = page(() => import('@/pages/Api'))
 
 // `keywords` are other words people might search for to find the page.
 type NavItem = { to: string; label: string; icon: LucideIcon; keywords?: string; adminOnly?: boolean }
