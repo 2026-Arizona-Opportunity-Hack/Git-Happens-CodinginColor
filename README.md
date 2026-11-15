@@ -107,7 +107,7 @@ The password is public on purpose because the data is fake. Replace these accoun
 - Backend: a Cloudflare Worker (`worker/index.ts`) serving a JSON API under `/api/*`, next to the static app
 - Database: [Cloudflare D1](https://developers.cloudflare.com/d1/) (SQLite). Schema in `migrations/`
 - Auth: [WorkOS AuthKit](https://workos.com/user-management), free up to 1M users. The Worker verifies each access token with `jose` and looks the user up in the CIC organization in WorkOS, which is the source of truth for who is on the board
-- APIs / services: the [OHack AI gateway](https://ai.ohack.dev) (OpenAI-compatible, model `muse-spark`) for the assistant. `POST /api/chat` sends it the caller's own scoped records, the same data `/api/bootstrap` returns, with the conversation. **That includes donor names, emails and gifts**, so check with CIC before real donor data goes through it.
+- APIs / services: the [OHack AI gateway](https://ai.ohack.dev) (OpenAI-compatible, model `muse-spark`) for the assistant. `POST /api/chat` sends it the caller's own scoped records, the same data `/api/bootstrap` returns, with the conversation. **That includes donor names, emails and gifts**, so check with CIC before real donor data goes through it. The prompt puts fixed instructions and the data first and the per-caller lines last, so the gateway can cache the repeated prefix across turns and between admins; `wrangler tail` logs how many prompt tokens each reply got from the cache.
 
 ## Run it locally
 
