@@ -38,7 +38,7 @@ function SignedInAs() {
       <div className="text-xs text-muted-foreground">Signed in as</div>
       <div className="font-medium">{member(session.memberId).name}</div>
       <div className="mb-2 text-xs text-muted-foreground">{session.role === 'admin' ? 'CIC admin' : 'Board member'}</div>
-      <Button variant="outline" size="sm" className="w-full bg-white" onClick={() => signOut()}>
+      <Button variant="outline" size="sm" className="w-full bg-white" onClick={() => signOut({ returnTo: location.origin })}>
         <LogOut aria-hidden /> Sign out
       </Button>
     </div>
@@ -52,7 +52,7 @@ function Shell() {
   return (
     <div className="min-h-screen md:grid md:grid-cols-[240px_1fr]">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:p-2">Skip to content</a>
-      <aside className="border-b border-sidebar-border bg-sidebar p-4 md:sticky md:top-0 md:h-screen md:border-r md:border-b-0">
+      <aside className="border-b border-sidebar-border bg-sidebar p-4 md:sticky md:top-0 md:flex md:h-screen md:flex-col md:overflow-y-auto md:border-r md:border-b-0">
         <div className="mb-6 flex items-center gap-2">
           <div aria-hidden className="flex size-8 items-center justify-center rounded-md bg-cic-dark text-sm font-bold text-white">
             C<span className="text-cic-green">i</span>C
@@ -84,7 +84,7 @@ function Shell() {
             </NavLink>
           ))}
         </nav>
-        <div className="mt-6">
+        <div className="mt-6 md:mt-auto md:pt-6">
           <SignedInAs />
         </div>
       </aside>
@@ -127,7 +127,7 @@ function SignedInApp() {
       </Centered>
     )
   return (
-    <StoreProvider token={getAccessToken} onSignOut={() => signOut()}>
+    <StoreProvider token={getAccessToken} onSignOut={() => signOut({ returnTo: location.origin })}>
       <BrowserRouter>
         <Shell />
       </BrowserRouter>
