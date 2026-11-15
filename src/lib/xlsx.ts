@@ -81,7 +81,7 @@ const esc = (s: string) =>
   s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 // A, B, ... Z, AA, AB ...
-const colName = (i: number): string => (i < 26 ? String.fromCharCode(65 + i) : colName(Math.floor(i / 26) - 1) + colName(i % 26))
+export const colName = (i: number): string => (i < 26 ? String.fromCharCode(65 + i) : colName(Math.floor(i / 26) - 1) + colName(i % 26))
 
 function sheetXml(header: string[], rows: Cell[][]): string {
   const widths = header.map((h, i) => Math.min(50, Math.max(h.length, ...rows.map((r) => String(r[i] ?? '').length)) + 2))
