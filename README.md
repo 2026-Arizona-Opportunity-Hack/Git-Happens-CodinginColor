@@ -60,6 +60,7 @@ Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevi
 | **Donor detail** | Timeline of gifts and communications; set a next step (one-click "invite to <event>"); log a text/email/call; draft thank-you/update; **one-click funder packet** |
 | **Retention** | Year over year: new, recovered, increased, same, decreased, lapsed, plus retention rate |
 | **Import** | Spreadsheet + Zeffy + Benevity CSVs → dedupe preview → commit; new donors assigned **round-robin to the member with the fewest**. Each source shows when it was last imported (stale after 30 days), plus an import history |
+| **Events calendar** | Upcoming events come from CIC's calendar through its iCal address (`CALENDAR_ICS_URL`), read at most every 10 minutes, so "invite to <event>" always has a real date. Cancelled events are left out. Until CIC shares its address, it reads the demo calendar in `public/demo-calendar.ics` (placeholder dates). See [Events calendar](#events-calendar) |
 | **Read API** | `GET /api/v1/summary?period=2026-Q4[&program=][&board_member=]` gives CIC's org dashboard totals and the 25 latest gifts and contacts, already grouped by quarter, program and board member, with **no donor names, emails or IDs**. It takes an API key (`Authorization: Bearer cic_live_…`) that an admin creates, copies once and revokes on the app's **Read API** page; D1 keeps only a SHA-256 of each key |
 | **API docs** | Interactive reference for the Worker API at [`/api/docs`](https://githappens.jurenka.software/api/docs), rendered by [Scalar](https://scalar.com) from the OpenAPI spec at `/api/openapi.json` (`worker/openapi.ts`). Paste a WorkOS access token, or a read API key for `/api/v1`, to try requests |
 | **Board members** (admin) | Invite board members, change their role, remove them (WorkOS Users Management widget) |
@@ -98,8 +99,9 @@ The password is public on purpose because the data is fake. Replace these accoun
 
 1. **Real exports**: get scrubbed Zeffy/Benevity samples from CIC and fix `COLUMN_MAP` in `dedupe.ts`.
 2. **Sending**: drafts open pre-filled in the board member's own mail or Messages app today. Saving drafts straight into their mailbox (Gmail API / Microsoft Graph) needs per-user OAuth and, for Gmail, Google's app verification; sending from the app (Resend, Twilio) would come from CIC rather than the board member.
-3. **Pick a P1**: debrief-to-action (a voice note becomes a contact record, a next step and a draft) or events-aware next steps (Google Calendar).
-4. **Brand**: swap the placeholder mark in `App.tsx` for the real CIC logo, and run Lighthouse (target a11y ≥ 95).
+3. **Real calendar**: ask CIC for its Google Calendar's iCal address and set `CALENDAR_ICS_URL` (see [Events calendar](#events-calendar)).
+4. **Other P1**: debrief-to-action (a voice note becomes a contact record, a next step and a draft).
+5. **Brand**: swap the placeholder mark in `App.tsx` for the real CIC logo, and run Lighthouse (target a11y ≥ 95).
 
 ## Tech stack
 
@@ -162,6 +164,17 @@ The repo needs two Actions secrets:
 The Worker also needs the WorkOS secret key. Set it once (or whenever the key is rotated) with `bunx wrangler secret put WORKOS_API_KEY` and paste the Staging `sk_test_…` key. Without it every API call fails.
 
 To deploy by hand, run `bun run deploy` inside `nix develop` (it builds with `nix build` and uses wrangler, so log in with `wrangler login` first). To reset the live demo to the fake seed data, run `bun run db:seed:remote` (with `WORKOS_API_KEY` in `.env`; it maps the seed's donor owners to WorkOS users by email).
+
+### Events calendar
+
+The Worker reads CIC's events from an iCal (`.ics`) address and keeps the next 400 days of them in D1. Once `CALENDAR_ICS_URL` is set, the calendar is the whole list: an event taken off it disappears from the app, and next steps linked to it keep their text and due date. If the address can't be read, the app keeps the events it already has (`wrangler tail` shows `calendar sync failed`).
+
+To switch from the demo calendar to CIC's own, in Google Calendar open **Settings and sharing** for the events calendar, then **Integrate calendar**:
+
+- **Public calendar:** copy **Public address in iCal format** into `CALENDAR_ICS_URL` in `wrangler.jsonc` and deploy.
+- **Private calendar:** the **Secret address in iCal format** works like a password, so it must not go in git. Delete `CALENDAR_ICS_URL` from `vars`, run `bunx wrangler secret put CALENDAR_ICS_URL`, paste the address, and deploy.
+
+Locally, `bun dev` reads the same var, or set `CALENDAR_ICS_URL` in `.env`. Without it, the events are the seed's.
 
 ### Brand
 

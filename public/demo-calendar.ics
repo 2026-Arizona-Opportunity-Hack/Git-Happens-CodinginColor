@@ -1,0 +1,56 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Git Happens//CIC demo events//EN
+CALSCALE:GREGORIAN
+X-WR-CALNAME:CIC events (demo)
+X-WR-TIMEZONE:America/Phoenix
+X-WR-CALDESC:Stand-in for Coding in Color's events calendar until the real Google Calendar address is set as CALENDAR_ICS_URL. Dates are placeholders.
+BEGIN:VEVENT
+UID:demo-giving-tuesday-2026@githappens
+DTSTART;VALUE=DATE:20261201
+DTEND;VALUE=DATE:20261202
+SUMMARY:Giving Tuesday
+DESCRIPTION:Online giving push through Zeffy.
+END:VEVENT
+BEGIN:VEVENT
+UID:demo-day-of-compute-2026@githappens
+DTSTART;TZID=America/Phoenix:20261205T090000
+DTEND;TZID=America/Phoenix:20261205T140000
+SUMMARY:Day of Compute
+LOCATION:Phoenix College\, Phoenix\, AZ
+DESCRIPTION:Workshops on AI\, cybersecurity and careers in computing for Pho
+ enix Union students. Donors and funders welcome.
+END:VEVENT
+BEGIN:VEVENT
+UID:demo-funder-breakfast-2026@githappens
+DTSTART:20261210T153000Z
+DTEND:20261210T170000Z
+SUMMARY:Funder breakfast
+DESCRIPTION:Year-end thank-you breakfast for foundation and corporate partners.
+END:VEVENT
+BEGIN:VEVENT
+UID:demo-ai-academy-showcase-2027@githappens
+DTSTART;TZID=America/Phoenix:20270123T100000
+DTEND;TZID=America/Phoenix:20270123T130000
+SUMMARY:AI Academy Showcase
+DESCRIPTION:Students from Desert Edge\, Maryvale and Salt River present their projects.
+END:VEVENT
+BEGIN:VEVENT
+UID:demo-az-gives-2027@githappens
+DTSTART;VALUE=DATE:20270406
+DTEND;VALUE=DATE:20270407
+SUMMARY:AZ Gives Day
+END:VEVENT
+BEGIN:VEVENT
+UID:demo-summer-camp-2027@githappens
+DTSTART;VALUE=DATE:20270607
+DTEND;VALUE=DATE:20270612
+SUMMARY:Summer Camp Kickoff
+END:VEVENT
+BEGIN:VEVENT
+UID:demo-cancelled-mixer@githappens
+DTSTART;VALUE=DATE:20261218
+SUMMARY:Holiday mixer
+STATUS:CANCELLED
+END:VEVENT
+END:VCALENDAR
