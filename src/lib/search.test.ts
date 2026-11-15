@@ -42,3 +42,8 @@ test('pages match on their name or keywords, word by word', () => {
   assert.deepEqual(labels('dash'), ['Dashboard'])
   assert.deepEqual(labels(' '), [])
 })
+
+test('a page named for the query comes before one that only lists it as a keyword', () => {
+  const pages = [{ label: 'Notifications', keywords: 'reminders follow-ups' }, { label: 'Follow-ups' }]
+  assert.deepEqual(searchPages(pages, 'follow').map((p) => p.label), ['Follow-ups', 'Notifications'])
+})
