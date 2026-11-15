@@ -18,14 +18,36 @@ covers:
 
 One Cloudflare Worker serves both the React app and a JSON API under `/api/*`. Donor data is in Cloudflare D1 (SQLite). WorkOS AuthKit signs people in and is the source of truth for who is on the board. The AI gateway writes drafts and answers the assistant.
 
-```
-browser (React SPA, PWA)
-   │  WorkOS access token
-   ▼
-Cloudflare Worker  worker/index.ts ──► WorkOS     who is on the board, their role
-   │                                ├─► AI gateway  drafts, assistant
-   ▼                                └─► CIC's iCal  events, every 10 minutes at most
-D1 (SQLite)  migrations/
+```mermaid
+flowchart LR
+  subgraph Clients
+    B["Board member / admin<br/>React SPA + PWA (src/)"]
+    O["CIC org dashboard<br/>API key cic_live_…"]
+  end
+
+  subgraph CF["Cloudflare (githappens.jurenka.software)"]
+    A["Static assets<br/>dist/, sw.js"]
+    subgraph W["Worker"]
+      AU["/auth/*<br/>worker/auth.ts<br/>sign-in, HttpOnly session cookie"]
+      API["/api/*<br/>worker/index.ts<br/>resolve caller → scope to owned donors"]
+      DOC["/api/docs<br/>worker/openapi.ts"]
+    end
+    D1[("D1 (SQLite)<br/>migrations/")]
+  end
+
+  WO["WorkOS AuthKit<br/>JWKS, users, CIC org roles"]
+  AI["OHack AI gateway<br/>drafts: gpt-oss-120b<br/>assistant: muse-spark"]
+  ICS["CIC events calendar (.ics)"]
+
+  B -- "pages" --> A
+  B -- "sign in / access token" --> AU
+  B -- "Bearer access token" --> API
+  O -- "GET /api/v1/summary" --> API
+  AU <--> WO
+  API -- "verify token, look up role" --> WO
+  API <--> D1
+  API -- "POST /api/drafts, /api/chat" --> AI
+  API -- "fetch, cached ≤10 min" --> ICS
 ```
 
 Every request resolves the caller first: the Worker verifies the token, then looks the user up in the CIC organization in WorkOS. A board member can only read or write donors they own; admins see every donor. The browser loads `/api/bootstrap` once, and each action calls one route and reloads, so the UI always shows what D1 holds.
@@ -50,7 +72,7 @@ Each page's doc in [features/](features/) says where its code is. The pieces eve
 - `worker/index.ts`: the API. Every route resolves the caller first; board members can only read or write donors they own, and import is admin-only. `POST /api/drafts` sends a draft on a channel the donor has (`draftChannel()` in `src/lib/drafts.ts`) and refuses one for a donor with no email or phone.
 - `migrations/`: D1 schema. Add a new numbered file for each change; deploys apply them before the new code goes live.
 - `src/lib/utils.ts`: `cn` for class names, and `fmtPhone`, which shows US 10-digit phones as (555) 555-1234 and leaves anything else as stored. Stored values and search are untouched.
-- `src/App.tsx`: the sidebar and routes. A donor page (`/donors/:id`) highlights My Donors only when the donor is yours, and All Donors otherwise.
+- `src/App.tsx`: the sidebar and routes. A donor page (`/donors/:id`) highlights My Donors only when the donor is yours, and All Donors otherwise. Pages other than the dashboard load when first opened; if a deploy has replaced a page's file since the tab opened, the app reloads once to get the new build instead of going blank.
 - `src/data/types.ts`: the domain model; the D1 schema in `migrations/` stores these shapes.
 - Lists: tables use `DataTable` (`src/components/ui/data-table.tsx`), 25 rows a page; plain lists that can grow wrap in `Paged` (`src/components/common.tsx`), 10 a page.
 

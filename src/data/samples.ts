@@ -2,7 +2,7 @@
 // Replace column names once CIC shares real (scrubbed) samples.
 
 export const SAMPLE_CSV = {
-  spreadsheet: `Name,Email,Phone,Organization,Amount,Date
+  unitedway: `Name,Email,Phone,Organization,Amount,Date
 Maria Lopez,,602-555-0141,,50,2024-12-03
 Luis Garcia,,(602) 555-0177,,300,2026-02-14
 Rosa Martinez,rosa.m@example.com,,,500,2026-05-20

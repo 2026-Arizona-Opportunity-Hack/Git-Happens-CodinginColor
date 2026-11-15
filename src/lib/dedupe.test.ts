@@ -9,7 +9,7 @@ const row = (r: Partial<RawDonorRow>): RawDonorRow => ({ source: 'spreadsheet', 
 test('a file is recognized as Zeffy or Benevity from its headers, so it can be caught in the wrong slot', () => {
   assert.equal(detectSource(csvHeaders(SAMPLE_CSV.zeffy)), 'zeffy')
   assert.equal(detectSource(csvHeaders(SAMPLE_CSV.benevity)), 'benevity')
-  assert.equal(detectSource(csvHeaders(SAMPLE_CSV.spreadsheet)), undefined)
+  assert.equal(detectSource(csvHeaders(SAMPLE_CSV.unitedway)), undefined)
   // Real export headers
   assert.equal(detectSource(['Payment Date (America/Phoenix)', 'First Name', 'Last Name', 'Email', 'Total Amount', 'Campaign Title']), 'zeffy')
   assert.equal(detectSource(['Company', 'Project', 'Donor First Name', 'Donor Last Name', 'Email', 'Total Donation to be Acknowledged']), 'benevity')
@@ -52,7 +52,7 @@ test('separate gifts and contact-only rows are left alone', () => {
 test('sample files: Kevin merges across sources and his $500 is counted once', () => {
   const rows = Object.entries(SAMPLE_CSV).flatMap(([src, text]) => rowsFromCsv(text, src as RawDonorRow['source']))
   const kevin = dedupe(rows).find((c) => c.name === 'Kevin Tran')!
-  assert.deepEqual(kevin.sources.sort(), ['benevity', 'spreadsheet'])
+  assert.deepEqual(kevin.sources.sort(), ['benevity', 'unitedway'])
   assert.equal(splitGifts(kevin.rows, []).keep.length, 1)
 })
 

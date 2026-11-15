@@ -256,7 +256,7 @@ export function autoMapping(headers: string[], customFields: string[] = []): Col
 
 // Headers only one platform's export writes, to catch a file chosen in the
 // wrong slot (a Benevity report loaded as Zeffy tags every donor "zeffy").
-// The donor spreadsheet has no signature: CIC's own columns are generic.
+// United Way's export has no signature: its columns are generic.
 const SOURCE_SIGNS: [Source, RegExp][] = [
   ['zeffy', /\bzeffy\b|^campaign( title| name)?$|^form( name| title)?$|^payment date$|^payment method$|^refund amount$|^total amount$/],
   ['benevity', /\bbenevity\b|to be acknowledged|cause support fee|match(ed)? amount|^company$|^donation date$|^donor (first |last )?name$|^project( name)?$/],

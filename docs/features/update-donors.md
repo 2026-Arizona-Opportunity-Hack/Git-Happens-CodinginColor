@@ -10,7 +10,7 @@ covers:
 
 # Update Donors (admin)
 
-Choosing a spreadsheet, Zeffy or Benevity CSV opens the review popup straight away to map its columns. **Review and map columns** reopens it after Back.
+Choosing a United Way, Zeffy or Benevity CSV opens the review popup straight away to map its columns. **Review and map columns** reopens it after Back.
 
 **Wrong slot:** a file whose headers look like another platform's export (two or more Zeffy headers such as *Payment Date* and *Campaign*, or Benevity ones such as *Company* and *Donation Date*; `detectSource()` in `src/lib/dedupe.ts`) can't be saved where it is. Saved there, every donor in it would be tagged with the wrong source. The popup offers **Move to** the matching slot, or **keep it here** when it really is that source (say, a spreadsheet with Benevity-style columns).
 

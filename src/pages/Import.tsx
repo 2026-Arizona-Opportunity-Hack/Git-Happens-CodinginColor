@@ -166,7 +166,7 @@ export default function Import() {
     <>
       <PageHeader
         title="Update Donors"
-        actions={<Button variant="outline" onClick={() => { setCsv(SAMPLE_CSV); setMappings({}); setFiles({ spreadsheet: 'sample-spreadsheet.csv', zeffy: 'sample-zeffy.csv', benevity: 'sample-benevity.csv' }); setStaging(true) }}>Load sample files</Button>}
+        actions={<Button variant="outline" onClick={() => { setCsv(SAMPLE_CSV); setMappings({}); setFiles({ unitedway: 'sample-united-way.csv', zeffy: 'sample-zeffy.csv', benevity: 'sample-benevity.csv' }); setStaging(true) }}>Load sample files</Button>}
       />
 
       <div className="grid gap-4 md:grid-cols-3">

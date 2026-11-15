@@ -26,7 +26,7 @@ The users are CIC's board, about 15 people. Admins see every donor; each board m
 
 Every page has a feature doc in [`docs/features/`](docs/features/):
 
-- **[Update Donors](docs/features/update-donors.md)** (admin): import the spreadsheet, Zeffy and Benevity exports. You map the columns, and duplicate donors across the three sources are merged into one list.
+- **[Update Donors](docs/features/update-donors.md)** (admin): import the United Way, Zeffy and Benevity exports. You map the columns, and duplicate donors across the three sources are merged into one list.
 - **[Follow-ups](docs/features/follow-ups.md)**: next steps, quarterly updates and nudges for lapsed donors. AI writes a draft, and a person approves it and sends it from their own mail app.
 - **[Retention](docs/features/retention.md)** (admin): year-over-year retention and churn, broken down by source and program.
 - **[Donor detail](docs/features/donor-detail.md)**: a donor's timeline and next steps, one-click invites to events, debriefs and a funder packet.
