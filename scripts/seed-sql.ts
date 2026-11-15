@@ -26,7 +26,7 @@ const out = ['DELETE FROM imports;', 'DELETE FROM drafts;', 'DELETE FROM interac
 for (const e of seed.events) out.push(row('events', { ...e }))
 for (const d of seed.donors)
   out.push(row('donors', {
-    id: d.id, name: d.name, email: d.email, phone: d.phone, org: d.org, owner_id: member(d.ownerId), sources: JSON.stringify(d.sources),
+    id: d.id, name: d.name, email: d.email, phone: d.phone, org: d.org, owner_id: d.ownerId ? member(d.ownerId) : '', sources: JSON.stringify(d.sources),
     next_step_text: d.nextStep?.text, next_step_due: d.nextStep?.due, next_step_event_id: d.nextStep?.eventId, last_touch_at: d.lastTouchAt,
   }))
 for (const g of seed.gifts) out.push(row('gifts', { id: g.id, donor_id: g.donorId, amount: g.amount, date: g.date, source: g.source, program: g.program }))

@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import type { Channel, Donor, Gift } from '@/data/types'
 import { useStore } from '@/store'
-import { fmtDate, money, retentionStatus, totalsByYear, yearOf } from '@/lib/logic'
+import { fmtDate, money, retentionStatus, totalsByYear, UNASSIGNED, yearOf } from '@/lib/logic'
 
 const CHANNEL_ICON = { email: Mail, text: MessageSquare, call: Phone, 'in-person': Users, note: StickyNote }
 
@@ -129,17 +129,18 @@ export default function DonorDetail() {
                 <Label className="mb-1">Owner</Label>
                 {s.session.role === 'admin' ? (
                   <Select
-                    items={s.boardMembers.map((m) => ({ value: m.id, label: m.name }))}
-                    value={donor.ownerId}
-                    onValueChange={(v) => s.reassign(donor.id, v as string)}
+                    items={[{ value: UNASSIGNED, label: 'Unassigned' }, ...s.boardMembers.map((m) => ({ value: m.id, label: m.name }))]}
+                    value={donor.ownerId ?? UNASSIGNED}
+                    onValueChange={(v) => s.reassign(donor.id, v === UNASSIGNED ? null : (v as string))}
                   >
                     <SelectTrigger aria-label="Owner" className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
                       {s.boardMembers.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 ) : (
-                  <div>{s.member(donor.ownerId).name}</div>
+                  <div>{s.ownerName(donor)}</div>
                 )}
               </div>
             </CardContent>

@@ -74,7 +74,17 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
         put: {
           tags: ['Donors'], summary: 'Reassign a donor (admin only)',
           parameters: [idParam('id', 'Donor ID')],
-          requestBody: jsonBody({ type: 'object', required: ['ownerId'], properties: { ownerId: { type: 'string', description: 'A board member ID' } } }),
+          requestBody: jsonBody({ type: 'object', required: ['ownerId'], properties: { ownerId: { type: ['string', 'null'], description: 'A board member ID, or null to unassign' } } }),
+          responses: { 200: ok, ...errors(400, 401, 403, 404) },
+        },
+      },
+      '/api/assign': {
+        post: {
+          tags: ['Donors'], summary: 'Assign several donors at once (admin only)', description: 'One transaction: all or nothing.',
+          requestBody: jsonBody({
+            type: 'object', required: ['assignments'],
+            properties: { assignments: { type: 'array', minItems: 1, maxItems: 1000, items: { type: 'object', required: ['donorId', 'ownerId'], properties: { donorId: { type: 'string' }, ownerId: { type: ['string', 'null'], description: 'A board member ID, or null to unassign' } } } } },
+          }),
           responses: { 200: ok, ...errors(400, 401, 403, 404) },
         },
       },
@@ -203,7 +213,7 @@ export function openapi(enums: { channels: string[]; kinds: string[]; sources: s
           type: 'object',
           properties: {
             id: { type: 'string' }, name: { type: 'string' }, email: { type: 'string' }, phone: { type: 'string' }, org: { type: 'string' },
-            ownerId: { type: 'string' }, sources: { type: 'array', items: { enum: enums.sources } }, nextStep: ref('NextStep'), lastTouchAt: isoDate,
+            ownerId: { type: ['string', 'null'], description: 'null until an admin assigns a board member' }, sources: { type: 'array', items: { enum: enums.sources } }, nextStep: ref('NextStep'), lastTouchAt: isoDate,
           },
         },
         Gift: {

@@ -155,6 +155,42 @@ const COLUMN_MAP: Record<string, Partial<Record<keyof RawDonorRow, string[]>>> =
   },
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  name: 'Name', email: 'Email', phone: 'Phone', org: 'Organization', amount: 'Gift amount', date: 'Gift date',
+}
+
+// Every column in a CSV's header row, with the donor-database field it fills,
+// or no field when the app has nowhere to store it (those values are dropped).
+// Drives the "Columns found" section of the import staging popup.
+export function csvColumns(text: string): { column: string; field?: string }[] {
+  const firstLine = text.split(/\r?\n/).find((l) => l.trim()) ?? ''
+  return parseCsvHeader(firstLine).map((column) => {
+    const key = column.trim().toLowerCase()
+    if (key === 'first name' || key === 'last name') return { column, field: 'Name' }
+    const field = Object.entries(COLUMN_MAP.default).find(([, names]) => names?.includes(key))?.[0]
+    return { column, field: field && FIELD_LABELS[field] }
+  })
+}
+
+// The header row as written (original case), using the same quoting rules.
+function parseCsvHeader(line: string): string[] {
+  const out: string[] = []
+  let field = ''
+  let quoted = false
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]
+    if (quoted) {
+      if (c === '"' && line[i + 1] === '"') { field += '"'; i++ }
+      else if (c === '"') quoted = false
+      else field += c
+    } else if (c === '"') quoted = true
+    else if (c === ',') { out.push(field.trim()); field = '' }
+    else field += c
+  }
+  out.push(field.trim())
+  return out.filter((h) => h)
+}
+
 export function rowsFromCsv(text: string, source: Source): RawDonorRow[] {
   const map = COLUMN_MAP.default
   const pick = (rec: Record<string, string>, field: keyof RawDonorRow) =>

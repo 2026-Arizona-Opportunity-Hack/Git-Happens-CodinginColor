@@ -2,7 +2,6 @@ import { createRemoteJWKSet, jwtVerify } from 'jose'
 import type { BoardMember, Channel, Donor, Draft, DraftKind, Gift, ImportRecord, Interaction, NextStep, Program, RawDonorRow, Source } from '../src/data/types'
 import { dedupe, matchDonor, splitGifts } from '../src/lib/dedupe'
 import { draftBody } from '../src/lib/drafts'
-import { nextOwner } from '../src/lib/logic'
 import { docsPage, openapi } from './openapi'
 
 // JSON API over D1. Every route resolves the caller's session first, and
@@ -63,7 +62,8 @@ const toDonor = (r: Row): Donor => ({
   email: (r.email as string) ?? undefined,
   phone: (r.phone as string) ?? undefined,
   org: (r.org as string) ?? undefined,
-  ownerId: r.owner_id as string,
+  // owner_id is NOT NULL in D1, so '' stands for "not assigned yet".
+  ownerId: (r.owner_id as string) || null,
   sources: JSON.parse(r.sources as string),
   nextStep: r.next_step_text
     ? { text: r.next_step_text as string, due: r.next_step_due as string, eventId: (r.next_step_event_id as string) ?? undefined }
@@ -238,7 +238,7 @@ async function summary(url: URL, env: Env) {
   const members = await listMembers(env)
   if (program !== null) oneOf(program, PROGRAMS, 'program')
   if (memberId !== null && !members.some((mb) => mb.id === memberId)) throw new HttpError(400, 'Unknown board_member')
-  const name = (mid: string) => members.find((mb) => mb.id === mid)?.name ?? 'Former board member'
+  const name = (mid: string) => (mid ? members.find((mb) => mb.id === mid)?.name ?? 'Former board member' : 'Unassigned')
 
   const db = env.DB
   const [gifts, contacts] = await db.batch<Row>([
@@ -413,12 +413,13 @@ async function route(req: Request, env: Env): Promise<Response> {
       return json({ ok: true })
     }
 
-    // PUT /api/donors/:id/owner {ownerId} (admin)
+    // PUT /api/donors/:id/owner {ownerId} (admin); ownerId null unassigns
     if (m === 'PUT' && parts[2] === 'owner') {
       requireAdmin(s)
-      const ownerId = str((await body(req)).ownerId, 'ownerId', 50)
-      if (!(await listMembers(env)).some((mb) => mb.id === ownerId)) throw new HttpError(400, 'Unknown board member')
-      await db.prepare('UPDATE donors SET owner_id = ? WHERE id = ?').bind(ownerId, donor.id).run()
+      const raw = (await body(req)).ownerId
+      const ownerId = raw === null ? null : str(raw, 'ownerId', 50)
+      if (ownerId && !(await listMembers(env)).some((mb) => mb.id === ownerId)) throw new HttpError(400, 'Unknown board member')
+      await db.prepare('UPDATE donors SET owner_id = ? WHERE id = ?').bind(ownerId ?? '', donor.id).run()
       return json({ ok: true })
     }
   }
@@ -484,8 +485,31 @@ async function route(req: Request, env: Env): Promise<Response> {
     return json({ token })
   }
 
-  // POST /api/import {rows, files?}: match against existing donors first, then
-  // round-robin any genuinely new donors. Admin only.
+  // POST /api/assign {assignments: [{donorId, ownerId | null}]}: set several
+  // donors' board members in one transaction (admin). null unassigns.
+  if (m === 'POST' && parts[0] === 'assign') {
+    requireAdmin(s)
+    const raw = (await body(req)).assignments
+    if (!Array.isArray(raw) || raw.length === 0 || raw.length > 1000) throw new HttpError(400, 'assignments must be an array of 1 to 1000 items')
+    const memberIds = new Set((await listMembers(env)).map((mb) => mb.id))
+    const list = raw.map((a, i) => {
+      const donorId = str(a?.donorId, `assignments[${i}].donorId`, 50)
+      const ownerId = a?.ownerId === null ? null : str(a?.ownerId, `assignments[${i}].ownerId`, 50)
+      if (ownerId && !memberIds.has(ownerId)) throw new HttpError(400, `assignments[${i}].ownerId is not a board member`)
+      return { donorId, ownerId }
+    })
+    // All IDs rather than WHERE id IN (...): D1 caps a query at 100 bound parameters.
+    const found = await db.prepare('SELECT id FROM donors').all()
+    const ids = new Set(found.results.map((r) => r.id as string))
+    const missing = list.find((a) => !ids.has(a.donorId))
+    if (missing) throw new HttpError(404, `Donor ${missing.donorId} not found`)
+    await db.batch(list.map((a) => db.prepare('UPDATE donors SET owner_id = ? WHERE id = ?').bind(a.ownerId ?? '', a.donorId)))
+    return json({ ok: true, updated: list.length })
+  }
+
+  // POST /api/import {rows, files?}: match against existing donors first; any
+  // genuinely new donors start unassigned, and the admin assigns them on the
+  // All Donors page (the response lists them). Admin only.
   if (m === 'POST' && parts[0] === 'import') {
     requireAdmin(s)
     const b = await body(req)
@@ -515,8 +539,8 @@ async function route(req: Request, env: Env): Promise<Response> {
     const known = new Map<string, { amount: number; date: string }[]>()
     for (const g of existingGifts.results)
       known.set(g.donor_id as string, [...(known.get(g.donor_id as string) ?? []), { amount: g.amount as number, date: g.date as string }])
-    const boardMembers = await listMembers(env)
     const writes: D1PreparedStatement[] = []
+    const createdDonors: { id: string; name: string }[] = []
     let created = 0, merged = 0, gifts = 0, skippedGifts = 0
     const clusters = dedupe(rows)
     for (const c of clusters) {
@@ -532,11 +556,12 @@ async function route(req: Request, env: Env): Promise<Response> {
           .bind(match.email ?? null, match.phone ?? null, JSON.stringify(match.sources), match.id))
       } else {
         created++
-        const d: Donor = { id: id('d'), name: c.name, email: c.email, phone: c.phone, org: c.org, sources: c.sources, ownerId: nextOwner(boardMembers, donors) }
+        const d: Donor = { id: id('d'), name: c.name, email: c.email, phone: c.phone, org: c.org, sources: c.sources, ownerId: null }
         donors.push(d)
+        createdDonors.push({ id: d.id, name: d.name })
         donorId = d.id
         writes.push(db.prepare('INSERT INTO donors (id, name, email, phone, org, owner_id, sources) VALUES (?, ?, ?, ?, ?, ?, ?)')
-          .bind(d.id, d.name, d.email ?? null, d.phone ?? null, d.org ?? null, d.ownerId, JSON.stringify(d.sources)))
+          .bind(d.id, d.name, d.email ?? null, d.phone ?? null, d.org ?? null, '', JSON.stringify(d.sources)))
       }
       // Skip gifts this donor already has (same amount, near-same date), so
       // re-imports and donations reported by two sources aren't double counted.
@@ -556,7 +581,7 @@ async function route(req: Request, env: Env): Promise<Response> {
       writes.push(db.prepare('INSERT INTO imports (id, source, file_name, row_count, imported_at, imported_by) VALUES (?, ?, ?, ?, ?, ?)')
         .bind(id('m'), src, optStr(files[src], `files.${src}`) ?? null, rows.filter((r) => r.source === src).length, now, s.memberId))
     if (writes.length) await db.batch(writes) // one transaction: all or nothing
-    return json({ created, merged, clusters: clusters.length, gifts, skippedGifts })
+    return json({ created, merged, clusters: clusters.length, gifts, skippedGifts, createdDonors })
   }
 
   throw new HttpError(404, 'Not found')

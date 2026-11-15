@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { RawDonorRow } from '../data/types'
 import { SAMPLE_CSV } from '../data/samples'
-import { dedupe, matchDonor, rowsFromCsv, sameGift, splitGifts } from './dedupe'
+import { csvColumns, dedupe, matchDonor, rowsFromCsv, sameGift, splitGifts } from './dedupe'
 
 const row = (r: Partial<RawDonorRow>): RawDonorRow => ({ source: 'spreadsheet', name: 'Kevin Tran', ...r })
 
@@ -50,4 +50,15 @@ test('matchDonor finds an existing donor by email regardless of case', () => {
   const donors = [{ id: 'd1', name: 'K. Tran', email: 'ktran@example.com' }, { id: 'd2', name: 'Someone Else' }]
   assert.equal(matchDonor(c, donors)?.id, 'd1')
   assert.equal(matchDonor(dedupe([row({ name: 'Nobody' })])[0], donors), undefined)
+})
+
+test('csvColumns lists every column and flags the ones the donor database has no field for', () => {
+  const cols = csvColumns('First Name,Last Name,"Email Address",Total Amount,Campaign\nA,B,a@b.c,5,X')
+  assert.deepEqual(cols, [
+    { column: 'First Name', field: 'Name' },
+    { column: 'Last Name', field: 'Name' },
+    { column: 'Email Address', field: 'Email' },
+    { column: 'Total Amount', field: 'Gift amount' },
+    { column: 'Campaign', field: undefined },
+  ])
 })

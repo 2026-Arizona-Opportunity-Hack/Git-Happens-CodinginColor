@@ -56,10 +56,11 @@ Coding in Color's donor records are split across a spreadsheet, Zeffy and Benevi
 | **Dashboard** | Org health; board-member load; upcoming events; recent activity |
 | **Notifications** | One inbox of reminders: overdue/upcoming next steps, quarterly updates due, lapsed donors, drafts to approve, events in the next 3 weeks and (admins) exports not re-imported in 30 days. Nav shows a count |
 | **Follow-ups** | Next steps with due dates; quarterly-touch queue; lapsed-donor nudges; **drafts a human must approve**. A draft opens in Gmail, Outlook or the default mail app (or Messages, for texts) with the donor, subject and body filled in, so it goes out from the board member's own address; they confirm "Did you send it?" and the touch is logged |
-| **Donors** | One deduped table across all sources; owner, lifetime, status, next step |
+| **My Donors** | The donors assigned to the signed-in person (admins too, since they can be assigned donors); lifetime, status, next step |
+| **All Donors** (admin) | Every donor with contact details and their board member. Pick a board member in a row and click **Update** to reassign. Donors just assigned from an import sit at the bottom marked *New*; an **Unassigned donors** section below holds the rest until someone is chosen |
 | **Donor detail** | Timeline of gifts and communications; set a next step (one-click "invite to <event>"); log a text/email/call; draft thank-you/update; **one-click funder packet** |
-| **Retention** | Year over year: new, recovered, increased, same, decreased, lapsed, plus retention rate |
-| **Import** | Spreadsheet + Zeffy + Benevity CSVs → dedupe preview → commit; new donors assigned **round-robin to the member with the fewest**. Each source shows when it was last imported (stale after 30 days), plus an import history |
+| **Retention** (admin) | Year over year: new, recovered, increased, same, decreased, lapsed, plus retention rate |
+| **Update Donors** (admin) | Upload the spreadsheet, Zeffy and Benevity CSVs, then a **staging popup** shows every column found (flagging any not in the donor database, which aren't saved) and what merges, before anything is saved. After saving, a **New Donors** popup lists donors that weren't in the database; the selected ones get the board member with the fewest donors and the rest go to Unassigned, both on All Donors. Each source shows when it was last imported (stale after 30 days), plus an import history |
 | **Read API** | `GET /api/v1/summary?period=2026-Q4[&program=][&board_member=]` gives CIC's org dashboard totals and the 25 latest gifts and contacts, already grouped by quarter, program and board member, with **no donor names, emails or IDs**. It takes an API key (`Authorization: Bearer cic_live_…`) that an admin creates, copies once and revokes on the app's **Read API** page; D1 keeps only a SHA-256 of each key |
 | **API docs** | Interactive reference for the Worker API at [`/api/docs`](https://githappens.jurenka.software/api/docs), rendered by [Scalar](https://scalar.com) from the OpenAPI spec at `/api/openapi.json` (`worker/openapi.ts`). Paste a WorkOS access token, or a read API key for `/api/v1`, to try requests |
 | **Board members** (admin) | Invite board members, change their role, remove them (WorkOS Users Management widget) |
@@ -86,7 +87,7 @@ The password is public on purpose because the data is fake. Replace these accoun
 
 - `src/lib/dedupe.ts`: CSV parsing, per-source column mapping, union-find dedupe on email, then phone, then name+org, then name. Name-only matches are flagged for review. Gifts are deduped too: for one donor, the same amount within 3 days of a gift already recorded (or already in this import) is skipped, so re-imports and a donation reported by two sources count once. The preview lists every skipped gift.
 - `src/lib/reminders.ts`: Notifications rules. Computed from current data, never stored, so a reminder clears once the work is done. Thresholds are constants at the top and in `src/data/sources.ts`.
-- `src/lib/logic.ts`: round-robin assignment, retention classification, quarterly cadence.
+- `src/lib/logic.ts`: suggested board member (fewest donors, spread across a batch), retention classification, quarterly cadence. A donor with no board member has `ownerId: null`; D1 stores that as `owner_id = ''` because the column is `NOT NULL`.
 - `src/lib/drafts.ts`: message templates. **Swap point for AI drafting**: same inputs, and a human still approves.
 - `src/store.tsx`: the API client. It loads `/api/bootstrap`, and each action calls one route and reloads, so the UI always shows what D1 holds.
 - `worker/openapi.ts`: the OpenAPI spec for the routes in `worker/index.ts`; update it when a route changes.

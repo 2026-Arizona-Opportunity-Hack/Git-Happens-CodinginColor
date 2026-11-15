@@ -49,6 +49,14 @@ export function reminders({ role, today, donors, gifts, drafts, events, imports 
         detail: `Drafted ${fmtDate(d.createdAt)}; nothing is sent until someone approves it`,
       })
 
+  const unassigned = donors.filter((d) => !d.ownerId).length
+  if (role === 'admin' && unassigned > 0)
+    out.push({
+      id: 'unassigned', category: 'donor', urgency: 'due', to: '/all-donors',
+      title: `${unassigned} donor${unassigned === 1 ? ' needs' : 's need'} a board member`,
+      detail: 'New donors from imports stay unassigned until an admin assigns them on All Donors',
+    })
+
   for (const d of donors) {
     if (d.nextStep) {
       const late = daysBetween(d.nextStep.due, today)
